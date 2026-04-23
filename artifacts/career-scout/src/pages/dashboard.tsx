@@ -47,7 +47,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import Layout from "@/components/layout";
 
-function ScoreRing({ score }: { score: number | null }) {
+function ScoreRing({ score, onClick }: { score: number | null; onClick?: () => void }) {
   if (score === null) {
     return (
       <div
@@ -80,7 +80,13 @@ function ScoreRing({ score }: { score: number | null }) {
   const progress = (score / 100) * circumference;
 
   return (
-    <div className="relative flex items-center justify-center w-14 h-14" data-testid="score-ring">
+    <button
+      type="button"
+      onClick={onClick}
+      className="relative flex items-center justify-center w-14 h-14 rounded-full hover:bg-muted/40 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      title="Click to see scoring details"
+      data-testid="score-ring"
+    >
       <svg width="56" height="56" viewBox="0 0 56 56" className="-rotate-90">
         <circle cx="28" cy="28" r={radius} fill="none" stroke="hsl(var(--muted))" strokeWidth="3" />
         <circle
@@ -100,7 +106,7 @@ function ScoreRing({ score }: { score: number | null }) {
       >
         {score}
       </span>
-    </div>
+    </button>
   );
 }
 
@@ -137,6 +143,15 @@ export default function DashboardPage() {
   const [minFitScore, setMinFitScore] = useState<number | undefined>(undefined);
   const [showAddModal, setShowAddModal] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [scoreDetail, setScoreDetail] = useState<{
+    title: string;
+    company: string;
+    fitScore: number;
+    reasoning: string | null;
+    matchedSkills: string[];
+    missingSkills: string[];
+    compensationGap: number | null;
+  } | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [sortKey, setSortKey] = useState("date-desc");
 
@@ -467,7 +482,18 @@ export default function DashboardPage() {
                   className="flex items-center gap-4 bg-card border border-border rounded-xl px-5 py-4 hover:border-indigo-800/50 transition-colors"
                   data-testid={`posting-card-${posting.id}`}
                 >
-                  <ScoreRing score={score} />
+                  <ScoreRing
+                    score={score}
+                    onClick={report?.fitScore != null ? () => setScoreDetail({
+                      title: posting.title,
+                      company: posting.company,
+                      fitScore: report.fitScore as number,
+                      reasoning: report.reasoning ?? null,
+                      matchedSkills: report.matchedSkills ?? [],
+                      missingSkills: report.missingSkills ?? [],
+                      compensationGap: report.compensationGap ?? null,
+                    }) : undefined}
+                  />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <Link href={`/postings/${posting.id}`}>
@@ -598,6 +624,78 @@ export default function DashboardPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Score detail modal */}
+      <Dialog open={scoreDetail !== null} onOpenChange={(open) => !open && setScoreDetail(null)}>
+        <DialogContent className="sm:max-w-md">
+          {scoreDetail && (() => {
+            const { title, company, fitScore, reasoning, matchedSkills, missingSkills, compensationGap } = scoreDetail;
+            const color = fitScore >= 80 ? "#22c55e" : fitScore >= 60 ? "#f59e0b" : "#ef4444";
+            const radius = 28;
+            const circumference = 2 * Math.PI * radius;
+            const progress = (fitScore / 100) * circumference;
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="pr-6">{title}</DialogTitle>
+                  <DialogDescription>{company}</DialogDescription>
+                </DialogHeader>
+                <div className="flex flex-col items-center gap-1 py-2">
+                  <div className="relative flex items-center justify-center w-20 h-20">
+                    <svg width="80" height="80" viewBox="0 0 80 80" className="-rotate-90">
+                      <circle cx="40" cy="40" r={radius} fill="none" stroke="hsl(var(--muted))" strokeWidth="4" />
+                      <circle cx="40" cy="40" r={radius} fill="none" stroke={color} strokeWidth="4"
+                        strokeDasharray={`${progress} ${circumference - progress}`} strokeLinecap="round" />
+                    </svg>
+                    <span className="absolute text-xl font-bold" style={{ color }}>{fitScore}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">fit score</p>
+                </div>
+                {reasoning && (
+                  <div className="rounded-lg bg-muted/40 px-4 py-3 text-sm text-foreground leading-relaxed">
+                    {reasoning}
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-xs font-medium text-emerald-400 mb-2">Matched skills</p>
+                    {matchedSkills.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {matchedSkills.map((s) => (
+                          <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-emerald-950/40 text-emerald-400 border border-emerald-800/30">{s}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">None</p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-red-400 mb-2">Missing skills</p>
+                    {missingSkills.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {missingSkills.map((s) => (
+                          <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-red-950/40 text-red-400 border border-red-800/30">{s}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">None</p>
+                    )}
+                  </div>
+                </div>
+                {compensationGap !== null && (
+                  <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-4 py-3">
+                    <span className="text-xs text-muted-foreground">Compensation gap</span>
+                    <span className={`ml-auto text-sm font-semibold ${compensationGap >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                      {compensationGap >= 0 ? "+" : ""}${Math.abs(compensationGap).toLocaleString()}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{compensationGap >= 0 ? "above target" : "below target"}</span>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 
