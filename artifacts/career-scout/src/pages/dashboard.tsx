@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "wouter";
 import {
   Plus, Search, SlidersHorizontal, Mail, TrendingUp,
   BriefcaseBusiness, CircleAlert, ExternalLink, Trash2,
-  RefreshCw, Unplug
+  RefreshCw, Unplug, ArrowUpDown,
 } from "lucide-react";
 import {
   useGetDashboardSummary,
@@ -138,6 +138,7 @@ export default function DashboardPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [sortKey, setSortKey] = useState("date-desc");
 
   const dashboardQ = useGetDashboardSummary();
   const postingsQ = useListPostings({ search: search || undefined, minFitScore });
@@ -152,8 +153,40 @@ export default function DashboardPage() {
   });
 
   const summary = dashboardQ.data;
-  const postings = postingsQ.data ?? [];
+  const rawPostings = postingsQ.data ?? [];
   const gmailStatus = gmailStatusQ.data;
+
+  const postings = useMemo(() => {
+    const items = [...rawPostings];
+    switch (sortKey) {
+      case "date-desc":
+        return items.sort((a, b) => new Date(b.posting.createdAt).getTime() - new Date(a.posting.createdAt).getTime());
+      case "date-asc":
+        return items.sort((a, b) => new Date(a.posting.createdAt).getTime() - new Date(b.posting.createdAt).getTime());
+      case "score-desc":
+        return items.sort((a, b) => {
+          const sa = a.report?.fitScore ?? -1;
+          const sb = b.report?.fitScore ?? -1;
+          return sb - sa;
+        });
+      case "score-asc":
+        return items.sort((a, b) => {
+          const sa = a.report?.fitScore ?? 101;
+          const sb = b.report?.fitScore ?? 101;
+          return sa - sb;
+        });
+      case "title-asc":
+        return items.sort((a, b) => a.posting.title.localeCompare(b.posting.title));
+      case "title-desc":
+        return items.sort((a, b) => b.posting.title.localeCompare(a.posting.title));
+      case "company-asc":
+        return items.sort((a, b) => a.posting.company.localeCompare(b.posting.company));
+      case "company-desc":
+        return items.sort((a, b) => b.posting.company.localeCompare(a.posting.company));
+      default:
+        return items;
+    }
+  }, [rawPostings, sortKey]);
 
   const gmailConnectUrl = "/api/gmail/connect";
 
@@ -337,6 +370,24 @@ export default function DashboardPage() {
               onChange={(e) => setSearch(e.target.value)}
               data-testid="search-input"
             />
+          </div>
+          <div className="relative">
+            <ArrowUpDown className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <select
+              value={sortKey}
+              onChange={(e) => setSortKey(e.target.value)}
+              data-testid="sort-select"
+              className="h-10 pl-8 pr-3 text-sm rounded-md border border-input bg-background text-foreground appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+            >
+              <option value="date-desc">Date: Newest first</option>
+              <option value="date-asc">Date: Oldest first</option>
+              <option value="score-desc">Score: Highest first</option>
+              <option value="score-asc">Score: Lowest first</option>
+              <option value="title-asc">Title: A → Z</option>
+              <option value="title-desc">Title: Z → A</option>
+              <option value="company-asc">Company: A → Z</option>
+              <option value="company-desc">Company: Z → A</option>
+            </select>
           </div>
           <Button
             variant="outline"

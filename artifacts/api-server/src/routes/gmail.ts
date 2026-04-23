@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { eq } from "drizzle-orm";
-import { db, gmailConnectionsTable, jobPostingsTable } from "@workspace/db";
+import { db, gmailConnectionsTable, jobPostingsTable, gmailSeenKeysTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
   getAuthUrl,
@@ -119,16 +119,14 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
 
   const emails = await fetchJobEmails(conn.accessToken, conn.refreshToken);
 
-  const existingKeys = (
-    await db
-      .select({ gmailMessageId: jobPostingsTable.gmailMessageId })
-      .from(jobPostingsTable)
-      .where(eq(jobPostingsTable.userId, userId))
-  )
-    .map((r) => r.gmailMessageId)
-    .filter(Boolean) as string[];
+  const seenKeys = await db
+    .select({ gmailKey: gmailSeenKeysTable.gmailKey })
+    .from(gmailSeenKeysTable)
+    .where(eq(gmailSeenKeysTable.userId, userId));
 
-  const processedBaseIds = new Set(existingKeys.map((k) => k.split(":")[0]));
+  const processedBaseIds = new Set(
+    seenKeys.map((r) => r.gmailKey.split(":")[0]),
+  );
 
   const newEmails = emails.filter((e) => !processedBaseIds.has(e.messageId));
   let synced = 0;
@@ -142,7 +140,13 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
       const listing = listings[i];
       if (!listing.description.trim()) continue;
 
-      const gmailMessageId = `${email.messageId}:${i}`;
+      const gmailKey = `${email.messageId}:${i}`;
+
+      await db
+        .insert(gmailSeenKeysTable)
+        .values({ userId, gmailKey })
+        .onConflictDoNothing();
+
       const [newPosting] = await db
         .insert(jobPostingsTable)
         .values({
@@ -151,7 +155,7 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
           company: listing.company || extractSender(email.sender),
           fullDescription: listing.description.slice(0, 10_000),
           source: "gmail",
-          gmailMessageId,
+          gmailMessageId: gmailKey,
           extractedSkills: [],
         })
         .returning();
