@@ -174,9 +174,12 @@ export default function ProfilePage() {
   }, [profileQ.data, reset]);
 
   function addSkill() {
-    const trimmed = skillInput.trim();
-    if (trimmed && !skills.includes(trimmed)) {
-      setValue("skills", [...skills, trimmed]);
+    const newSkills = skillInput
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0 && !skills.includes(s));
+    if (newSkills.length > 0) {
+      setValue("skills", [...skills, ...newSkills]);
     }
     setSkillInput("");
   }
@@ -249,7 +252,7 @@ export default function ProfilePage() {
                   value={skillInput}
                   onChange={(e) => setSkillInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") { e.preventDefault(); addSkill(); }
+                    if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addSkill(); }
                   }}
                   data-testid="skill-input"
                 />
