@@ -11,7 +11,7 @@ import {
   signState,
   verifyState,
 } from "../lib/gmailClient";
-import { scorePostingBackground, sweepUnscoredPostings } from "../lib/scoringService";
+import { scorePostingBackground, sweepUnscoredPostings, extractJobListings } from "../lib/scoringService";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -119,35 +119,47 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
 
   const emails = await fetchJobEmails(conn.accessToken, conn.refreshToken);
 
-  const existingMsgIds = new Set(
-    (
-      await db
-        .select({ gmailMessageId: jobPostingsTable.gmailMessageId })
-        .from(jobPostingsTable)
-        .where(eq(jobPostingsTable.userId, userId))
-    )
-      .map((r) => r.gmailMessageId)
-      .filter(Boolean) as string[],
-  );
+  const existingKeys = (
+    await db
+      .select({ gmailMessageId: jobPostingsTable.gmailMessageId })
+      .from(jobPostingsTable)
+      .where(eq(jobPostingsTable.userId, userId))
+  )
+    .map((r) => r.gmailMessageId)
+    .filter(Boolean) as string[];
 
-  const newEmails = emails.filter((e) => !existingMsgIds.has(e.messageId));
+  const processedBaseIds = new Set(existingKeys.map((k) => k.split(":")[0]));
+
+  const newEmails = emails.filter((e) => !processedBaseIds.has(e.messageId));
   let synced = 0;
 
   for (const email of newEmails) {
     if (!email.body.trim()) continue;
-    const [newPosting] = await db.insert(jobPostingsTable).values({
-      userId,
-      title: email.subject.slice(0, 200) || "Job Opportunity",
-      company: extractSender(email.sender),
-      fullDescription: email.body.slice(0, 10_000),
-      source: "gmail",
-      gmailMessageId: email.messageId,
-      extractedSkills: [],
-    }).returning();
-    if (newPosting) {
-      scorePostingBackground(newPosting.id, userId);
+
+    const listings = await extractJobListings(email.body, email.subject, email.sender);
+
+    for (let i = 0; i < listings.length; i++) {
+      const listing = listings[i];
+      if (!listing.description.trim()) continue;
+
+      const gmailMessageId = `${email.messageId}:${i}`;
+      const [newPosting] = await db
+        .insert(jobPostingsTable)
+        .values({
+          userId,
+          title: listing.title || email.subject.slice(0, 200) || "Job Opportunity",
+          company: listing.company || extractSender(email.sender),
+          fullDescription: listing.description.slice(0, 10_000),
+          source: "gmail",
+          gmailMessageId,
+          extractedSkills: [],
+        })
+        .returning();
+      if (newPosting) {
+        scorePostingBackground(newPosting.id, userId);
+      }
+      synced++;
     }
-    synced++;
   }
 
   const lastSyncedAt = new Date();

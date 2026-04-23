@@ -5,9 +5,10 @@ import { gmail_v1, google } from "googleapis";
 const GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"];
 
 const JOB_QUERY = [
+  "is:unread",
   "subject:(job OR opportunity OR role OR position OR hiring OR offer",
   'OR recruiter OR "job alert" OR "job opportunity" OR "open position")',
-  "newer_than:7d",
+  "newer_than:30d",
 ].join(" ");
 
 export function getGmailRedirectUri(): string {

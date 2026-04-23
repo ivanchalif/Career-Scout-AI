@@ -22,6 +22,87 @@ const parsedJobSchema = z.object({
 
 type ParsedJob = z.infer<typeof parsedJobSchema>;
 
+const extractedJobsSchema = z
+  .array(
+    z.object({
+      title: z.string().default(""),
+      company: z.string().default(""),
+      description: z.string().default(""),
+    }),
+  )
+  .default([]);
+
+export interface ExtractedJobListing {
+  title: string;
+  company: string;
+  description: string;
+}
+
+/**
+ * Use the LLM to split an email body into individual job listings.
+ * Falls back to treating the full email as a single listing if AI is unavailable.
+ */
+export async function extractJobListings(
+  emailBody: string,
+  subject: string,
+  sender: string,
+): Promise<ExtractedJobListing[]> {
+  const prompt = `You are an email parser that extracts individual job listings from emails.
+
+An email may contain:
+- A single job posting → return an array with 1 item
+- A recruiter outreach for a single role → return 1 item
+- A jobs digest / roundup with multiple distinct roles → return each as its own item
+- No actual job listings (company news, newsletter articles, etc.) → return []
+
+Email Subject: ${subject}
+Email Sender: ${sender}
+Email Body:
+---
+${emailBody.slice(0, 6000)}
+---
+
+Return a JSON array of job listings (max 10). Each entry must have:
+{
+  "title": "job title (infer from context if not explicit)",
+  "company": "company name",
+  "description": "the relevant portion of the email body for THIS specific job (200-2000 chars)"
+}
+
+Rules:
+- Only include real job opportunities, not articles about hiring trends or company news
+- If the email is a single posting, return exactly 1 item using the full body as description
+- Each description must be self-contained — include the role title, requirements, and any relevant details
+- Return raw JSON array only, no markdown`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-5-mini",
+      max_completion_tokens: 2048,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const content = response.choices[0]?.message?.content ?? "[]";
+    const cleaned = content
+      .replace(/```json\n?/gi, "")
+      .replace(/```\n?/gi, "")
+      .trim();
+    const parsed = JSON.parse(cleaned);
+    const result = extractedJobsSchema.safeParse(parsed);
+
+    if (result.success) {
+      const listings = result.data.filter((j) => j.description.trim().length > 0).slice(0, 10);
+      if (listings.length > 0) return listings;
+    } else {
+      logger.warn({ issues: result.error.issues }, "scoringService: extractJobListings schema validation failed");
+    }
+  } catch (err) {
+    logger.warn({ err }, "scoringService: extractJobListings failed, falling back to single listing");
+  }
+
+  return [{ title: subject.slice(0, 200), company: sender, description: emailBody }];
+}
+
 const fitScoreResultSchema = z.object({
   fitScore: z.number().min(0).max(100),
   reasoning: z.string().default(""),
