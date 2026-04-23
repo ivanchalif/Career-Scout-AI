@@ -1,0 +1,25 @@
+• Core Concept: A "Career Scout" AI agent that autonomously monitors email inboxes for job postings, parses them, matches them against a user's professional profile, and provides a prioritized "fit score" and compensation analysis.
+• User Personas:
+  • The Busy Professional: Looking for a new role but lacks time to manually search, parse, and evaluate opportunities.
+  • The Strategic Job Seeker: Wants to ensure they only apply to roles where they exceed 80% of the requirements to maximize interview success rates.
+• User Flows:
+  • Onboarding: User connects email (Gmail/Outlook) and uploads resume/LinkedIn profile PDF.
+  • Detection: Agent runs daily background sync, detects new incoming job alerts or job-related emails.
+  • Evaluation: Agent parses posting, extracts requirements, and compares against the user's profile.
+  • Feedback: User receives a push notification/dashboard update: "New match: [Role] at [Company]. Fit Score: 92%. Est. Compensation: [Range]."
+• Screen Specifications:
+  • Dashboard: Overview of current active opportunities, filtered by high fit scores.
+  • Posting Details: Parsed job description, pros/cons list based on experience, and "One-click Application Prep" button.
+  • Profile Management: Interface to update resume or adjust career preferences (e.g., target salary, remote vs. office).
+• Data Model:
+  • UserProfile: Skills, experience history, education, compensation target.
+  • JobPosting: Title, company, link, full description, extracted skills, salary data.
+  • MatchReport: Fit score (0-100), reasoning notes, compensation gap analysis.
+• Agent Design (The "Career Scout"):
+  • Persona: Precise, objective, encouraging. Focuses on data-driven match accuracy.
+  • Rules: Never apply automatically without user review. Default to conservative skill assessment.
+  • Guardrails: Sensitive to PII; redact email content after parsing.
+• Implementation Notes (Replit):
+  • Use Replit's Auth/Email library to handle OAuth for email providers.
+  • Use a lightweight Python/Node.js backend for parsing (using LLM extraction).
+  • Use Replit's Agent to build the frontend dashboard iteratively.
