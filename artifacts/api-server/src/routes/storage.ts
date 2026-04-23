@@ -5,7 +5,7 @@ import {
   RequestUploadUrlResponse,
 } from "@workspace/api-zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
-import { ObjectPermission } from "../lib/objectAcl";
+import { ObjectPermission, type ObjectAclPolicy } from "../lib/objectAcl";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
@@ -41,6 +41,30 @@ router.post("/storage/uploads/request-url", requireAuth, async (req: Request, re
   } catch (error) {
     req.log.error({ err: error }, "Error generating upload URL");
     res.status(500).json({ error: "Failed to generate upload URL" });
+  }
+});
+
+/**
+ * POST /storage/uploads/confirm
+ *
+ * Register ownership (ACL) for an object that was just uploaded via presigned URL.
+ * Must be called by the client after a successful PUT to the presigned URL.
+ * Sets owner=userId, visibility=private so the owner can later retrieve the object.
+ */
+router.post("/storage/uploads/confirm", requireAuth, async (req: Request, res: Response) => {
+  const { objectPath } = req.body as { objectPath?: string };
+  if (!objectPath || typeof objectPath !== "string") {
+    res.status(400).json({ error: "objectPath is required" });
+    return;
+  }
+
+  try {
+    const policy: ObjectAclPolicy = { owner: req.userId, visibility: "private" };
+    await objectStorageService.trySetObjectEntityAclPolicy(objectPath, policy);
+    res.json({ ok: true, objectPath });
+  } catch (error) {
+    req.log.error({ err: error }, "Error setting object ACL");
+    res.status(500).json({ error: "Failed to register object ownership" });
   }
 });
 

@@ -45,7 +45,7 @@ const profileSchema = z.object({
   education: z.string().optional(),
   targetSalary: z.number().int().min(0).optional().nullable(),
   remotePreference: z.enum(["remote", "hybrid", "onsite"]).default("hybrid"),
-  resumeUrl: z.string().url().optional().or(z.literal("")),
+  resumeUrl: z.string().optional().or(z.literal("")),
 });
 
 type ProfileFormData = z.infer<typeof profileSchema>;
@@ -81,6 +81,12 @@ export default function ProfilePage() {
         headers: { "Content-Type": file.type },
       });
       if (!putRes.ok) throw new Error("Upload failed");
+
+      await fetch("/api/storage/uploads/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ objectPath }),
+      });
 
       const servingUrl = `/api/storage/objects/${objectPath.replace(/^\/objects\//, "")}`;
       setValue("resumeUrl", servingUrl);

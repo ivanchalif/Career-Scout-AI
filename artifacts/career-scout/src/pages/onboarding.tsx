@@ -131,6 +131,12 @@ export default function OnboardingPage() {
       });
       if (!putRes.ok) throw new Error("Upload failed");
 
+      await fetch("/api/storage/uploads/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ objectPath }),
+      });
+
       const servingUrl = `/api/storage/objects/${objectPath.replace(/^\/objects\//, "")}`;
       setValue("resumeUrl", servingUrl);
       toast({ title: "Resume uploaded", description: `${file.name} uploaded successfully.` });
