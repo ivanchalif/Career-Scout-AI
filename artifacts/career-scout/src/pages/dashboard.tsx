@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import {
   Plus, Search, SlidersHorizontal, Mail, TrendingUp,
   BriefcaseBusiness, CircleAlert, ExternalLink, Trash2,
-  RefreshCw, Unplug, ArrowUpDown,
+  RefreshCw, Unplug, ArrowUpDown, Sparkles,
 } from "lucide-react";
 import {
   useGetDashboardSummary,
@@ -154,6 +154,7 @@ export default function DashboardPage() {
   } | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [sortKey, setSortKey] = useState("date-desc");
+  const [reanalyzing, setReanalyzing] = useState(false);
 
   const dashboardQ = useGetDashboardSummary();
   const postingsQ = useListPostings({ search: search || undefined, minFitScore });
@@ -225,6 +226,25 @@ export default function DashboardPage() {
     );
   }
 
+  async function onReanalyzeAll() {
+    setReanalyzing(true);
+    try {
+      await fetch("/api/postings/rescore-all", { method: "POST" });
+      toast({
+        title: "Re-analysis queued",
+        description: "All jobs are being re-analyzed in the background. Scores will update shortly.",
+      });
+      setTimeout(() => {
+        qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+        setReanalyzing(false);
+      }, 8000);
+    } catch {
+      toast({ title: "Error", description: "Failed to queue re-analysis.", variant: "destructive" });
+      setReanalyzing(false);
+    }
+  }
+
   async function onDisconnectGmail() {
     await disconnectMutation.mutateAsync(
       undefined,
@@ -279,14 +299,28 @@ export default function DashboardPage() {
             <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
             <p className="text-sm text-muted-foreground mt-0.5">Your job opportunities, ranked by fit</p>
           </div>
-          <Button
-            onClick={() => setShowAddModal(true)}
-            className="bg-indigo-600 hover:bg-indigo-500 gap-2"
-            data-testid="add-job-button"
-          >
-            <Plus className="w-4 h-4" />
-            Add job
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onReanalyzeAll}
+              disabled={reanalyzing}
+              className="gap-2 text-muted-foreground"
+              data-testid="reanalyze-button"
+              title="Re-run AI analysis on all jobs to refresh skill matching"
+            >
+              <Sparkles className={`w-3.5 h-3.5 ${reanalyzing ? "animate-pulse" : ""}`} />
+              {reanalyzing ? "Analyzing..." : "Re-analyze"}
+            </Button>
+            <Button
+              onClick={() => setShowAddModal(true)}
+              className="bg-indigo-600 hover:bg-indigo-500 gap-2"
+              data-testid="add-job-button"
+            >
+              <Plus className="w-4 h-4" />
+              Add job
+            </Button>
+          </div>
         </div>
 
         {/* Gmail banner */}
@@ -658,32 +692,39 @@ export default function DashboardPage() {
                     {reasoning}
                   </div>
                 )}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <p className="text-xs font-medium text-emerald-400 mb-2">Matched skills</p>
-                    {matchedSkills.length > 0 ? (
-                      <div className="flex flex-wrap gap-1">
-                        {matchedSkills.map((s) => (
-                          <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-emerald-950/40 text-emerald-400 border border-emerald-800/30">{s}</span>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">None</p>
-                    )}
+                {matchedSkills.length === 0 && missingSkills.length === 0 ? (
+                  <div className="rounded-lg bg-muted/30 px-4 py-3 text-center">
+                    <p className="text-xs text-muted-foreground">No specific skill requirements were found in this posting.</p>
+                    <p className="text-xs text-muted-foreground mt-1">Click <span className="text-foreground font-medium">Re-analyze</span> on the dashboard to refresh.</p>
                   </div>
-                  <div>
-                    <p className="text-xs font-medium text-red-400 mb-2">Missing skills</p>
-                    {missingSkills.length > 0 ? (
-                      <div className="flex flex-wrap gap-1">
-                        {missingSkills.map((s) => (
-                          <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-red-950/40 text-red-400 border border-red-800/30">{s}</span>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">None</p>
-                    )}
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-xs font-medium text-emerald-400 mb-2">Matched skills</p>
+                      {matchedSkills.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {matchedSkills.map((s) => (
+                            <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-emerald-950/40 text-emerald-400 border border-emerald-800/30">{s}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">None from your profile</p>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-red-400 mb-2">Missing skills</p>
+                      {missingSkills.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {missingSkills.map((s) => (
+                            <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-red-950/40 text-red-400 border border-red-800/30">{s}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">None — full match</p>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
                 {compensationGap !== null && (
                   <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-4 py-3">
                     <span className="text-xs text-muted-foreground">Compensation gap</span>

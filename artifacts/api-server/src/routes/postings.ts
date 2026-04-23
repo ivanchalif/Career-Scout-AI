@@ -146,6 +146,13 @@ router.delete("/postings/:id", requireAuth, async (req, res): Promise<void> => {
   res.sendStatus(204);
 });
 
+router.post("/postings/rescore-all", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId;
+  const { rescoreAllPostings } = await import("../lib/scoringService");
+  rescoreAllPostings(userId, { forceParse: true }).catch(() => {});
+  res.json({ queued: true });
+});
+
 router.post("/postings/:id/analyze", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId;
   const params = AnalyzePostingParams.safeParse(req.params);

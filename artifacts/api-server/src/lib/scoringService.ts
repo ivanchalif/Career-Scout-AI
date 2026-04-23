@@ -118,6 +118,8 @@ async function parseJobDescription(
   title: string,
   company: string,
 ): Promise<ParsedJob> {
+  const isShortDescription = rawDescription.trim().length < 600;
+
   const prompt = `You are a structured job posting parser. Extract structured data from the following job posting.
 
 Job Title (from subject/header): ${title}
@@ -141,8 +143,9 @@ Return a JSON object with EXACTLY these fields (no markdown, just raw JSON):
 }
 
 Rules:
-- requiredSkills: only hard requirements (must-have). Keep each skill concise (e.g. "React", "Python", "5+ years experience" → extract skill name only).
+- requiredSkills: extract explicitly listed requirements. ${isShortDescription ? `IMPORTANT: this description is brief — if skills are not explicitly listed, infer the 4–7 most critical skills for someone in this role based on the job title and seniority (e.g. "Head of Product" → ["Product Strategy", "Roadmapping", "Stakeholder Management", "Cross-functional Leadership"]; "Director of Product Management" → ["Product Management", "Product Strategy", "Roadmapping", "Stakeholder Management", "Leadership"]). Never leave requiredSkills empty.` : `If not explicitly listed, infer 3–5 critical skills from the job title and context.`}
 - niceToHaveSkills: preferred/bonus skills only.
+- Keep each skill concise (e.g. "React", "Python", "5+ years experience" → extract skill name only).
 - Combine related synonyms into one (e.g. "Node.js" and "NodeJS" → "Node.js").
 - If salary is a range like "$120k-$150k", set salaryMin=120000, salaryMax=150000.
 - If no salary mentioned, set both to null.
@@ -455,18 +458,23 @@ export function scorePostingBackground(
 /**
  * Enqueue all postings for a user for background re-scoring.
  * Called when the user's profile is updated so scores reflect the latest profile.
- * Reuses existing parsed job fields (no LLM re-parse) — only the fit score is recomputed.
+ * @param forceParse If true, forces re-parsing of job descriptions (ignores cached skills).
+ *                   Defaults to false — re-uses existing parsed fields when available.
  */
-export async function rescoreAllPostings(userId: string): Promise<void> {
+export async function rescoreAllPostings(userId: string, { forceParse = false }: { forceParse?: boolean } = {}): Promise<void> {
   const allPostings = await db
     .select({ id: jobPostingsTable.id })
     .from(jobPostingsTable)
     .where(eq(jobPostingsTable.userId, userId));
 
   if (allPostings.length > 0) {
-    logger.info({ userId, count: allPostings.length }, "scoringService: queuing all postings for re-score after profile update");
+    logger.info({ userId, count: allPostings.length, forceParse }, "scoringService: queuing all postings for re-score");
     for (const { id } of allPostings) {
-      scorePostingBackground(id, userId);
+      backgroundQueue = backgroundQueue.then(async () => {
+        await scorePosting(id, userId, { forceParse }).catch((err) => {
+          logger.error({ postingId: id, userId, err }, "scoringService: background scoring failed");
+        });
+      });
     }
   }
 }
