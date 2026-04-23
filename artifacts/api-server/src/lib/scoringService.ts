@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNotNull } from "drizzle-orm";
 import {
   db,
   jobPostingsTable,
@@ -320,15 +320,6 @@ export async function scorePosting(
       ? jobSalaryMid - userProfile.targetSalary
       : null;
 
-  await db
-    .delete(matchReportsTable)
-    .where(
-      and(
-        eq(matchReportsTable.jobPostingId, postingId),
-        eq(matchReportsTable.userId, userId),
-      ),
-    );
-
   const [report] = await db
     .insert(matchReportsTable)
     .values({
@@ -339,6 +330,16 @@ export async function scorePosting(
       matchedSkills: fitResult.matchedSkills,
       missingSkills: fitResult.missingSkills,
       compensationGap,
+    })
+    .onConflictDoUpdate({
+      target: [matchReportsTable.jobPostingId, matchReportsTable.userId],
+      set: {
+        fitScore: fitResult.fitScore,
+        reasoning: fitResult.reasoning,
+        matchedSkills: fitResult.matchedSkills,
+        missingSkills: fitResult.missingSkills,
+        compensationGap,
+      },
     })
     .returning();
 
@@ -368,4 +369,31 @@ export function scorePostingBackground(
       );
     });
   });
+}
+
+/**
+ * Enqueue all unscored postings for a user for background scoring.
+ * Runs at sync time to retry any postings that failed scoring previously.
+ */
+export async function sweepUnscoredPostings(userId: string): Promise<void> {
+  const [scored, allPostings] = await Promise.all([
+    db
+      .select({ id: matchReportsTable.jobPostingId })
+      .from(matchReportsTable)
+      .where(and(eq(matchReportsTable.userId, userId), isNotNull(matchReportsTable.fitScore))),
+    db
+      .select({ id: jobPostingsTable.id })
+      .from(jobPostingsTable)
+      .where(eq(jobPostingsTable.userId, userId)),
+  ]);
+
+  const scoredIds = new Set(scored.map((r) => r.id));
+  const unscored = allPostings.filter((p) => !scoredIds.has(p.id));
+
+  if (unscored.length > 0) {
+    logger.info({ userId, count: unscored.length }, "scoringService: queuing unscored postings");
+    for (const { id } of unscored) {
+      scorePostingBackground(id, userId);
+    }
+  }
 }

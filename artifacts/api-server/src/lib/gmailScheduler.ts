@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db, gmailConnectionsTable, jobPostingsTable } from "@workspace/db";
 import { fetchJobEmails } from "./gmailClient";
-import { scorePostingBackground } from "./scoringService";
+import { scorePostingBackground, sweepUnscoredPostings } from "./scoringService";
 import { logger } from "./logger";
 
 const SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -59,6 +59,10 @@ async function syncAllUsers(): Promise<void> {
         .update(gmailConnectionsTable)
         .set({ lastSyncedAt, updatedAt: lastSyncedAt })
         .where(eq(gmailConnectionsTable.userId, conn.userId));
+
+      sweepUnscoredPostings(conn.userId).catch((err) => {
+        logger.warn({ userId: conn.userId, err }, "Gmail scheduler: sweep unscored postings failed");
+      });
 
       logger.info(
         { userId: conn.userId, synced },

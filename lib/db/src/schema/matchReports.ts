@@ -1,4 +1,4 @@
-import { pgTable, text, integer, timestamp, serial } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, timestamp, serial, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -13,7 +13,9 @@ export const matchReportsTable = pgTable("match_reports", {
   missingSkills: text("missing_skills").array().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (t) => [
+  unique("match_reports_posting_user_unique").on(t.jobPostingId, t.userId),
+]);
 
 export const insertMatchReportSchema = createInsertSchema(matchReportsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertMatchReport = z.infer<typeof insertMatchReportSchema>;

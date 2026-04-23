@@ -11,7 +11,8 @@ import {
   signState,
   verifyState,
 } from "../lib/gmailClient";
-import { scorePostingBackground } from "../lib/scoringService";
+import { scorePostingBackground, sweepUnscoredPostings } from "../lib/scoringService";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -154,6 +155,10 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
     .update(gmailConnectionsTable)
     .set({ lastSyncedAt, updatedAt: lastSyncedAt })
     .where(eq(gmailConnectionsTable.userId, userId));
+
+  sweepUnscoredPostings(userId).catch((err) => {
+    logger.warn({ userId, err }, "gmail sync: sweep unscored postings failed");
+  });
 
   res.json({
     synced,
