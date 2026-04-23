@@ -10,14 +10,13 @@ import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
-  Plus, Trash2, Save, User, Briefcase, GraduationCap,
-  DollarSign, Wifi, CheckCircle2, Upload, FileText, Loader2
+  Plus, Trash2, ArrowRight, User, Briefcase,
+  DollarSign, Wifi, FileText, Upload, Loader2, Rocket
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -27,9 +26,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import Layout from "@/components/layout";
+import { useLocation } from "wouter";
 
-const profileSchema = z.object({
+const onboardingSchema = z.object({
   skills: z.array(z.string()).default([]),
   experienceHistory: z
     .array(
@@ -45,59 +44,25 @@ const profileSchema = z.object({
   education: z.string().optional(),
   targetSalary: z.number().int().min(0).optional().nullable(),
   remotePreference: z.enum(["remote", "hybrid", "onsite"]).default("hybrid"),
-  resumeUrl: z.string().url().optional().or(z.literal("")),
+  resumeUrl: z.string().optional().or(z.literal("")),
 });
 
-type ProfileFormData = z.infer<typeof profileSchema>;
+type OnboardingFormData = z.infer<typeof onboardingSchema>;
 
-export default function ProfilePage() {
+export default function OnboardingPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [, setLocation] = useLocation();
   const [skillInput, setSkillInput] = useState("");
   const [resumeFileName, setResumeFileName] = useState<string | null>(null);
   const [isUploadingResume, setIsUploadingResume] = useState(false);
-
-  async function handleResumeFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.type !== "application/pdf") {
-      toast({ title: "Invalid file type", description: "Please upload a PDF file.", variant: "destructive" });
-      return;
-    }
-    setResumeFileName(file.name);
-    setIsUploadingResume(true);
-    try {
-      const uploadRes = await fetch("/api/storage/uploads/request-url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
-      });
-      if (!uploadRes.ok) throw new Error("Failed to get upload URL");
-      const { uploadURL, objectPath } = await uploadRes.json();
-
-      const putRes = await fetch(uploadURL, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type },
-      });
-      if (!putRes.ok) throw new Error("Upload failed");
-
-      const servingUrl = `/api/storage/objects/${objectPath.replace(/^\/objects\//, "")}`;
-      setValue("resumeUrl", servingUrl);
-      toast({ title: "Resume uploaded", description: `${file.name} uploaded successfully.` });
-    } catch {
-      toast({ title: "Upload failed", description: "Failed to upload resume. Please try again.", variant: "destructive" });
-    } finally {
-      setIsUploadingResume(false);
-    }
-  }
 
   const profileQ = useGetProfile({ query: { queryKey: getGetProfileQueryKey() } });
   const upsertMutation = useUpsertProfile();
 
   const { register, handleSubmit, control, setValue, watch, reset, formState: { errors } } =
-    useForm<ProfileFormData>({
-      resolver: zodResolver(profileSchema),
+    useForm<OnboardingFormData>({
+      resolver: zodResolver(onboardingSchema),
       defaultValues: {
         skills: [],
         experienceHistory: [],
@@ -141,7 +106,42 @@ export default function ProfilePage() {
     setValue("skills", skills.filter((s) => s !== skill));
   }
 
-  async function onSubmit(data: ProfileFormData) {
+  async function handleResumeFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== "application/pdf") {
+      toast({ title: "Invalid file type", description: "Please upload a PDF file.", variant: "destructive" });
+      return;
+    }
+    setResumeFileName(file.name);
+    setIsUploadingResume(true);
+    try {
+      const uploadRes = await fetch("/api/storage/uploads/request-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
+      });
+      if (!uploadRes.ok) throw new Error("Failed to get upload URL");
+      const { uploadURL, objectPath } = await uploadRes.json();
+
+      const putRes = await fetch(uploadURL, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": file.type },
+      });
+      if (!putRes.ok) throw new Error("Upload failed");
+
+      const servingUrl = `/api/storage/objects/${objectPath.replace(/^\/objects\//, "")}`;
+      setValue("resumeUrl", servingUrl);
+      toast({ title: "Resume uploaded", description: `${file.name} uploaded successfully.` });
+    } catch {
+      toast({ title: "Upload failed", description: "Failed to upload resume.", variant: "destructive" });
+    } finally {
+      setIsUploadingResume(false);
+    }
+  }
+
+  async function onSubmit(data: OnboardingFormData) {
     const payload: UpsertProfileBody = {
       ...data,
       targetSalary: data.targetSalary || undefined,
@@ -159,7 +159,7 @@ export default function ProfilePage() {
       {
         onSuccess: () => {
           qc.invalidateQueries({ queryKey: getGetProfileQueryKey() });
-          toast({ title: "Profile saved", description: "Your career profile has been updated." });
+          setLocation("/dashboard");
         },
         onError: () =>
           toast({ title: "Error", description: "Failed to save profile.", variant: "destructive" }),
@@ -168,39 +168,39 @@ export default function ProfilePage() {
   }
 
   return (
-    <Layout>
-      <div className="px-6 py-8 max-w-3xl mx-auto" data-testid="profile-page">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Career Profile</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Your profile is used to score and rank job opportunities
+    <div className="min-h-dvh bg-background flex flex-col">
+      {/* Header */}
+      <header className="border-b border-border px-6 py-4 flex items-center gap-3">
+        <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+          <Rocket className="w-4 h-4 text-white" />
+        </div>
+        <span className="font-bold text-foreground">Career Scout</span>
+      </header>
+
+      <div className="flex-1 flex items-start justify-center px-4 py-12">
+        <div className="w-full max-w-2xl" data-testid="onboarding-page">
+          {/* Welcome */}
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-950/50 border border-indigo-800/30 mb-4">
+              <User className="w-7 h-7 text-indigo-400" />
+            </div>
+            <h1 className="text-2xl font-bold text-foreground">Set up your career profile</h1>
+            <p className="text-muted-foreground mt-2 text-sm max-w-md mx-auto">
+              Tell us about your skills and experience so we can score job opportunities against your profile.
             </p>
           </div>
-          {!profileQ.data && !profileQ.isLoading && (
-            <div className="px-3 py-1.5 rounded-lg bg-amber-950/40 border border-amber-800/30 text-xs text-amber-400">
-              Profile not set up yet
-            </div>
-          )}
-        </div>
 
-        {profileQ.isLoading ? (
-          <div className="space-y-4">
-            <Skeleton className="h-40 rounded-xl" />
-            <Skeleton className="h-40 rounded-xl" />
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             {/* Skills */}
             <section className="bg-card border border-border rounded-xl p-5">
               <div className="flex items-center gap-2 mb-4">
                 <User className="w-4 h-4 text-indigo-400" />
-                <h2 className="font-semibold text-foreground">Skills</h2>
+                <h2 className="font-semibold text-foreground">Your skills</h2>
+                <span className="text-xs text-muted-foreground ml-auto">Add at least a few to improve scoring</span>
               </div>
               <div className="flex gap-2 mb-3">
                 <Input
-                  placeholder="Add a skill (e.g. TypeScript)"
+                  placeholder="e.g. TypeScript, React, Python..."
                   value={skillInput}
                   onChange={(e) => setSkillInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -220,7 +220,6 @@ export default function ProfilePage() {
                       variant="secondary"
                       className="gap-1.5 pr-1.5 cursor-pointer hover:bg-destructive/20 hover:text-destructive transition-colors"
                       onClick={() => removeSkill(skill)}
-                      data-testid={`skill-${skill}`}
                     >
                       {skill}
                       <Trash2 className="w-3 h-3" />
@@ -237,7 +236,7 @@ export default function ProfilePage() {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <Briefcase className="w-4 h-4 text-indigo-400" />
-                  <h2 className="font-semibold text-foreground">Experience</h2>
+                  <h2 className="font-semibold text-foreground">Work experience</h2>
                 </div>
                 <Button
                   type="button"
@@ -252,11 +251,11 @@ export default function ProfilePage() {
                 </Button>
               </div>
               {expFields.length === 0 && (
-                <p className="text-sm text-muted-foreground">No experience entries yet</p>
+                <p className="text-sm text-muted-foreground">No experience entries yet. Add your most recent roles.</p>
               )}
               <div className="space-y-4">
                 {expFields.map((field, i) => (
-                  <div key={field.id} className="p-4 bg-background border border-border rounded-lg space-y-3" data-testid={`experience-${i}`}>
+                  <div key={field.id} className="p-4 bg-background border border-border rounded-lg space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground font-medium">Position {i + 1}</span>
                       <Button
@@ -265,7 +264,6 @@ export default function ProfilePage() {
                         size="icon"
                         className="w-7 h-7 text-destructive hover:text-destructive hover:bg-destructive/10"
                         onClick={() => removeExp(i)}
-                        data-testid={`remove-experience-${i}`}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
@@ -273,38 +271,24 @@ export default function ProfilePage() {
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
                         <Label className="text-xs">Job title</Label>
-                        <Input
-                          placeholder="Software Engineer"
-                          data-testid={`exp-title-${i}`}
-                          {...register(`experienceHistory.${i}.title`)}
-                        />
+                        <Input placeholder="Software Engineer" {...register(`experienceHistory.${i}.title`)} />
                         {errors.experienceHistory?.[i]?.title && (
                           <p className="text-xs text-destructive">{errors.experienceHistory[i]?.title?.message}</p>
                         )}
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs">Company</Label>
-                        <Input
-                          placeholder="Acme Corp"
-                          data-testid={`exp-company-${i}`}
-                          {...register(`experienceHistory.${i}.company`)}
-                        />
+                        <Input placeholder="Acme Corp" {...register(`experienceHistory.${i}.company`)} />
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs">Start year</Label>
-                        <Input
-                          type="number"
-                          placeholder="2020"
-                          data-testid={`exp-start-${i}`}
-                          {...register(`experienceHistory.${i}.startYear`, { valueAsNumber: true })}
-                        />
+                        <Input type="number" placeholder="2020" {...register(`experienceHistory.${i}.startYear`, { valueAsNumber: true })} />
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs">End year (leave blank if current)</Label>
                         <Input
                           type="number"
                           placeholder="Present"
-                          data-testid={`exp-end-${i}`}
                           {...register(`experienceHistory.${i}.endYear`, {
                             setValueAs: (v) => (v === "" || v === null ? null : Number(v)),
                           })}
@@ -313,32 +297,16 @@ export default function ProfilePage() {
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs">Description (optional)</Label>
-                      <Textarea
-                        placeholder="Brief description of your role..."
-                        rows={2}
-                        data-testid={`exp-description-${i}`}
-                        {...register(`experienceHistory.${i}.description`)}
-                      />
+                      <Textarea placeholder="Brief description of your role..." rows={2} {...register(`experienceHistory.${i}.description`)} />
                     </div>
                   </div>
                 ))}
               </div>
             </section>
 
-            {/* Education + Target Salary + Remote */}
+            {/* Preferences + Resume */}
             <section className="bg-card border border-border rounded-xl p-5 space-y-4">
-              <div className="flex items-center gap-2 mb-1">
-                <GraduationCap className="w-4 h-4 text-indigo-400" />
-                <h2 className="font-semibold text-foreground">Preferences</h2>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Education</Label>
-                <Input
-                  placeholder="e.g. B.S. Computer Science, MIT 2018"
-                  data-testid="education-input"
-                  {...register("education")}
-                />
-              </div>
+              <h2 className="font-semibold text-foreground">Preferences &amp; resume</h2>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label className="flex items-center gap-1.5">
@@ -358,10 +326,8 @@ export default function ProfilePage() {
                     Work preference
                   </Label>
                   <Select
-                    defaultValue={profileQ.data?.remotePreference ?? "hybrid"}
-                    onValueChange={(val) =>
-                      setValue("remotePreference", val as "remote" | "hybrid" | "onsite")
-                    }
+                    defaultValue="hybrid"
+                    onValueChange={(val) => setValue("remotePreference", val as "remote" | "hybrid" | "onsite")}
                   >
                     <SelectTrigger data-testid="remote-select">
                       <SelectValue />
@@ -374,82 +340,58 @@ export default function ProfilePage() {
                   </Select>
                 </div>
               </div>
+
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1.5">
                   <FileText className="w-3.5 h-3.5" />
-                  Resume (PDF)
+                  Resume (PDF, optional)
                 </Label>
                 <div className="flex items-center gap-3">
                   <label
-                    htmlFor="resume-upload"
+                    htmlFor="onboarding-resume-upload"
                     className={`flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-background text-sm font-medium cursor-pointer hover:bg-muted/50 transition-colors ${isUploadingResume ? "opacity-60 pointer-events-none" : ""}`}
                     data-testid="resume-upload-label"
                   >
-                    {isUploadingResume ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Upload className="w-4 h-4" />
-                    )}
+                    {isUploadingResume ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                     {isUploadingResume ? "Uploading…" : "Upload PDF"}
                   </label>
                   <input
-                    id="resume-upload"
+                    id="onboarding-resume-upload"
                     type="file"
                     accept="application/pdf"
                     className="sr-only"
                     onChange={handleResumeFile}
                     data-testid="resume-file-input"
                   />
-                  {(resumeFileName || watch("resumeUrl")) && (
-                    <span className="text-xs text-muted-foreground truncate max-w-[200px]">
-                      {resumeFileName ?? "Resume saved"}
-                    </span>
+                  {resumeFileName && (
+                    <span className="text-xs text-muted-foreground truncate max-w-[200px]">{resumeFileName}</span>
                   )}
                 </div>
-                {watch("resumeUrl") && (
-                  <a
-                    href={watch("resumeUrl")}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-indigo-400 hover:underline"
-                    data-testid="resume-view-link"
-                  >
-                    View current resume
-                  </a>
-                )}
                 <input type="hidden" {...register("resumeUrl")} />
               </div>
             </section>
 
-            {/* Save button */}
-            <div className="flex justify-end">
-              <Button
-                type="submit"
-                className="gap-2 bg-indigo-600 hover:bg-indigo-500 min-w-[120px]"
-                disabled={upsertMutation.isPending}
-                data-testid="save-profile-button"
-              >
-                {upsertMutation.isSuccess ? (
-                  <>
-                    <CheckCircle2 className="w-4 h-4" />
-                    Saved
-                  </>
-                ) : upsertMutation.isPending ? (
-                  <>
-                    <Save className="w-4 h-4 animate-pulse" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4" />
-                    Save profile
-                  </>
-                )}
-              </Button>
-            </div>
+            <Button
+              type="submit"
+              className="w-full gap-2 bg-indigo-600 hover:bg-indigo-500 h-11"
+              disabled={upsertMutation.isPending}
+              data-testid="start-button"
+            >
+              {upsertMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  Get started
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </Button>
+            <p className="text-center text-xs text-muted-foreground">
+              You can update your profile anytime from the settings page.
+            </p>
           </form>
-        )}
+        </div>
       </div>
-    </Layout>
+    </div>
   );
 }

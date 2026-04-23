@@ -8,7 +8,9 @@ import LandingPage from "@/pages/landing";
 import DashboardPage from "@/pages/dashboard";
 import PostingDetailPage from "@/pages/posting-detail";
 import ProfilePage from "@/pages/profile";
+import OnboardingPage from "@/pages/onboarding";
 import NotFound from "@/pages/not-found";
+import { useGetProfile, getGetProfileQueryKey } from "@workspace/api-client-react";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -122,11 +124,25 @@ function ClerkQueryClientCacheInvalidator() {
   return null;
 }
 
+function SignedInHomeGate() {
+  const profileQ = useGetProfile({ query: { queryKey: getGetProfileQueryKey() } });
+
+  if (profileQ.isLoading) return null;
+
+  const profile = profileQ.data;
+  const hasProfile = !!(profile && (
+    (profile.skills && profile.skills.length > 0) ||
+    (profile.experienceHistory && profile.experienceHistory.length > 0)
+  ));
+
+  return <Redirect to={hasProfile ? "/dashboard" : "/onboarding"} />;
+}
+
 function HomeRoute() {
   return (
     <>
       <Show when="signed-in">
-        <Redirect to="/dashboard" />
+        <SignedInHomeGate />
       </Show>
       <Show when="signed-out">
         <LandingPage />
@@ -194,6 +210,11 @@ function ClerkProviderWithRoutes() {
           <Route path="/profile">
             <ProtectedRoute>
               <ProfilePage />
+            </ProtectedRoute>
+          </Route>
+          <Route path="/onboarding">
+            <ProtectedRoute>
+              <OnboardingPage />
             </ProtectedRoute>
           </Route>
           <Route component={NotFound} />
