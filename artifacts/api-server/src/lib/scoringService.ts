@@ -265,6 +265,10 @@ export async function scorePosting(
     .update(jobPostingsTable)
     .set({
       extractedSkills: updatedSkills,
+      requiredSkills: parsedJob.requiredSkills,
+      niceToHaveSkills: parsedJob.niceToHaveSkills,
+      minYearsExperience: parsedJob.minYearsExperience ?? posting.minYearsExperience,
+      remoteType: parsedJob.remoteType !== "unknown" ? parsedJob.remoteType : posting.remoteType,
       salaryMin: parsedJob.salaryMin ?? posting.salaryMin,
       salaryMax: parsedJob.salaryMax ?? posting.salaryMax,
     })
