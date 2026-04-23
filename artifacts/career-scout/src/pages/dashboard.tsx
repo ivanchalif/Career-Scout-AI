@@ -306,7 +306,18 @@ export default function DashboardPage() {
                         {posting.source}
                       </Badge>
                     </div>
-                    <p className="text-sm text-muted-foreground mt-0.5">{posting.company}</p>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      {posting.company}
+                      {(posting.salaryMin || posting.salaryMax) && (
+                        <span className="ml-2 text-xs text-emerald-400 font-medium">
+                          {posting.salaryMin && posting.salaryMax
+                            ? `$${(posting.salaryMin / 1000).toFixed(0)}k–$${(posting.salaryMax / 1000).toFixed(0)}k`
+                            : posting.salaryMin
+                            ? `$${(posting.salaryMin / 1000).toFixed(0)}k+`
+                            : `up to $${(posting.salaryMax! / 1000).toFixed(0)}k`}
+                        </span>
+                      )}
+                    </p>
                     {report?.matchedSkills && report.matchedSkills.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-2">
                         {report.matchedSkills.slice(0, 4).map((skill) => (

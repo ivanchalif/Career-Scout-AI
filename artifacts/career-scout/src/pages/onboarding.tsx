@@ -11,7 +11,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
   Plus, Trash2, ArrowRight, User, Briefcase,
-  DollarSign, Wifi, FileText, Upload, Loader2, Rocket
+  DollarSign, Wifi, FileText, Upload, Loader2, Rocket, GraduationCap
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -345,6 +345,19 @@ export default function OnboardingPage() {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1.5">
+                  <GraduationCap className="w-3.5 h-3.5" />
+                  Education (optional)
+                </Label>
+                <Textarea
+                  placeholder="e.g. B.S. Computer Science, MIT, 2019"
+                  rows={2}
+                  data-testid="education-input"
+                  {...register("education")}
+                />
               </div>
 
               <div className="space-y-1.5">
