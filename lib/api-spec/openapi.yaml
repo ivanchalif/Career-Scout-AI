@@ -407,6 +407,8 @@ components:
           type: string
         resumeUrl:
           type: ["string", "null"]
+        resumeText:
+          type: ["string", "null"]
         createdAt:
           type: string
           format: date-time
@@ -458,6 +460,8 @@ components:
         remotePreference:
           type: string
         resumeUrl:
+          type: ["string", "null"]
+        resumeText:
           type: ["string", "null"]
 
     JobPosting:

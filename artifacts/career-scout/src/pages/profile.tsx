@@ -52,6 +52,7 @@ const profileSchema = z.object({
   targetSalary: z.number().int().min(0).optional().nullable(),
   remotePreference: z.enum(["remote", "hybrid", "onsite"]).default("hybrid"),
   resumeUrl: z.string().optional().or(z.literal("")),
+  resumeText: z.string().optional().or(z.literal("")),
 });
 
 type ProfileFormData = z.infer<typeof profileSchema>;
@@ -64,6 +65,7 @@ export default function ProfilePage() {
   const [resumeFileName, setResumeFileName] = useState<string | null>(null);
   const [isUploadingResume, setIsUploadingResume] = useState(false);
   const [isParsingResume, setIsParsingResume] = useState(false);
+  const [resumeMode, setResumeMode] = useState<"upload" | "paste">("upload");
 
   const { data: gmailStatus, isLoading: gmailLoading } = useGetGmailStatus();
   const disconnectMutation = useDisconnectGmail({
@@ -201,7 +203,11 @@ export default function ProfilePage() {
       targetSalary: p.targetSalary ?? null,
       remotePreference: (p.remotePreference as "remote" | "hybrid" | "onsite") ?? "hybrid",
       resumeUrl: p.resumeUrl ?? "",
+      resumeText: p.resumeText ?? "",
     });
+    if (p.resumeText && p.resumeText.length > 0) {
+      setResumeMode("paste");
+    }
   }, [profileQ.data, reset]);
 
   function addSkill() {
@@ -224,6 +230,9 @@ export default function ProfilePage() {
       ...data,
       targetSalary: data.targetSalary || undefined,
       resumeUrl: data.resumeUrl || undefined,
+      // When in upload mode, clear any stored pasted text so PDF is used for scoring
+      // When in paste mode, the pasted text takes priority in scoring
+      resumeText: resumeMode === "paste" ? (data.resumeText || undefined) : undefined,
       experienceHistory: data.experienceHistory.map((e) => ({
         title: e.title,
         company: e.company,
@@ -471,48 +480,85 @@ export default function ProfilePage() {
                   </Select>
                 </div>
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <Label className="flex items-center gap-1.5">
                   <FileText className="w-3.5 h-3.5" />
-                  Resume (PDF)
+                  Resume
                 </Label>
-                <div className="flex items-center gap-3">
-                  <label
-                    htmlFor="resume-upload"
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-background text-sm font-medium cursor-pointer hover:bg-muted/50 transition-colors ${isUploadingResume ? "opacity-60 pointer-events-none" : ""}`}
-                    data-testid="resume-upload-label"
+                {/* Mode toggle */}
+                <div className="flex items-center gap-1 p-1 bg-muted/40 rounded-lg w-fit">
+                  <button
+                    type="button"
+                    onClick={() => setResumeMode("upload")}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${resumeMode === "upload" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                    data-testid="resume-mode-upload"
                   >
-                    {isUploadingResume ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Upload className="w-4 h-4" />
-                    )}
-                    {isUploadingResume ? "Uploading…" : "Upload PDF"}
-                  </label>
-                  <input
-                    id="resume-upload"
-                    type="file"
-                    accept="application/pdf"
-                    className="sr-only"
-                    onChange={handleResumeFile}
-                    data-testid="resume-file-input"
-                  />
-                  {(resumeFileName || watch("resumeUrl")) && (
-                    <span className="text-xs text-muted-foreground truncate max-w-[200px]">
-                      {resumeFileName ?? "Resume saved"}
-                    </span>
-                  )}
+                    Upload PDF
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setResumeMode("paste")}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${resumeMode === "paste" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                    data-testid="resume-mode-paste"
+                  >
+                    Paste text
+                  </button>
                 </div>
-                {watch("resumeUrl") && (
-                  <a
-                    href={watch("resumeUrl")}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-indigo-400 hover:underline"
-                    data-testid="resume-view-link"
-                  >
-                    View current resume
-                  </a>
+
+                {resumeMode === "upload" ? (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-3">
+                      <label
+                        htmlFor="resume-upload"
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-background text-sm font-medium cursor-pointer hover:bg-muted/50 transition-colors ${isUploadingResume ? "opacity-60 pointer-events-none" : ""}`}
+                        data-testid="resume-upload-label"
+                      >
+                        {isUploadingResume ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Upload className="w-4 h-4" />
+                        )}
+                        {isUploadingResume ? "Uploading…" : "Choose PDF"}
+                      </label>
+                      <input
+                        id="resume-upload"
+                        type="file"
+                        accept="application/pdf"
+                        className="sr-only"
+                        onChange={handleResumeFile}
+                        data-testid="resume-file-input"
+                      />
+                      {(resumeFileName || watch("resumeUrl")) && (
+                        <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                          {resumeFileName ?? "Resume saved"}
+                        </span>
+                      )}
+                    </div>
+                    {watch("resumeUrl") && (
+                      <a
+                        href={watch("resumeUrl")}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-indigo-400 hover:underline"
+                        data-testid="resume-view-link"
+                      >
+                        View current resume
+                      </a>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <Textarea
+                      placeholder="Paste your resume text here — include your work history, skills, education, and any other relevant details…"
+                      rows={12}
+                      className="text-sm font-mono resize-y"
+                      data-testid="resume-text-input"
+                      {...register("resumeText")}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Paste plain text from your resume. This will be used for scoring and "Import from resume" — no file upload needed.
+                    </p>
+                  </div>
                 )}
                 <input type="hidden" {...register("resumeUrl")} />
               </div>

@@ -64,6 +64,7 @@ export const GetProfileResponse = zod.object({
   targetSalary: zod.number().nullish(),
   remotePreference: zod.string(),
   resumeUrl: zod.string().nullish(),
+  resumeText: zod.string().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
 });
@@ -88,6 +89,7 @@ export const UpsertProfileBody = zod.object({
   targetSalary: zod.number().nullish(),
   remotePreference: zod.string().optional(),
   resumeUrl: zod.string().nullish(),
+  resumeText: zod.string().nullish(),
 });
 
 export const UpsertProfileResponse = zod.object({
@@ -106,6 +108,7 @@ export const UpsertProfileResponse = zod.object({
   targetSalary: zod.number().nullish(),
   remotePreference: zod.string(),
   resumeUrl: zod.string().nullish(),
+  resumeText: zod.string().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
 });

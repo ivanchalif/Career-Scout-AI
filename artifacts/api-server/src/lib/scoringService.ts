@@ -330,10 +330,13 @@ export async function scorePosting(
     .where(eq(userProfilesTable.userId, userId));
 
   let resumeText = "";
-  if (profile?.resumeUrl) {
+  if (profile?.resumeText && profile.resumeText.length > 50) {
+    resumeText = profile.resumeText;
+    logger.info({ postingId, userId, chars: resumeText.length }, "scoringService: using stored resume text");
+  } else if (profile?.resumeUrl) {
     resumeText = await getResumeText(profile.resumeUrl);
     if (resumeText) {
-      logger.info({ postingId, userId, chars: resumeText.length }, "scoringService: loaded resume text");
+      logger.info({ postingId, userId, chars: resumeText.length }, "scoringService: loaded resume text from URL");
     } else {
       logger.warn({ postingId, userId }, "scoringService: resumeUrl present but could not extract text");
     }

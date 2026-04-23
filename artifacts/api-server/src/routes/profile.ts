@@ -67,14 +67,20 @@ router.post("/profile/parse-resume", requireAuth, async (req, res): Promise<void
   const userId = req.userId;
 
   const [profile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, userId));
-  if (!profile?.resumeUrl) {
-    res.status(400).json({ error: "No resume uploaded. Please upload a PDF resume first." });
+  if (!profile?.resumeUrl && !profile?.resumeText) {
+    res.status(400).json({ error: "No resume found. Upload a PDF or paste your resume text first." });
     return;
   }
 
-  const resumeText = await getResumeText(profile.resumeUrl);
+  let resumeText = "";
+  if (profile.resumeText && profile.resumeText.length > 50) {
+    resumeText = profile.resumeText;
+  } else if (profile.resumeUrl) {
+    resumeText = await getResumeText(profile.resumeUrl);
+  }
+
   if (!resumeText || resumeText.length < 50) {
-    res.status(422).json({ error: "Could not extract text from your resume. Make sure it is a text-based PDF (not a scanned image)." });
+    res.status(422).json({ error: "Could not extract text from your resume. Make sure it is a text-based PDF (not a scanned image), or use the paste option." });
     return;
   }
 

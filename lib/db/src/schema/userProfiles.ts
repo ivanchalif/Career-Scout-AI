@@ -10,6 +10,7 @@ export const userProfilesTable = pgTable("user_profiles", {
   targetSalary: integer("target_salary"),
   remotePreference: text("remote_preference").notNull().default("hybrid"),
   resumeUrl: text("resume_url"),
+  resumeText: text("resume_text"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
