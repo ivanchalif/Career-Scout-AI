@@ -310,6 +310,16 @@ export async function scorePosting(
   logger.info({ postingId, userId }, "scoringService: running fit scoring");
   const fitResult = await scoreFit(parsedJob, userProfile);
 
+  const jobSalaryMid =
+    parsedJob.salaryMin != null && parsedJob.salaryMax != null
+      ? Math.round((parsedJob.salaryMin + parsedJob.salaryMax) / 2)
+      : parsedJob.salaryMin ?? parsedJob.salaryMax ?? null;
+
+  const compensationGap =
+    jobSalaryMid != null && userProfile.targetSalary != null
+      ? jobSalaryMid - userProfile.targetSalary
+      : null;
+
   await db
     .delete(matchReportsTable)
     .where(
@@ -328,7 +338,7 @@ export async function scorePosting(
       reasoning: fitResult.reasoning,
       matchedSkills: fitResult.matchedSkills,
       missingSkills: fitResult.missingSkills,
-      compensationGap: fitResult.compensationGap,
+      compensationGap,
     })
     .returning();
 
