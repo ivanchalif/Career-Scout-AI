@@ -39,10 +39,15 @@ app.use(cors({
     }
     const devDomain = process.env["REPLIT_DEV_DOMAIN"];
     const clientOrigin = process.env["CLIENT_ORIGIN"];
-    const trusted =
-      (devDomain && origin.includes(devDomain)) ||
-      (clientOrigin && origin === clientOrigin);
-    callback(null, devDomain ? !!trusted : true);
+    if (!devDomain && !clientOrigin) {
+      callback(null, true);
+      return;
+    }
+    const allowedOrigins = [
+      devDomain ? `https://${devDomain}` : null,
+      clientOrigin ?? null,
+    ].filter(Boolean) as string[];
+    callback(null, allowedOrigins.includes(origin));
   },
 }));
 app.use(express.json());
