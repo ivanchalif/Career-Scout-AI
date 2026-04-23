@@ -82,7 +82,7 @@ Rules:
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-5-mini",
+      model: "gpt-4o-mini",
       max_completion_tokens: 2048,
       messages: [{ role: "user", content: prompt }],
     });
@@ -157,7 +157,7 @@ Rules:
 - Be thorough but precise — max 20 required skills, max 10 nice-to-have.`;
 
   const response = await openai.chat.completions.create({
-    model: "gpt-5-mini",
+    model: "gpt-4o-mini",
     max_completion_tokens: 1024,
     messages: [{ role: "user", content: prompt }],
   });
@@ -257,7 +257,7 @@ Scoring rules (be CONSERVATIVE — round DOWN for uncertainty):
 - Candidate target salary: ${userProfile.targetSalary ?? "unknown"}`;
 
   const response = await openai.chat.completions.create({
-    model: "gpt-5-mini",
+    model: "gpt-4o-mini",
     max_completion_tokens: 1024,
     messages: [{ role: "user", content: prompt }],
   });
