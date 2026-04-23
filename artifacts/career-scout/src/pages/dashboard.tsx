@@ -360,62 +360,75 @@ export default function DashboardPage() {
         </div>
 
         {/* Search + filters */}
-        <div className="flex gap-2 mb-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search jobs..."
-              className="pl-9"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              data-testid="search-input"
-            />
-          </div>
-          <div className="relative">
-            <ArrowUpDown className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            <select
-              value={sortKey}
-              onChange={(e) => setSortKey(e.target.value)}
-              data-testid="sort-select"
-              className="h-10 pl-8 pr-3 text-sm rounded-md border border-input bg-background text-foreground appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
-            >
-              <option value="date-desc">Date: Newest first</option>
-              <option value="date-asc">Date: Oldest first</option>
-              <option value="score-desc">Score: Highest first</option>
-              <option value="score-asc">Score: Lowest first</option>
-              <option value="title-asc">Title: A → Z</option>
-              <option value="title-desc">Title: Z → A</option>
-              <option value="company-asc">Company: A → Z</option>
-              <option value="company-desc">Company: Z → A</option>
-            </select>
-          </div>
+        <div className="flex justify-end mb-4">
           <Button
             variant="outline"
-            size="icon"
+            size="sm"
             onClick={() => setShowFilters((v) => !v)}
-            className={showFilters ? "border-indigo-500 text-indigo-400" : ""}
+            className={`gap-2 ${showFilters ? "border-indigo-500 text-indigo-400" : ""}`}
             data-testid="filter-button"
           >
             <SlidersHorizontal className="w-4 h-4" />
+            Filters
           </Button>
         </div>
 
         {showFilters && (
-          <div className="flex items-center gap-3 mb-4 p-3 bg-card border border-border rounded-lg">
-            <Label className="text-xs text-muted-foreground whitespace-nowrap">Min fit score</Label>
-            <Input
-              type="number"
-              min={0}
-              max={100}
-              placeholder="e.g. 70"
-              className="w-28 h-8 text-sm"
-              value={minFitScore ?? ""}
-              onChange={(e) => setMinFitScore(e.target.value ? Number(e.target.value) : undefined)}
-              data-testid="min-score-input"
-            />
-            {minFitScore != null && (
-              <Button variant="ghost" size="sm" onClick={() => setMinFitScore(undefined)}>
-                Clear
+          <div className="flex flex-wrap items-end gap-3 mb-4 p-4 bg-card border border-border rounded-lg">
+            <div className="flex-1 min-w-48 space-y-1">
+              <Label className="text-xs text-muted-foreground">Search</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search jobs..."
+                  className="pl-9 h-9"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  data-testid="search-input"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Sort</Label>
+              <div className="relative">
+                <ArrowUpDown className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <select
+                  value={sortKey}
+                  onChange={(e) => setSortKey(e.target.value)}
+                  data-testid="sort-select"
+                  className="h-9 pl-8 pr-3 text-sm rounded-md border border-input bg-background text-foreground appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+                >
+                  <option value="date-desc">Date: Newest first</option>
+                  <option value="date-asc">Date: Oldest first</option>
+                  <option value="score-desc">Score: Highest first</option>
+                  <option value="score-asc">Score: Lowest first</option>
+                  <option value="title-asc">Title: A → Z</option>
+                  <option value="title-desc">Title: Z → A</option>
+                  <option value="company-asc">Company: A → Z</option>
+                  <option value="company-desc">Company: Z → A</option>
+                </select>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Min fit score</Label>
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                placeholder="e.g. 70"
+                className="w-28 h-9 text-sm"
+                value={minFitScore ?? ""}
+                onChange={(e) => setMinFitScore(e.target.value ? Number(e.target.value) : undefined)}
+                data-testid="min-score-input"
+              />
+            </div>
+            {(search || minFitScore != null || sortKey !== "date-desc") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { setSearch(""); setMinFitScore(undefined); setSortKey("date-desc"); }}
+              >
+                Reset
               </Button>
             )}
           </div>
