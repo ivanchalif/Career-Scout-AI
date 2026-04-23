@@ -7,7 +7,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 const router: IRouter = Router();
 
 router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> => {
-  const userId = (req as any).userId as string;
+  const userId = req.userId;
 
   const [profile] = await db
     .select()

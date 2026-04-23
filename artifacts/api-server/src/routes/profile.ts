@@ -7,7 +7,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 const router: IRouter = Router();
 
 router.get("/profile", requireAuth, async (req, res): Promise<void> => {
-  const userId = (req as any).userId as string;
+  const userId = req.userId;
   const [profile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, userId));
   if (!profile) {
     res.status(404).json({ error: "Profile not found" });
@@ -17,7 +17,7 @@ router.get("/profile", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.put("/profile", requireAuth, async (req, res): Promise<void> => {
-  const userId = (req as any).userId as string;
+  const userId = req.userId;
   const parsed = UpsertProfileBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });

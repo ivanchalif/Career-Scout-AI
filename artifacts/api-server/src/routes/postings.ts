@@ -32,7 +32,7 @@ async function getPostingWithReport(postingId: number, userId: string) {
 }
 
 router.get("/postings", requireAuth, async (req, res): Promise<void> => {
-  const userId = (req as any).userId as string;
+  const userId = req.userId;
   const queryParsed = ListPostingsQueryParams.safeParse(req.query);
   if (!queryParsed.success) {
     res.status(400).json({ error: queryParsed.error.message });
@@ -85,7 +85,7 @@ router.get("/postings", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.post("/postings", requireAuth, async (req, res): Promise<void> => {
-  const userId = (req as any).userId as string;
+  const userId = req.userId;
   const parsed = CreatePostingBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -106,7 +106,7 @@ router.post("/postings", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.get("/postings/:id", requireAuth, async (req, res): Promise<void> => {
-  const userId = (req as any).userId as string;
+  const userId = req.userId;
   const params = GetPostingParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -123,7 +123,7 @@ router.get("/postings/:id", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.delete("/postings/:id", requireAuth, async (req, res): Promise<void> => {
-  const userId = (req as any).userId as string;
+  const userId = req.userId;
   const params = DeletePostingParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -144,7 +144,7 @@ router.delete("/postings/:id", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.post("/postings/:id/analyze", requireAuth, async (req, res): Promise<void> => {
-  const userId = (req as any).userId as string;
+  const userId = req.userId;
   const params = AnalyzePostingParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -166,23 +166,36 @@ router.post("/postings/:id/analyze", requireAuth, async (req, res): Promise<void
     .from(userProfilesTable)
     .where(eq(userProfilesTable.userId, userId));
 
+  const profileSkills = profile?.skills ?? [];
+  const postingSkills = posting.extractedSkills ?? [];
+  const matchedSkills = postingSkills.filter((s) => profileSkills.includes(s));
+  const missingSkills = postingSkills.filter((s) => !profileSkills.includes(s));
+  const fitScore = postingSkills.length > 0
+    ? Math.round((matchedSkills.length / postingSkills.length) * 100)
+    : 50;
+
   const placeholderReport = {
     jobPostingId: posting.id,
     userId,
-    fitScore: null as number | null,
-    reasoning: "AI analysis coming soon in Task 3.",
+    fitScore,
+    reasoning: "Basic skill-match analysis. Full AI scoring coming in Task 3.",
     compensationGap: null as number | null,
-    matchedSkills: [] as string[],
-    missingSkills: [] as string[],
+    matchedSkills,
+    missingSkills,
   };
+
+  await db
+    .delete(matchReportsTable)
+    .where(
+      and(
+        eq(matchReportsTable.jobPostingId, posting.id),
+        eq(matchReportsTable.userId, userId)
+      )
+    );
 
   const [report] = await db
     .insert(matchReportsTable)
     .values(placeholderReport)
-    .onConflictDoUpdate({
-      target: [matchReportsTable.jobPostingId, matchReportsTable.userId],
-      set: { updatedAt: new Date() },
-    })
     .returning();
 
   res.json(AnalyzePostingResponse.parse(report));

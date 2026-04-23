@@ -41,9 +41,11 @@ All routes are protected by Clerk auth (`requireAuth` middleware reads session c
 - `GET/PUT /api/profile` — career profile CRUD
 - `GET/POST /api/postings` — list/create job postings
 - `GET/DELETE /api/postings/:id` — get/delete a specific posting
-- `POST /api/postings/:id/analyze` — trigger AI analysis (placeholder, returns null fitScore until Task #3)
+- `POST /api/postings/:id/analyze` — trigger analysis (placeholder: basic skill-match score until Task #3)
 - `GET/POST /api/match-reports` — match report management
 - `GET /api/dashboard/summary` — aggregated stats (totalPostings, avgFitScore, topMatches, hasProfile, gmailConnected)
+- `POST /api/storage/uploads/request-url` — request a presigned URL for file upload
+- `GET /api/storage/public-objects/*` — serve public objects from object storage
 
 ## Frontend Pages
 
@@ -52,7 +54,7 @@ All routes are protected by Clerk auth (`requireAuth` middleware reads session c
 - `/sign-up/*?` — Clerk sign-up (branded dark theme)
 - `/dashboard` — Job opportunities ranked by fit score, search + filter, add job modal
 - `/postings/:id` — Posting detail: large score ring, matched/missing skills, AI reasoning, re-analyze button
-- `/profile` — Career profile editor: skills tag input, experience history, salary target, remote preference
+- `/profile` — Career profile editor: skills tag input, experience history, salary target, remote preference, resume PDF upload
 
 ## Key Files
 
@@ -74,6 +76,7 @@ All routes are protected by Clerk auth (`requireAuth` middleware reads session c
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
+- `pnpm --filter @workspace/scripts run seed` — seed sample job postings and match reports into DB
 
 ## Pending Tasks
 
@@ -84,7 +87,11 @@ All routes are protected by Clerk auth (`requireAuth` middleware reads session c
 
 - `CLERK_PUBLISHABLE_KEY` is injected into the Vite build via `vite.config.ts` `define` block (not .env)
 - `CLERK_PROXY_URL` is only set in production (the proxy is server-side only)
-- Analyze endpoint returns a placeholder response with `fitScore: null` until Task #3 is done
+- Analyze endpoint returns a basic skill-match score (matched/total skills %) until Task #3 replaces it with full AI scoring
 - Gmail banner on dashboard shows "Coming soon" until Task #2 is done
+- Object storage: bucket provisioned, `lib/object-storage-web` client package available for frontend upload
+- Resume upload on profile page uses native file input → presigned URL → PUT to object storage
+- Application Prep section on posting detail shows matched/missing skill guidance when a match report exists
+- Seed script at `scripts/seed.ts` inserts 5 sample postings + 3 match reports for demo/testing
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.

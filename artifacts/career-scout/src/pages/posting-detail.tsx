@@ -1,7 +1,8 @@
 import { Link } from "wouter";
 import {
   ArrowLeft, Zap, ExternalLink, RotateCcw,
-  Building2, Calendar, DollarSign, CheckCircle, XCircle
+  Building2, Calendar, DollarSign, CheckCircle, XCircle,
+  Lightbulb, BookOpen, ClipboardList
 } from "lucide-react";
 import {
   useGetPosting,
@@ -274,6 +275,83 @@ export default function PostingDetailPage({ id }: { id: number }) {
             </div>
           )}
         </div>
+
+        {/* Application Prep */}
+        {report && (
+          <div className="bg-card border border-border rounded-xl p-6 mb-6" data-testid="application-prep">
+            <div className="flex items-center gap-2 mb-4">
+              <ClipboardList className="w-4 h-4 text-indigo-400" />
+              <h2 className="font-semibold text-foreground">Application Prep</h2>
+            </div>
+
+            <div className="space-y-4">
+              {/* Matched skills — lead with strengths */}
+              {report.matchedSkills && report.matchedSkills.length > 0 && (
+                <div className="p-4 bg-emerald-950/20 border border-emerald-800/30 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                    <p className="text-xs font-semibold text-emerald-400 uppercase tracking-wide">Highlight in your application</p>
+                  </div>
+                  <ul className="space-y-1.5">
+                    {report.matchedSkills.map((skill) => (
+                      <li key={skill} className="flex items-start gap-2 text-sm text-foreground/80">
+                        <span className="text-emerald-400 mt-0.5 shrink-0">✓</span>
+                        <span>
+                          Emphasize your <strong className="text-foreground">{skill}</strong> experience — it directly matches what they require.
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Missing skills — actionable gaps */}
+              {report.missingSkills && report.missingSkills.length > 0 && (
+                <div className="p-4 bg-amber-950/20 border border-amber-800/30 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+                    <p className="text-xs font-semibold text-amber-400 uppercase tracking-wide">Skills to address</p>
+                  </div>
+                  <ul className="space-y-1.5">
+                    {report.missingSkills.map((skill) => (
+                      <li key={skill} className="flex items-start gap-2 text-sm text-foreground/80">
+                        <span className="text-amber-400 mt-0.5 shrink-0">→</span>
+                        <span>
+                          <strong className="text-foreground">{skill}</strong> is listed as a requirement. Consider taking a short course or adding a personal project to close this gap.
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* General tips */}
+              <div className="p-4 bg-indigo-950/20 border border-indigo-800/30 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <Lightbulb className="w-3.5 h-3.5 text-indigo-400" />
+                  <p className="text-xs font-semibold text-indigo-400 uppercase tracking-wide">Application tips</p>
+                </div>
+                <ul className="space-y-1.5 text-sm text-foreground/80">
+                  <li className="flex items-start gap-2">
+                    <span className="text-indigo-400 mt-0.5 shrink-0">•</span>
+                    Tailor your resume headline to match <strong className="text-foreground">{posting.title}</strong> at {posting.company}.
+                  </li>
+                  {posting.salaryMin && (
+                    <li className="flex items-start gap-2">
+                      <span className="text-indigo-400 mt-0.5 shrink-0">•</span>
+                      The posted salary range starts at <strong className="text-foreground">${posting.salaryMin.toLocaleString()}</strong>
+                      {posting.salaryMax ? ` up to $${posting.salaryMax.toLocaleString()}` : ""}. Research market rates before negotiating.
+                    </li>
+                  )}
+                  <li className="flex items-start gap-2">
+                    <span className="text-indigo-400 mt-0.5 shrink-0">•</span>
+                    Write a concise cover letter focusing on specific achievements, not just responsibilities.
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Full description */}
         <div className="bg-card border border-border rounded-xl p-6">

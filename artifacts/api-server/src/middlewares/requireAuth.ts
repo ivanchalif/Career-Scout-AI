@@ -3,11 +3,11 @@ import type { Request, Response, NextFunction } from "express";
 
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const auth = getAuth(req);
-  const userId = auth?.sessionClaims?.userId as string | undefined || auth?.userId;
+  const userId = auth?.userId;
   if (!userId) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
-  (req as any).userId = userId;
+  req.userId = userId;
   next();
 }

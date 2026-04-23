@@ -11,7 +11,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 const router: IRouter = Router();
 
 router.get("/match-reports", requireAuth, async (req, res): Promise<void> => {
-  const userId = (req as any).userId as string;
+  const userId = req.userId;
   const reports = await db
     .select()
     .from(matchReportsTable)
@@ -22,7 +22,7 @@ router.get("/match-reports", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.get("/match-reports/:id", requireAuth, async (req, res): Promise<void> => {
-  const userId = (req as any).userId as string;
+  const userId = req.userId;
   const params = GetMatchReportParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });

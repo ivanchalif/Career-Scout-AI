@@ -11,7 +11,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
   Plus, Trash2, Save, User, Briefcase, GraduationCap,
-  DollarSign, Wifi, CheckCircle2
+  DollarSign, Wifi, CheckCircle2, Upload, FileText, Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import Layout from "@/components/layout";
+import { useUpload } from "@workspace/object-storage-web";
 
 const profileSchema = z.object({
   skills: z.array(z.string()).default([]),
@@ -54,6 +55,47 @@ export default function ProfilePage() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [skillInput, setSkillInput] = useState("");
+  const [resumeFileName, setResumeFileName] = useState<string | null>(null);
+
+  const { getUploadParameters, isUploading: isUploadingResume } = useUpload({
+    onSuccess: (response) => {
+      const publicUrl = `/api/storage/public-objects/${response.objectPath}`;
+      setValue("resumeUrl", publicUrl);
+      toast({ title: "Resume uploaded", description: "Your resume has been uploaded successfully." });
+    },
+    onError: () => {
+      toast({ title: "Upload failed", description: "Failed to upload resume. Please try again.", variant: "destructive" });
+    },
+  });
+
+  async function handleResumeFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== "application/pdf") {
+      toast({ title: "Invalid file type", description: "Please upload a PDF file.", variant: "destructive" });
+      return;
+    }
+    setResumeFileName(file.name);
+    try {
+      const params = await getUploadParameters({
+        name: file.name,
+        size: file.size,
+        type: file.type,
+      } as Parameters<typeof getUploadParameters>[0]);
+      const res = await fetch(params.url, {
+        method: params.method,
+        body: file,
+        headers: params.headers ?? {},
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const objectPath = new URL(params.url).pathname.replace(/^\//, "");
+      const publicUrl = `/api/storage/public-objects/${objectPath}`;
+      setValue("resumeUrl", publicUrl);
+      toast({ title: "Resume uploaded", description: `${file.name} uploaded successfully.` });
+    } catch {
+      toast({ title: "Upload failed", description: "Failed to upload resume. Please try again.", variant: "destructive" });
+    }
+  }
 
   const profileQ = useGetProfile({ query: { queryKey: getGetProfileQueryKey() } });
   const upsertMutation = useUpsertProfile();
@@ -338,16 +380,49 @@ export default function ProfilePage() {
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label>Resume URL (optional)</Label>
-                <Input
-                  type="url"
-                  placeholder="https://your-resume.com/resume.pdf"
-                  data-testid="resume-input"
-                  {...register("resumeUrl")}
-                />
-                {errors.resumeUrl && (
-                  <p className="text-xs text-destructive">Please enter a valid URL</p>
+                <Label className="flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5" />
+                  Resume (PDF)
+                </Label>
+                <div className="flex items-center gap-3">
+                  <label
+                    htmlFor="resume-upload"
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-background text-sm font-medium cursor-pointer hover:bg-muted/50 transition-colors ${isUploadingResume ? "opacity-60 pointer-events-none" : ""}`}
+                    data-testid="resume-upload-label"
+                  >
+                    {isUploadingResume ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Upload className="w-4 h-4" />
+                    )}
+                    {isUploadingResume ? "Uploading…" : "Upload PDF"}
+                  </label>
+                  <input
+                    id="resume-upload"
+                    type="file"
+                    accept="application/pdf"
+                    className="sr-only"
+                    onChange={handleResumeFile}
+                    data-testid="resume-file-input"
+                  />
+                  {(resumeFileName || watch("resumeUrl")) && (
+                    <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                      {resumeFileName ?? "Resume saved"}
+                    </span>
+                  )}
+                </div>
+                {watch("resumeUrl") && (
+                  <a
+                    href={watch("resumeUrl")}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-indigo-400 hover:underline"
+                    data-testid="resume-view-link"
+                  >
+                    View current resume
+                  </a>
                 )}
+                <input type="hidden" {...register("resumeUrl")} />
               </div>
             </section>
 
