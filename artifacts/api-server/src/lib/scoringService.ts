@@ -188,9 +188,10 @@ Scoring rules (be CONSERVATIVE — round DOWN for uncertainty):
     logger.warn({ content }, "scoringService: failed to parse fit score JSON, using fallback");
   }
 
-  const profileSkills = userProfile.skills.map((s: string) => s.toLowerCase());
+  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9+#.]/g, "").trim();
+  const profileSkillsNorm = userProfile.skills.map((s: string) => normalize(s));
   const matched = parsedJob.requiredSkills.filter((s: string) =>
-    profileSkills.some((ps: string) => ps.includes(s.toLowerCase()) || s.toLowerCase().includes(ps))
+    profileSkillsNorm.includes(normalize(s))
   );
   const missing = parsedJob.requiredSkills.filter((s: string) => !matched.includes(s));
   const fitScore =
@@ -287,9 +288,14 @@ export async function scorePosting(
       ]),
     ];
 
+    const canonicalTitle = parsedJob.title.trim() || posting.title;
+    const canonicalCompany = parsedJob.company.trim() || posting.company;
+
     await db
       .update(jobPostingsTable)
       .set({
+        title: canonicalTitle,
+        company: canonicalCompany,
         extractedSkills: updatedSkills,
         requiredSkills: parsedJob.requiredSkills,
         niceToHaveSkills: parsedJob.niceToHaveSkills,
@@ -334,14 +340,22 @@ export async function scorePosting(
   return { report };
 }
 
-export async function scorePostingBackground(
+let backgroundQueue = Promise.resolve();
+
+/**
+ * Enqueue a posting for background scoring.
+ * All calls are serialized to prevent burst failures during large Gmail imports.
+ */
+export function scorePostingBackground(
   postingId: number,
   userId: string,
-): Promise<void> {
-  scorePosting(postingId, userId).catch((err) => {
-    logger.error(
-      { postingId, userId, err },
-      "scoringService: background scoring failed",
-    );
+): void {
+  backgroundQueue = backgroundQueue.then(async () => {
+    await scorePosting(postingId, userId).catch((err) => {
+      logger.error(
+        { postingId, userId, err },
+        "scoringService: background scoring failed",
+      );
+    });
   });
 }
