@@ -158,11 +158,12 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
           gmailMessageId: gmailKey,
           extractedSkills: [],
         })
+        .onConflictDoNothing()
         .returning();
       if (newPosting) {
         scorePostingBackground(newPosting.id, userId);
+        synced++;
       }
-      synced++;
     }
   }
 
