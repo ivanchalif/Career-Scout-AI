@@ -10,16 +10,22 @@ const JOB_QUERY = [
   "newer_than:7d",
 ].join(" ");
 
-export function createOAuth2Client(): OAuth2Client {
+export function getGmailRedirectUri(): string {
+  if (process.env["GMAIL_REDIRECT_URI"]) {
+    return process.env["GMAIL_REDIRECT_URI"];
+  }
   const devDomain = process.env["REPLIT_DEV_DOMAIN"];
-  const redirectUri = devDomain
-    ? `https://${devDomain}/api/gmail/callback`
-    : "http://localhost:3000/api/gmail/callback";
+  if (devDomain) {
+    return `https://${devDomain}/api/gmail/callback`;
+  }
+  return "http://localhost:3000/api/gmail/callback";
+}
 
+export function createOAuth2Client(): OAuth2Client {
   return new OAuth2Client({
     clientId: process.env["GOOGLE_CLIENT_ID"],
     clientSecret: process.env["GOOGLE_CLIENT_SECRET"],
-    redirectUri,
+    redirectUri: getGmailRedirectUri(),
   });
 }
 
