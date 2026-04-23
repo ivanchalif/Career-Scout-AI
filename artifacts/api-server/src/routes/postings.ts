@@ -165,7 +165,7 @@ router.post("/postings/:id/analyze", requireAuth, async (req, res): Promise<void
   }
 
   try {
-    const { report } = await scorePosting(posting.id, userId);
+    const { report } = await scorePosting(posting.id, userId, { forceParse: true });
     res.json(AnalyzePostingResponse.parse(report));
   } catch (err) {
     const message = err instanceof Error ? err.message : "Scoring failed";

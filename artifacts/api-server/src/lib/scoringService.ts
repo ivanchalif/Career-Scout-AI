@@ -5,27 +5,32 @@ import {
   matchReportsTable,
   userProfilesTable,
 } from "@workspace/db";
+import { z } from "zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { logger } from "./logger";
 
-interface ParsedJob {
-  title: string;
-  company: string;
-  requiredSkills: string[];
-  niceToHaveSkills: string[];
-  minYearsExperience: number | null;
-  salaryMin: number | null;
-  salaryMax: number | null;
-  remoteType: "remote" | "hybrid" | "onsite" | "unknown";
-}
+const parsedJobSchema = z.object({
+  title: z.string().default(""),
+  company: z.string().default(""),
+  requiredSkills: z.array(z.string()).default([]),
+  niceToHaveSkills: z.array(z.string()).default([]),
+  minYearsExperience: z.number().nullable().default(null),
+  salaryMin: z.number().nullable().default(null),
+  salaryMax: z.number().nullable().default(null),
+  remoteType: z.enum(["remote", "hybrid", "onsite", "unknown"]).default("unknown"),
+});
 
-interface FitScoreResult {
-  fitScore: number;
-  reasoning: string;
-  matchedSkills: string[];
-  missingSkills: string[];
-  compensationGap: number | null;
-}
+type ParsedJob = z.infer<typeof parsedJobSchema>;
+
+const fitScoreResultSchema = z.object({
+  fitScore: z.number().min(0).max(100),
+  reasoning: z.string().default(""),
+  matchedSkills: z.array(z.string()).default([]),
+  missingSkills: z.array(z.string()).default([]),
+  compensationGap: z.number().nullable().default(null),
+});
+
+type FitScoreResult = z.infer<typeof fitScoreResultSchema>;
 
 async function parseJobDescription(
   rawDescription: string,
@@ -75,19 +80,16 @@ Rules:
       .replace(/```json\n?/gi, "")
       .replace(/```\n?/gi, "")
       .trim();
-    return JSON.parse(cleaned) as ParsedJob;
+    const parsed = JSON.parse(cleaned);
+    const result = parsedJobSchema.safeParse(parsed);
+    if (result.success) {
+      return result.data;
+    }
+    logger.warn({ issues: result.error.issues }, "scoringService: LLM output failed schema validation, using safe defaults");
+    return parsedJobSchema.parse({});
   } catch {
     logger.warn({ content }, "scoringService: failed to parse job JSON, using defaults");
-    return {
-      title,
-      company,
-      requiredSkills: [],
-      niceToHaveSkills: [],
-      minYearsExperience: null,
-      salaryMin: null,
-      salaryMax: null,
-      remoteType: "unknown",
-    };
+    return parsedJobSchema.parse({});
   }
 }
 
@@ -173,43 +175,50 @@ Scoring rules (be CONSERVATIVE — round DOWN for uncertainty):
       .replace(/```json\n?/gi, "")
       .replace(/```\n?/gi, "")
       .trim();
-    const result = JSON.parse(cleaned) as FitScoreResult;
-    return {
-      fitScore: Math.max(0, Math.min(100, Math.round(result.fitScore))),
-      reasoning: result.reasoning ?? "",
-      matchedSkills: Array.isArray(result.matchedSkills) ? result.matchedSkills : [],
-      missingSkills: Array.isArray(result.missingSkills) ? result.missingSkills : [],
-      compensationGap:
-        result.compensationGap != null ? Math.round(result.compensationGap) : null,
-    };
+    const parsed = JSON.parse(cleaned);
+    const result = fitScoreResultSchema.safeParse(parsed);
+    if (result.success) {
+      return {
+        ...result.data,
+        fitScore: Math.max(0, Math.min(100, Math.round(result.data.fitScore))),
+      };
+    }
+    logger.warn({ issues: result.error.issues }, "scoringService: fit score failed schema validation, using fallback");
   } catch {
     logger.warn({ content }, "scoringService: failed to parse fit score JSON, using fallback");
-    const profileSkills = userProfile.skills.map((s) => s.toLowerCase());
-    const matched = parsedJob.requiredSkills.filter((s) =>
-      profileSkills.some((ps) => ps.includes(s.toLowerCase()) || s.toLowerCase().includes(ps))
-    );
-    const missing = parsedJob.requiredSkills.filter((s) => !matched.includes(s));
-    const fitScore =
-      parsedJob.requiredSkills.length > 0
-        ? Math.round((matched.length / parsedJob.requiredSkills.length) * 100)
-        : 50;
-    return {
-      fitScore,
-      reasoning: "Fit score based on skill overlap analysis.",
-      matchedSkills: matched,
-      missingSkills: missing,
-      compensationGap: null,
-    };
   }
+
+  const profileSkills = userProfile.skills.map((s: string) => s.toLowerCase());
+  const matched = parsedJob.requiredSkills.filter((s: string) =>
+    profileSkills.some((ps: string) => ps.includes(s.toLowerCase()) || s.toLowerCase().includes(ps))
+  );
+  const missing = parsedJob.requiredSkills.filter((s: string) => !matched.includes(s));
+  const fitScore =
+    parsedJob.requiredSkills.length > 0
+      ? Math.round((matched.length / parsedJob.requiredSkills.length) * 100)
+      : 50;
+  return {
+    fitScore,
+    reasoning: "Fit score based on skill overlap analysis.",
+    matchedSkills: matched,
+    missingSkills: missing,
+    compensationGap: null,
+  };
 }
 
 export interface ScoringResult {
   report: typeof matchReportsTable.$inferSelect;
 }
 
+/**
+ * Score a job posting against the user's profile.
+ * @param forceParse If true, always re-parse the job description even if already parsed.
+ *                   Defaults to false — re-uses existing parsed fields when available.
+ */
 export async function scorePosting(
   postingId: number,
   userId: string,
+  { forceParse = false }: { forceParse?: boolean } = {},
 ): Promise<ScoringResult> {
   const [posting] = await db
     .select()
@@ -247,32 +256,50 @@ export async function scorePosting(
         remotePreference: "hybrid",
       };
 
-  logger.info({ postingId, userId }, "scoringService: parsing job description");
-  const parsedJob = await parseJobDescription(
-    posting.fullDescription,
-    posting.title,
-    posting.company,
-  );
+  let parsedJob: ParsedJob;
 
-  const updatedSkills = [
-    ...new Set([
-      ...parsedJob.requiredSkills,
-      ...parsedJob.niceToHaveSkills,
-    ]),
-  ];
+  const alreadyParsed = posting.requiredSkills.length > 0 && !forceParse;
 
-  await db
-    .update(jobPostingsTable)
-    .set({
-      extractedSkills: updatedSkills,
-      requiredSkills: parsedJob.requiredSkills,
-      niceToHaveSkills: parsedJob.niceToHaveSkills,
-      minYearsExperience: parsedJob.minYearsExperience ?? posting.minYearsExperience,
-      remoteType: parsedJob.remoteType !== "unknown" ? parsedJob.remoteType : posting.remoteType,
-      salaryMin: parsedJob.salaryMin ?? posting.salaryMin,
-      salaryMax: parsedJob.salaryMax ?? posting.salaryMax,
-    })
-    .where(eq(jobPostingsTable.id, postingId));
+  if (alreadyParsed) {
+    logger.info({ postingId, userId }, "scoringService: reusing existing parsed fields");
+    parsedJob = {
+      title: posting.title,
+      company: posting.company,
+      requiredSkills: posting.requiredSkills,
+      niceToHaveSkills: posting.niceToHaveSkills,
+      minYearsExperience: posting.minYearsExperience ?? null,
+      salaryMin: posting.salaryMin ?? null,
+      salaryMax: posting.salaryMax ?? null,
+      remoteType: (posting.remoteType as ParsedJob["remoteType"]) ?? "unknown",
+    };
+  } else {
+    logger.info({ postingId, userId }, "scoringService: parsing job description");
+    parsedJob = await parseJobDescription(
+      posting.fullDescription,
+      posting.title,
+      posting.company,
+    );
+
+    const updatedSkills = [
+      ...new Set([
+        ...parsedJob.requiredSkills,
+        ...parsedJob.niceToHaveSkills,
+      ]),
+    ];
+
+    await db
+      .update(jobPostingsTable)
+      .set({
+        extractedSkills: updatedSkills,
+        requiredSkills: parsedJob.requiredSkills,
+        niceToHaveSkills: parsedJob.niceToHaveSkills,
+        minYearsExperience: parsedJob.minYearsExperience ?? posting.minYearsExperience,
+        remoteType: parsedJob.remoteType !== "unknown" ? parsedJob.remoteType : posting.remoteType,
+        salaryMin: parsedJob.salaryMin ?? posting.salaryMin,
+        salaryMax: parsedJob.salaryMax ?? posting.salaryMax,
+      })
+      .where(eq(jobPostingsTable.id, postingId));
+  }
 
   logger.info({ postingId, userId }, "scoringService: running fit scoring");
   const fitResult = await scoreFit(parsedJob, userProfile);
