@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db, gmailConnectionsTable, jobPostingsTable, gmailSeenKeysTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -13,6 +13,48 @@ import {
 } from "../lib/gmailClient";
 import { scorePostingBackground, sweepUnscoredPostings, extractJobListings } from "../lib/scoringService";
 import { logger } from "../lib/logger";
+
+function normalizeFuzzy(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/\s*\([^)]*\)/g, " ")
+    .replace(/\b(inc|llc|ltd|corp|co|gmbh|ag|plc|sa|technologies|technology|tech|solutions|group|holdings|services)\.?\b/gi, " ")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function isFuzzyDuplicate(
+  userId: string,
+  title: string,
+  company: string,
+): Promise<{ isDuplicate: boolean; matchedTitle?: string; matchedCompany?: string }> {
+  const normTitle = normalizeFuzzy(title);
+  const normCompany = normalizeFuzzy(company);
+
+  if (!normTitle || !normCompany) return { isDuplicate: false };
+
+  const rows = await db.execute(sql`
+    SELECT id, title, company
+    FROM job_postings
+    WHERE user_id = ${userId}
+      AND similarity(
+        regexp_replace(lower(title),   '[^a-z0-9 ]', ' ', 'g'),
+        ${normTitle}
+      ) > 0.75
+      AND similarity(
+        regexp_replace(regexp_replace(lower(company), '\s*\([^)]*\)', ' ', 'g'), '[^a-z0-9 ]', ' ', 'g'),
+        ${normCompany}
+      ) > 0.65
+    LIMIT 1
+  `);
+
+  if (rows.rows.length > 0) {
+    const match = rows.rows[0] as { title: string; company: string };
+    return { isDuplicate: true, matchedTitle: match.title, matchedCompany: match.company };
+  }
+  return { isDuplicate: false };
+}
 
 const router: IRouter = Router();
 
@@ -141,18 +183,29 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
       if (!listing.description.trim()) continue;
 
       const gmailKey = `${email.messageId}:${i}`;
+      const title = listing.title || email.subject.slice(0, 200) || "Job Opportunity";
+      const company = listing.company || extractSender(email.sender);
 
       await db
         .insert(gmailSeenKeysTable)
         .values({ userId, gmailKey })
         .onConflictDoNothing();
 
+      const { isDuplicate, matchedTitle, matchedCompany } = await isFuzzyDuplicate(userId, title, company);
+      if (isDuplicate) {
+        logger.info(
+          { userId, title, company, matchedTitle, matchedCompany },
+          "gmail sync: skipping fuzzy duplicate posting",
+        );
+        continue;
+      }
+
       const [newPosting] = await db
         .insert(jobPostingsTable)
         .values({
           userId,
-          title: listing.title || email.subject.slice(0, 200) || "Job Opportunity",
-          company: listing.company || extractSender(email.sender),
+          title,
+          company,
           fullDescription: listing.description.slice(0, 10_000),
           source: "gmail",
           gmailMessageId: gmailKey,
