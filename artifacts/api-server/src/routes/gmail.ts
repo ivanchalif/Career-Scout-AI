@@ -11,6 +11,7 @@ import {
   signState,
   verifyState,
 } from "../lib/gmailClient";
+import { scorePostingBackground } from "../lib/scoringService";
 
 const router: IRouter = Router();
 
@@ -133,7 +134,7 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
 
   for (const email of newEmails) {
     if (!email.body.trim()) continue;
-    await db.insert(jobPostingsTable).values({
+    const [newPosting] = await db.insert(jobPostingsTable).values({
       userId,
       title: email.subject.slice(0, 200) || "Job Opportunity",
       company: extractSender(email.sender),
@@ -141,7 +142,10 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
       source: "gmail",
       gmailMessageId: email.messageId,
       extractedSkills: [],
-    });
+    }).returning();
+    if (newPosting) {
+      scorePostingBackground(newPosting.id, userId);
+    }
     synced++;
   }
 

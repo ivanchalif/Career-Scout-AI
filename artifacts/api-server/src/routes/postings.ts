@@ -12,6 +12,7 @@ import {
   AnalyzePostingResponse,
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
+import { scorePosting, scorePostingBackground } from "../lib/scoringService";
 
 const router: IRouter = Router();
 
@@ -103,6 +104,8 @@ router.post("/postings", requireAuth, async (req, res): Promise<void> => {
     .returning();
 
   res.status(201).json(posting);
+
+  scorePostingBackground(posting.id, userId);
 });
 
 router.get("/postings/:id", requireAuth, async (req, res): Promise<void> => {
@@ -161,44 +164,13 @@ router.post("/postings/:id/analyze", requireAuth, async (req, res): Promise<void
     return;
   }
 
-  const [profile] = await db
-    .select()
-    .from(userProfilesTable)
-    .where(eq(userProfilesTable.userId, userId));
-
-  const profileSkills = profile?.skills ?? [];
-  const postingSkills = posting.extractedSkills ?? [];
-  const matchedSkills = postingSkills.filter((s) => profileSkills.includes(s));
-  const missingSkills = postingSkills.filter((s) => !profileSkills.includes(s));
-  const fitScore = postingSkills.length > 0
-    ? Math.round((matchedSkills.length / postingSkills.length) * 100)
-    : 50;
-
-  const placeholderReport = {
-    jobPostingId: posting.id,
-    userId,
-    fitScore,
-    reasoning: "Basic skill-match analysis. Full AI scoring coming in Task 3.",
-    compensationGap: null as number | null,
-    matchedSkills,
-    missingSkills,
-  };
-
-  await db
-    .delete(matchReportsTable)
-    .where(
-      and(
-        eq(matchReportsTable.jobPostingId, posting.id),
-        eq(matchReportsTable.userId, userId)
-      )
-    );
-
-  const [report] = await db
-    .insert(matchReportsTable)
-    .values(placeholderReport)
-    .returning();
-
-  res.json(AnalyzePostingResponse.parse(report));
+  try {
+    const { report } = await scorePosting(posting.id, userId);
+    res.json(AnalyzePostingResponse.parse(report));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Scoring failed";
+    res.status(500).json({ error: message });
+  }
 });
 
 export default router;

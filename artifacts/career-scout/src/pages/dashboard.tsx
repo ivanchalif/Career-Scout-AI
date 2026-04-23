@@ -50,8 +50,26 @@ import Layout from "@/components/layout";
 function ScoreRing({ score }: { score: number | null }) {
   if (score === null) {
     return (
-      <div className="flex items-center justify-center w-14 h-14 rounded-full border-2 border-muted bg-muted/20">
-        <span className="text-xs text-muted-foreground">—</span>
+      <div
+        className="relative flex items-center justify-center w-14 h-14"
+        title="AI scoring in progress"
+        data-testid="score-ring-pending"
+      >
+        <svg width="56" height="56" viewBox="0 0 56 56" className="-rotate-90 animate-spin" style={{ animationDuration: "3s" }}>
+          <circle cx="28" cy="28" r={22} fill="none" stroke="hsl(var(--muted))" strokeWidth="3" />
+          <circle
+            cx="28"
+            cy="28"
+            r={22}
+            fill="none"
+            stroke="hsl(var(--muted-foreground))"
+            strokeWidth="3"
+            strokeDasharray="20 118"
+            strokeLinecap="round"
+            opacity="0.4"
+          />
+        </svg>
+        <span className="absolute text-[9px] text-muted-foreground font-medium leading-none text-center">AI</span>
       </div>
     );
   }

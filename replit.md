@@ -41,7 +41,7 @@ All routes are protected by Clerk auth (`requireAuth` middleware reads session c
 - `GET/PUT /api/profile` — career profile CRUD
 - `GET/POST /api/postings` — list/create job postings
 - `GET/DELETE /api/postings/:id` — get/delete a specific posting
-- `POST /api/postings/:id/analyze` — trigger analysis (placeholder: basic skill-match score until Task #3)
+- `POST /api/postings/:id/analyze` — re-trigger AI scoring for a posting (LLM parse + fit score, updates match report)
 - `GET/POST /api/match-reports` — match report management
 - `GET /api/dashboard/summary` — aggregated stats (totalPostings, avgFitScore, topMatches, hasProfile, gmailConnected)
 - `POST /api/storage/uploads/request-url` — request a presigned URL for file upload
@@ -83,15 +83,20 @@ All routes are protected by Clerk auth (`requireAuth` middleware reads session c
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
 - `pnpm --filter @workspace/scripts run seed` — seed sample job postings and match reports into DB
 
-## Pending Tasks
+## AI Scoring Engine
 
-- **Task #3**: AI fit scoring engine — Anthropic/OpenAI integration, job post analysis against user profile, skill matching, compensation gap calculation
+- **Integration**: OpenAI via Replit AI Integrations proxy (`@workspace/integrations-openai-ai-server`), model: `gpt-5-mini`
+- **Pipeline**: (1) Parse raw job description → extract required/nice-to-have skills, salary range, remote type; (2) Score candidate profile against parsed requirements
+- **Auto-trigger**: Scoring fires in the background after every new job posting (manual or Gmail sync)
+- **Re-analyze**: `POST /api/postings/:id/analyze` re-runs the full pipeline synchronously and returns the updated match report
+- **Output**: fitScore (0–100, conservative), reasoning (2–3 sentences), matchedSkills[], missingSkills[], compensationGap
+- **Service**: `artifacts/api-server/src/lib/scoringService.ts`
 
 ## Notes
 
 - `CLERK_PUBLISHABLE_KEY` is injected into the Vite build via `vite.config.ts` `define` block (not .env)
 - `CLERK_PROXY_URL` is only set in production (the proxy is server-side only)
-- Analyze endpoint returns a basic skill-match score (matched/total skills %) until Task #3 replaces it with full AI scoring
+- AI scoring uses gpt-5-mini, runs as background task on new postings, synchronous on re-analyze
 - Gmail integration: requires `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` secrets (Google Cloud project with Gmail API enabled, OAuth 2.0 credentials, redirect URI = `https://${REPLIT_DEV_DOMAIN}/api/gmail/callback`)
 - Gmail OAuth uses HMAC-signed state token to correlate callback with userId (no cookies needed across redirect)
 - Gmail sync query: `subject:(job OR opportunity OR role OR position OR hiring OR offer OR recruiter ...) newer_than:7d`

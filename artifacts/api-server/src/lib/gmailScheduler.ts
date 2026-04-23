@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db, gmailConnectionsTable, jobPostingsTable } from "@workspace/db";
 import { fetchJobEmails } from "./gmailClient";
+import { scorePostingBackground } from "./scoringService";
 import { logger } from "./logger";
 
 const SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -38,7 +39,7 @@ async function syncAllUsers(): Promise<void> {
 
       for (const email of newEmails) {
         if (!email.body.trim()) continue;
-        await db.insert(jobPostingsTable).values({
+        const [newPosting] = await db.insert(jobPostingsTable).values({
           userId: conn.userId,
           title: email.subject.slice(0, 200) || "Job Opportunity",
           company: extractSender(email.sender),
@@ -46,7 +47,10 @@ async function syncAllUsers(): Promise<void> {
           source: "gmail",
           gmailMessageId: email.messageId,
           extractedSkills: [],
-        });
+        }).returning();
+        if (newPosting) {
+          scorePostingBackground(newPosting.id, conn.userId);
+        }
         synced++;
       }
 
