@@ -453,6 +453,25 @@ export function scorePostingBackground(
 }
 
 /**
+ * Enqueue all postings for a user for background re-scoring.
+ * Called when the user's profile is updated so scores reflect the latest profile.
+ * Reuses existing parsed job fields (no LLM re-parse) — only the fit score is recomputed.
+ */
+export async function rescoreAllPostings(userId: string): Promise<void> {
+  const allPostings = await db
+    .select({ id: jobPostingsTable.id })
+    .from(jobPostingsTable)
+    .where(eq(jobPostingsTable.userId, userId));
+
+  if (allPostings.length > 0) {
+    logger.info({ userId, count: allPostings.length }, "scoringService: queuing all postings for re-score after profile update");
+    for (const { id } of allPostings) {
+      scorePostingBackground(id, userId);
+    }
+  }
+}
+
+/**
  * Enqueue all unscored postings for a user for background scoring.
  * Runs at sync time to retry any postings that failed scoring previously.
  */

@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm";
 import { db, userProfilesTable } from "@workspace/db";
 import { UpsertProfileBody, GetProfileResponse, UpsertProfileResponse } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
+import { rescoreAllPostings } from "../lib/scoringService";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -40,6 +42,10 @@ router.put("/profile", requireAuth, async (req, res): Promise<void> => {
       },
     })
     .returning();
+
+  rescoreAllPostings(userId).catch((err) => {
+    logger.warn({ userId, err }, "profile: failed to queue re-scoring after profile update");
+  });
 
   res.json(UpsertProfileResponse.parse(profile));
 });
