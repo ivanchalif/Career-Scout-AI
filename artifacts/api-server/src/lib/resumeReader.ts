@@ -3,13 +3,21 @@ import { logger } from "./logger";
 let cachedText: string | null = null;
 let cachedUrl: string | null = null;
 
+function toAbsoluteUrl(url: string): string {
+  if (/^https?:\/\//i.test(url)) return url;
+  // Relative URL (e.g. /api/storage/objects/...) — resolve against localhost server
+  const port = process.env["PORT"] ?? "8080";
+  return `http://127.0.0.1:${port}${url.startsWith("/") ? url : `/${url}`}`;
+}
+
 export async function getResumeText(resumeUrl: string): Promise<string> {
   if (cachedUrl === resumeUrl && cachedText !== null) {
     return cachedText;
   }
 
   try {
-    const response = await fetch(resumeUrl, { signal: AbortSignal.timeout(10_000) });
+    const absoluteUrl = toAbsoluteUrl(resumeUrl);
+    const response = await fetch(absoluteUrl, { signal: AbortSignal.timeout(10_000) });
     if (!response.ok) {
       logger.warn({ resumeUrl, status: response.status }, "resumeReader: failed to download resume");
       return "";

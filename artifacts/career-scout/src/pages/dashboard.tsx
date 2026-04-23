@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Link } from "wouter";
 import {
   Plus, Search, SlidersHorizontal, Mail, TrendingUp,
@@ -153,7 +153,13 @@ export default function DashboardPage() {
     compensationGap: number | null;
   } | null>(null);
   const [showFilters, setShowFilters] = useState(false);
-  const [sortKey, setSortKey] = useState("date-desc");
+  const [sortKey, setSortKeyState] = useState<string>(
+    () => localStorage.getItem("dashboard-sort") ?? "date-desc"
+  );
+  const setSortKey = useCallback((key: string) => {
+    localStorage.setItem("dashboard-sort", key);
+    setSortKeyState(key);
+  }, []);
   const [reanalyzing, setReanalyzing] = useState(false);
 
   const dashboardQ = useGetDashboardSummary();
