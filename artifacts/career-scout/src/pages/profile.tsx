@@ -1,0 +1,385 @@
+import { useState, useEffect } from "react";
+import {
+  useGetProfile,
+  useUpsertProfile,
+  getGetProfileQueryKey,
+  type UpsertProfileBody,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useForm, useFieldArray } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import {
+  Plus, Trash2, Save, User, Briefcase, GraduationCap,
+  DollarSign, Wifi, CheckCircle2
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import Layout from "@/components/layout";
+
+const profileSchema = z.object({
+  skills: z.array(z.string()).default([]),
+  experienceHistory: z
+    .array(
+      z.object({
+        title: z.string().min(1, "Title required"),
+        company: z.string().min(1, "Company required"),
+        startYear: z.number().int().min(1970).max(2030),
+        endYear: z.number().int().min(1970).max(2030).optional().nullable(),
+        description: z.string().optional(),
+      })
+    )
+    .default([]),
+  education: z.string().optional(),
+  targetSalary: z.number().int().min(0).optional().nullable(),
+  remotePreference: z.enum(["remote", "hybrid", "onsite"]).default("hybrid"),
+  resumeUrl: z.string().url().optional().or(z.literal("")),
+});
+
+type ProfileFormData = z.infer<typeof profileSchema>;
+
+export default function ProfilePage() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [skillInput, setSkillInput] = useState("");
+
+  const profileQ = useGetProfile({ query: { queryKey: getGetProfileQueryKey() } });
+  const upsertMutation = useUpsertProfile();
+
+  const { register, handleSubmit, control, setValue, watch, reset, formState: { errors } } =
+    useForm<ProfileFormData>({
+      resolver: zodResolver(profileSchema),
+      defaultValues: {
+        skills: [],
+        experienceHistory: [],
+        remotePreference: "hybrid",
+      },
+    });
+
+  const { fields: expFields, append: appendExp, remove: removeExp } = useFieldArray({
+    control,
+    name: "experienceHistory",
+  });
+
+  const skills = watch("skills") ?? [];
+
+  useEffect(() => {
+    const p = profileQ.data;
+    if (!p) return;
+    reset({
+      skills: p.skills ?? [],
+      experienceHistory: (p.experienceHistory ?? []).map((e) => ({
+        ...e,
+        endYear: e.endYear ?? null,
+        description: e.description ?? "",
+      })),
+      education: p.education ?? "",
+      targetSalary: p.targetSalary ?? null,
+      remotePreference: (p.remotePreference as "remote" | "hybrid" | "onsite") ?? "hybrid",
+      resumeUrl: p.resumeUrl ?? "",
+    });
+  }, [profileQ.data, reset]);
+
+  function addSkill() {
+    const trimmed = skillInput.trim();
+    if (trimmed && !skills.includes(trimmed)) {
+      setValue("skills", [...skills, trimmed]);
+    }
+    setSkillInput("");
+  }
+
+  function removeSkill(skill: string) {
+    setValue("skills", skills.filter((s) => s !== skill));
+  }
+
+  async function onSubmit(data: ProfileFormData) {
+    const payload: UpsertProfileBody = {
+      ...data,
+      targetSalary: data.targetSalary || undefined,
+      resumeUrl: data.resumeUrl || undefined,
+      experienceHistory: data.experienceHistory.map((e) => ({
+        title: e.title,
+        company: e.company,
+        startYear: e.startYear,
+        endYear: e.endYear || undefined,
+        description: e.description || "",
+      })),
+    };
+    await upsertMutation.mutateAsync(
+      { data: payload },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: getGetProfileQueryKey() });
+          toast({ title: "Profile saved", description: "Your career profile has been updated." });
+        },
+        onError: () =>
+          toast({ title: "Error", description: "Failed to save profile.", variant: "destructive" }),
+      }
+    );
+  }
+
+  return (
+    <Layout>
+      <div className="px-6 py-8 max-w-3xl mx-auto" data-testid="profile-page">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Career Profile</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Your profile is used to score and rank job opportunities
+            </p>
+          </div>
+          {!profileQ.data && !profileQ.isLoading && (
+            <div className="px-3 py-1.5 rounded-lg bg-amber-950/40 border border-amber-800/30 text-xs text-amber-400">
+              Profile not set up yet
+            </div>
+          )}
+        </div>
+
+        {profileQ.isLoading ? (
+          <div className="space-y-4">
+            <Skeleton className="h-40 rounded-xl" />
+            <Skeleton className="h-40 rounded-xl" />
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            {/* Skills */}
+            <section className="bg-card border border-border rounded-xl p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <User className="w-4 h-4 text-indigo-400" />
+                <h2 className="font-semibold text-foreground">Skills</h2>
+              </div>
+              <div className="flex gap-2 mb-3">
+                <Input
+                  placeholder="Add a skill (e.g. TypeScript)"
+                  value={skillInput}
+                  onChange={(e) => setSkillInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); addSkill(); }
+                  }}
+                  data-testid="skill-input"
+                />
+                <Button type="button" variant="outline" onClick={addSkill} data-testid="add-skill-button">
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+              {skills.length > 0 ? (
+                <div className="flex flex-wrap gap-2" data-testid="skills-list">
+                  {skills.map((skill) => (
+                    <Badge
+                      key={skill}
+                      variant="secondary"
+                      className="gap-1.5 pr-1.5 cursor-pointer hover:bg-destructive/20 hover:text-destructive transition-colors"
+                      onClick={() => removeSkill(skill)}
+                      data-testid={`skill-${skill}`}
+                    >
+                      {skill}
+                      <Trash2 className="w-3 h-3" />
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No skills added yet</p>
+              )}
+            </section>
+
+            {/* Experience */}
+            <section className="bg-card border border-border rounded-xl p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Briefcase className="w-4 h-4 text-indigo-400" />
+                  <h2 className="font-semibold text-foreground">Experience</h2>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => appendExp({ title: "", company: "", startYear: new Date().getFullYear(), endYear: null, description: "" })}
+                  data-testid="add-experience-button"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add
+                </Button>
+              </div>
+              {expFields.length === 0 && (
+                <p className="text-sm text-muted-foreground">No experience entries yet</p>
+              )}
+              <div className="space-y-4">
+                {expFields.map((field, i) => (
+                  <div key={field.id} className="p-4 bg-background border border-border rounded-lg space-y-3" data-testid={`experience-${i}`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground font-medium">Position {i + 1}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="w-7 h-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => removeExp(i)}
+                        data-testid={`remove-experience-${i}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Job title</Label>
+                        <Input
+                          placeholder="Software Engineer"
+                          data-testid={`exp-title-${i}`}
+                          {...register(`experienceHistory.${i}.title`)}
+                        />
+                        {errors.experienceHistory?.[i]?.title && (
+                          <p className="text-xs text-destructive">{errors.experienceHistory[i]?.title?.message}</p>
+                        )}
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Company</Label>
+                        <Input
+                          placeholder="Acme Corp"
+                          data-testid={`exp-company-${i}`}
+                          {...register(`experienceHistory.${i}.company`)}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Start year</Label>
+                        <Input
+                          type="number"
+                          placeholder="2020"
+                          data-testid={`exp-start-${i}`}
+                          {...register(`experienceHistory.${i}.startYear`, { valueAsNumber: true })}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">End year (leave blank if current)</Label>
+                        <Input
+                          type="number"
+                          placeholder="Present"
+                          data-testid={`exp-end-${i}`}
+                          {...register(`experienceHistory.${i}.endYear`, {
+                            setValueAs: (v) => (v === "" || v === null ? null : Number(v)),
+                          })}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Description (optional)</Label>
+                      <Textarea
+                        placeholder="Brief description of your role..."
+                        rows={2}
+                        data-testid={`exp-description-${i}`}
+                        {...register(`experienceHistory.${i}.description`)}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Education + Target Salary + Remote */}
+            <section className="bg-card border border-border rounded-xl p-5 space-y-4">
+              <div className="flex items-center gap-2 mb-1">
+                <GraduationCap className="w-4 h-4 text-indigo-400" />
+                <h2 className="font-semibold text-foreground">Preferences</h2>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Education</Label>
+                <Input
+                  placeholder="e.g. B.S. Computer Science, MIT 2018"
+                  data-testid="education-input"
+                  {...register("education")}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5">
+                    <DollarSign className="w-3.5 h-3.5" />
+                    Target salary (USD/year)
+                  </Label>
+                  <Input
+                    type="number"
+                    placeholder="e.g. 150000"
+                    data-testid="salary-input"
+                    {...register("targetSalary", { setValueAs: (v) => (v === "" ? null : Number(v)) })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5">
+                    <Wifi className="w-3.5 h-3.5" />
+                    Work preference
+                  </Label>
+                  <Select
+                    defaultValue={profileQ.data?.remotePreference ?? "hybrid"}
+                    onValueChange={(val) =>
+                      setValue("remotePreference", val as "remote" | "hybrid" | "onsite")
+                    }
+                  >
+                    <SelectTrigger data-testid="remote-select">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="remote">Remote</SelectItem>
+                      <SelectItem value="hybrid">Hybrid</SelectItem>
+                      <SelectItem value="onsite">On-site</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Resume URL (optional)</Label>
+                <Input
+                  type="url"
+                  placeholder="https://your-resume.com/resume.pdf"
+                  data-testid="resume-input"
+                  {...register("resumeUrl")}
+                />
+                {errors.resumeUrl && (
+                  <p className="text-xs text-destructive">Please enter a valid URL</p>
+                )}
+              </div>
+            </section>
+
+            {/* Save button */}
+            <div className="flex justify-end">
+              <Button
+                type="submit"
+                className="gap-2 bg-indigo-600 hover:bg-indigo-500 min-w-[120px]"
+                disabled={upsertMutation.isPending}
+                data-testid="save-profile-button"
+              >
+                {upsertMutation.isSuccess ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    Saved
+                  </>
+                ) : upsertMutation.isPending ? (
+                  <>
+                    <Save className="w-4 h-4 animate-pulse" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    Save profile
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
+        )}
+      </div>
+    </Layout>
+  );
+}

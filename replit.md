@@ -1,4 +1,6 @@
-# Workspace
+# Career Scout
+
+AI-powered job matching dashboard that monitors inboxes for job postings, scores them against a user's career profile, and surfaces the best matches.
 
 ## Overview
 
@@ -10,11 +12,60 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Node.js version**: 24
 - **Package manager**: pnpm
 - **TypeScript version**: 5.9
+- **Frontend**: React 19 + Vite + Tailwind CSS v4 + shadcn/ui + wouter routing
+- **Auth**: Clerk (Replit-managed, white-label)
 - **API framework**: Express 5
 - **Database**: PostgreSQL + Drizzle ORM
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
+
+## Artifacts
+
+| Artifact | Path | Description |
+|---|---|---|
+| `career-scout` | `/` | React+Vite frontend — landing page, dashboard, profile, posting detail |
+| `api-server` | `/api` | Express backend — REST API for profiles, postings, match reports, dashboard |
+
+## Database Schema
+
+- `userProfiles` — career profile (skills[], experienceHistory JSONB, targetSalary, remotePreference)
+- `jobPostings` — job postings per user (title, company, fullDescription, extractedSkills[], source, salaryMin/Max)
+- `matchReports` — AI scoring results (fitScore, reasoning, matchedSkills[], missingSkills[], compensationGap)
+- `gmailConnections` — Gmail OAuth credentials (coming soon)
+
+## API Routes
+
+All routes are protected by Clerk auth (`requireAuth` middleware reads session cookies).
+
+- `GET/PUT /api/profile` — career profile CRUD
+- `GET/POST /api/postings` — list/create job postings
+- `GET/DELETE /api/postings/:id` — get/delete a specific posting
+- `POST /api/postings/:id/analyze` — trigger AI analysis (placeholder, returns null fitScore until Task #3)
+- `GET/POST /api/match-reports` — match report management
+- `GET /api/dashboard/summary` — aggregated stats (totalPostings, avgFitScore, topMatches, hasProfile, gmailConnected)
+
+## Frontend Pages
+
+- `/` — Public landing page (redirects to /dashboard if signed in)
+- `/sign-in/*?` — Clerk sign-in (branded dark theme)
+- `/sign-up/*?` — Clerk sign-up (branded dark theme)
+- `/dashboard` — Job opportunities ranked by fit score, search + filter, add job modal
+- `/postings/:id` — Posting detail: large score ring, matched/missing skills, AI reasoning, re-analyze button
+- `/profile` — Career profile editor: skills tag input, experience history, salary target, remote preference
+
+## Key Files
+
+- `lib/api-spec/openapi.yaml` — OpenAPI spec (source of truth for API contracts)
+- `lib/api-spec/orval.config.ts` — Orval codegen config
+- `lib/api-zod/src/generated/api.ts` — Generated Zod schemas
+- `lib/api-client-react/src/generated/api.ts` — Generated React Query hooks + TypeScript types
+- `lib/db/src/schema/` — Drizzle schema files
+- `artifacts/api-server/src/app.ts` — Express app with Clerk middleware
+- `artifacts/api-server/src/routes/` — Route handlers
+- `artifacts/career-scout/src/App.tsx` — Clerk provider setup + routing
+- `artifacts/career-scout/src/pages/` — Page components
+- `artifacts/career-scout/src/components/layout.tsx` — Sidebar navigation with user menu
 
 ## Key Commands
 
@@ -23,5 +74,17 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
+
+## Pending Tasks
+
+- **Task #2**: Gmail inbox integration — Gmail OAuth, inbox monitoring, email parsing to extract job postings
+- **Task #3**: AI fit scoring engine — Anthropic/OpenAI integration, job post analysis against user profile, skill matching, compensation gap calculation
+
+## Notes
+
+- `CLERK_PUBLISHABLE_KEY` is injected into the Vite build via `vite.config.ts` `define` block (not .env)
+- `CLERK_PROXY_URL` is only set in production (the proxy is server-side only)
+- Analyze endpoint returns a placeholder response with `fitScore: null` until Task #3 is done
+- Gmail banner on dashboard shows "Coming soon" until Task #2 is done
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.

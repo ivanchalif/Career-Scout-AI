@@ -1,0 +1,22 @@
+import { pgTable, text, integer, timestamp, serial } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+
+export const jobPostingsTable = pgTable("job_postings", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  title: text("title").notNull(),
+  company: text("company").notNull(),
+  link: text("link"),
+  fullDescription: text("full_description").notNull(),
+  extractedSkills: text("extracted_skills").array().notNull().default([]),
+  salaryMin: integer("salary_min"),
+  salaryMax: integer("salary_max"),
+  source: text("source").notNull().default("manual"),
+  gmailMessageId: text("gmail_message_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertJobPostingSchema = createInsertSchema(jobPostingsTable).omit({ id: true, createdAt: true });
+export type InsertJobPosting = z.infer<typeof insertJobPostingSchema>;
+export type JobPosting = typeof jobPostingsTable.$inferSelect;

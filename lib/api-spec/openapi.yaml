@@ -3,13 +3,21 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Career Scout API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: profile
+    description: User profile management
+  - name: postings
+    description: Job posting management
+  - name: matchReports
+    description: Match report retrieval
+  - name: dashboard
+    description: Dashboard summary data
 paths:
   /healthz:
     get:
@@ -24,6 +32,209 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /profile:
+    get:
+      operationId: getProfile
+      tags: [profile]
+      summary: Get user profile
+      description: Returns the current user's career profile
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "404":
+          description: Profile not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: upsertProfile
+      tags: [profile]
+      summary: Create or update user profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertProfileBody"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+
+  /postings:
+    get:
+      operationId: listPostings
+      tags: [postings]
+      summary: List job postings
+      description: Returns job postings for the current user, with optional filtering
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search term to filter by title or company
+        - name: minFitScore
+          in: query
+          schema:
+            type: integer
+          description: Minimum fit score filter
+        - name: source
+          in: query
+          schema:
+            type: string
+          description: Filter by source (manual, gmail)
+      responses:
+        "200":
+          description: List of job postings with match reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PostingWithReport"
+    post:
+      operationId: createPosting
+      tags: [postings]
+      summary: Create a job posting
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePostingBody"
+      responses:
+        "201":
+          description: Created posting
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobPosting"
+
+  /postings/{id}:
+    get:
+      operationId: getPosting
+      tags: [postings]
+      summary: Get a job posting
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Job posting with match report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostingWithReport"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deletePosting
+      tags: [postings]
+      summary: Delete a job posting
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /postings/{id}/analyze:
+    post:
+      operationId: analyzePosting
+      tags: [postings]
+      summary: Trigger AI analysis of a job posting
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated match report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MatchReport"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /match-reports:
+    get:
+      operationId: listMatchReports
+      tags: [matchReports]
+      summary: List match reports for current user
+      responses:
+        "200":
+          description: List of match reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MatchReport"
+
+  /match-reports/{id}:
+    get:
+      operationId: getMatchReport
+      tags: [matchReports]
+      summary: Get a match report
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Match report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MatchReport"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard summary statistics
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +245,223 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    UserProfile:
+      type: object
+      properties:
+        userId:
+          type: string
+        skills:
+          type: array
+          items:
+            type: string
+        experienceHistory:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExperienceEntry"
+        education:
+          type: ["string", "null"]
+        targetSalary:
+          type: ["integer", "null"]
+        remotePreference:
+          type: string
+        resumeUrl:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - userId
+        - skills
+        - experienceHistory
+        - remotePreference
+        - createdAt
+        - updatedAt
+
+    ExperienceEntry:
+      type: object
+      properties:
+        title:
+          type: string
+        company:
+          type: string
+        startYear:
+          type: integer
+        endYear:
+          type: ["integer", "null"]
+        description:
+          type: string
+      required:
+        - title
+        - company
+        - startYear
+        - description
+
+    UpsertProfileBody:
+      type: object
+      properties:
+        skills:
+          type: array
+          items:
+            type: string
+        experienceHistory:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExperienceEntry"
+        education:
+          type: ["string", "null"]
+        targetSalary:
+          type: ["integer", "null"]
+        remotePreference:
+          type: string
+        resumeUrl:
+          type: ["string", "null"]
+
+    JobPosting:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: string
+        title:
+          type: string
+        company:
+          type: string
+        link:
+          type: ["string", "null"]
+        fullDescription:
+          type: string
+        extractedSkills:
+          type: array
+          items:
+            type: string
+        salaryMin:
+          type: ["integer", "null"]
+        salaryMax:
+          type: ["integer", "null"]
+        source:
+          type: string
+        gmailMessageId:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - title
+        - company
+        - fullDescription
+        - extractedSkills
+        - source
+        - createdAt
+
+    MatchReport:
+      type: object
+      properties:
+        id:
+          type: integer
+        jobPostingId:
+          type: integer
+        userId:
+          type: string
+        fitScore:
+          type: ["integer", "null"]
+        reasoning:
+          type: ["string", "null"]
+        compensationGap:
+          type: ["integer", "null"]
+        matchedSkills:
+          type: array
+          items:
+            type: string
+        missingSkills:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - jobPostingId
+        - userId
+        - matchedSkills
+        - missingSkills
+        - createdAt
+        - updatedAt
+
+    PostingWithReport:
+      type: object
+      properties:
+        posting:
+          $ref: "#/components/schemas/JobPosting"
+        report:
+          oneOf:
+            - $ref: "#/components/schemas/MatchReport"
+            - type: "null"
+      required:
+        - posting
+        - report
+
+    CreatePostingBody:
+      type: object
+      properties:
+        title:
+          type: string
+        company:
+          type: string
+        link:
+          type: ["string", "null"]
+        fullDescription:
+          type: string
+        extractedSkills:
+          type: array
+          items:
+            type: string
+        salaryMin:
+          type: ["integer", "null"]
+        salaryMax:
+          type: ["integer", "null"]
+        source:
+          type: string
+      required:
+        - title
+        - company
+        - fullDescription
+
+    DashboardSummary:
+      type: object
+      properties:
+        totalPostings:
+          type: integer
+        avgFitScore:
+          type: ["number", "null"]
+        topMatches:
+          type: array
+          items:
+            $ref: "#/components/schemas/PostingWithReport"
+        hasProfile:
+          type: boolean
+        gmailConnected:
+          type: boolean
+      required:
+        - totalPostings
+        - avgFitScore
+        - topMatches
+        - hasProfile
+        - gmailConnected
