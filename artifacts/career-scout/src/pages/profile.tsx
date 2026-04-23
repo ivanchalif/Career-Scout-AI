@@ -17,7 +17,7 @@ import { z } from "zod";
 import {
   Plus, Trash2, Save, User, Briefcase, GraduationCap,
   DollarSign, Wifi, CheckCircle2, Upload, FileText, Loader2,
-  Mail, RefreshCw, Unlink
+  Mail, RefreshCw, Unlink, Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,6 +63,7 @@ export default function ProfilePage() {
   const [skillInput, setSkillInput] = useState("");
   const [resumeFileName, setResumeFileName] = useState<string | null>(null);
   const [isUploadingResume, setIsUploadingResume] = useState(false);
+  const [isParsingResume, setIsParsingResume] = useState(false);
 
   const { data: gmailStatus, isLoading: gmailLoading } = useGetGmailStatus();
   const disconnectMutation = useDisconnectGmail({
@@ -149,10 +150,40 @@ export default function ProfilePage() {
       },
     });
 
-  const { fields: expFields, append: appendExp, remove: removeExp } = useFieldArray({
+  const { fields: expFields, append: appendExp, remove: removeExp, replace: replaceExp } = useFieldArray({
     control,
     name: "experienceHistory",
   });
+
+  async function parseResumeExperience() {
+    const currentResumeUrl = watch("resumeUrl");
+    if (!currentResumeUrl) {
+      toast({ title: "No resume uploaded", description: "Upload a PDF resume first, then save your profile.", variant: "destructive" });
+      return;
+    }
+    setIsParsingResume(true);
+    try {
+      const res = await fetch("/api/profile/parse-resume", { method: "POST" });
+      const body = await res.json() as { experienceHistory?: Array<{ title: string; company: string; startYear: number; endYear?: number | null; description?: string }>; error?: string };
+      if (!res.ok) {
+        toast({ title: "Parsing failed", description: body.error ?? "Could not parse resume.", variant: "destructive" });
+        return;
+      }
+      const entries = body.experienceHistory ?? [];
+      replaceExp(entries.map((e) => ({
+        title: e.title,
+        company: e.company,
+        startYear: e.startYear,
+        endYear: e.endYear ?? null,
+        description: e.description ?? "",
+      })));
+      toast({ title: "Work history imported", description: `${entries.length} position${entries.length === 1 ? "" : "s"} imported from your resume. Review and save.` });
+    } catch {
+      toast({ title: "Parsing failed", description: "An error occurred. Please try again.", variant: "destructive" });
+    } finally {
+      setIsParsingResume(false);
+    }
+  }
 
   const skills = watch("skills") ?? [];
 
@@ -287,17 +318,35 @@ export default function ProfilePage() {
                   <Briefcase className="w-4 h-4 text-indigo-400" />
                   <h2 className="font-semibold text-foreground">Experience</h2>
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={() => appendExp({ title: "", company: "", startYear: new Date().getFullYear(), endYear: null, description: "" })}
-                  data-testid="add-experience-button"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Add
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-indigo-400 border-indigo-800/50 hover:bg-indigo-950/30 hover:text-indigo-300"
+                    onClick={parseResumeExperience}
+                    disabled={isParsingResume}
+                    data-testid="parse-resume-button"
+                  >
+                    {isParsingResume ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-3.5 h-3.5" />
+                    )}
+                    {isParsingResume ? "Parsing…" : "Import from resume"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => appendExp({ title: "", company: "", startYear: new Date().getFullYear(), endYear: null, description: "" })}
+                    data-testid="add-experience-button"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add
+                  </Button>
+                </div>
               </div>
               {expFields.length === 0 && (
                 <p className="text-sm text-muted-foreground">No experience entries yet</p>
