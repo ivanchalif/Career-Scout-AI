@@ -32,7 +32,7 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - `userProfiles` — career profile (skills[], experienceHistory JSONB, targetSalary, remotePreference)
 - `jobPostings` — job postings per user (title, company, fullDescription, extractedSkills[], source, salaryMin/Max)
 - `matchReports` — AI scoring results (fitScore, reasoning, matchedSkills[], missingSkills[], compensationGap)
-- `gmailConnections` — Gmail OAuth credentials (coming soon)
+- `gmailConnections` — Gmail OAuth credentials per user (accessToken, refreshToken, email, lastSyncedAt)
 
 ## API Routes
 
@@ -46,6 +46,11 @@ All routes are protected by Clerk auth (`requireAuth` middleware reads session c
 - `GET /api/dashboard/summary` — aggregated stats (totalPostings, avgFitScore, topMatches, hasProfile, gmailConnected)
 - `POST /api/storage/uploads/request-url` — request a presigned URL for file upload
 - `GET /api/storage/public-objects/*` — serve public objects from object storage
+- `GET /api/gmail/connect` — initiate Google OAuth (redirect) — requires GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET secrets
+- `GET /api/gmail/callback` — Google OAuth callback; exchanges code, saves tokens, redirects to /profile
+- `GET /api/gmail/status` — current user's Gmail connection status + posting count
+- `DELETE /api/gmail/disconnect` — revoke token and delete connection
+- `POST /api/gmail/sync` — scan Gmail inbox for job-related emails, create job_postings records
 
 ## Frontend Pages
 
@@ -54,7 +59,7 @@ All routes are protected by Clerk auth (`requireAuth` middleware reads session c
 - `/sign-up/*?` — Clerk sign-up (branded dark theme)
 - `/dashboard` — Job opportunities ranked by fit score, search + filter, add job modal
 - `/postings/:id` — Posting detail: large score ring, matched/missing skills, AI reasoning, re-analyze button
-- `/profile` — Career profile editor: skills tag input, experience history, salary target, remote preference, resume PDF upload
+- `/profile` — Career profile editor: skills tag input, experience history, salary target, remote preference, resume PDF upload, Gmail connect/sync/disconnect
 
 ## Key Files
 
@@ -80,7 +85,6 @@ All routes are protected by Clerk auth (`requireAuth` middleware reads session c
 
 ## Pending Tasks
 
-- **Task #2**: Gmail inbox integration — Gmail OAuth, inbox monitoring, email parsing to extract job postings
 - **Task #3**: AI fit scoring engine — Anthropic/OpenAI integration, job post analysis against user profile, skill matching, compensation gap calculation
 
 ## Notes
@@ -88,7 +92,10 @@ All routes are protected by Clerk auth (`requireAuth` middleware reads session c
 - `CLERK_PUBLISHABLE_KEY` is injected into the Vite build via `vite.config.ts` `define` block (not .env)
 - `CLERK_PROXY_URL` is only set in production (the proxy is server-side only)
 - Analyze endpoint returns a basic skill-match score (matched/total skills %) until Task #3 replaces it with full AI scoring
-- Gmail banner on dashboard shows "Coming soon" until Task #2 is done
+- Gmail integration: requires `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` secrets (Google Cloud project with Gmail API enabled, OAuth 2.0 credentials, redirect URI = `https://${REPLIT_DEV_DOMAIN}/api/gmail/callback`)
+- Gmail OAuth uses HMAC-signed state token to correlate callback with userId (no cookies needed across redirect)
+- Gmail sync query: `subject:(job OR opportunity OR role OR position OR hiring OR offer OR recruiter ...) newer_than:7d`
+- Deduplication: checks `gmail_message_id` column in `job_postings` to avoid re-processing same email
 - Object storage: bucket provisioned, `lib/object-storage-web` client package available for frontend upload
 - Resume upload on profile page uses native file input → presigned URL → PUT to object storage
 - Application Prep section on posting detail shows matched/missing skill guidance when a match report exists

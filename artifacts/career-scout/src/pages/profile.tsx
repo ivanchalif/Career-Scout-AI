@@ -3,15 +3,21 @@ import {
   useGetProfile,
   useUpsertProfile,
   getGetProfileQueryKey,
+  useGetGmailStatus,
+  getGetGmailStatusQueryKey,
+  useDisconnectGmail,
+  useSyncGmail,
   type UpsertProfileBody,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useSearch } from "wouter";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
   Plus, Trash2, Save, User, Briefcase, GraduationCap,
-  DollarSign, Wifi, CheckCircle2, Upload, FileText, Loader2
+  DollarSign, Wifi, CheckCircle2, Upload, FileText, Loader2,
+  Mail, RefreshCw, Unlink
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,9 +59,41 @@ type ProfileFormData = z.infer<typeof profileSchema>;
 export default function ProfilePage() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const search = useSearch();
   const [skillInput, setSkillInput] = useState("");
   const [resumeFileName, setResumeFileName] = useState<string | null>(null);
   const [isUploadingResume, setIsUploadingResume] = useState(false);
+
+  const { data: gmailStatus, isLoading: gmailLoading } = useGetGmailStatus();
+  const disconnectMutation = useDisconnectGmail({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetGmailStatusQueryKey() });
+        toast({ title: "Gmail disconnected", description: "Your Gmail account has been unlinked." });
+      },
+      onError: () => toast({ title: "Error", description: "Failed to disconnect Gmail.", variant: "destructive" }),
+    },
+  });
+  const syncMutation = useSyncGmail({
+    mutation: {
+      onSuccess: (data) => {
+        qc.invalidateQueries({ queryKey: getGetGmailStatusQueryKey() });
+        toast({ title: "Inbox synced", description: `Found ${data.synced} new job email${data.synced === 1 ? "" : "s"}.` });
+      },
+      onError: () => toast({ title: "Sync failed", description: "Could not sync Gmail inbox. Please try again.", variant: "destructive" }),
+    },
+  });
+
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    const gmail = params.get("gmail");
+    if (gmail === "connected") {
+      qc.invalidateQueries({ queryKey: getGetGmailStatusQueryKey() });
+      toast({ title: "Gmail connected", description: "Your Gmail account is now linked to Career Scout." });
+    } else if (gmail === "error") {
+      toast({ title: "Gmail connection failed", description: "Could not connect your Gmail account. Please try again.", variant: "destructive" });
+    }
+  }, []);
 
   async function handleResumeFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -197,6 +235,7 @@ export default function ProfilePage() {
             <Skeleton className="h-40 rounded-xl" />
           </div>
         ) : (
+          <>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             {/* Skills */}
             <section className="bg-card border border-border rounded-xl p-5">
@@ -454,6 +493,78 @@ export default function ProfilePage() {
               </Button>
             </div>
           </form>
+
+          {/* Gmail integration section */}
+          <section className="bg-card border border-border rounded-xl p-5 mt-5" data-testid="gmail-section">
+            <div className="flex items-center gap-2 mb-4">
+              <Mail className="w-4 h-4 text-indigo-400" />
+              <h2 className="font-semibold text-foreground">Gmail integration</h2>
+            </div>
+
+            {gmailLoading ? (
+              <div className="h-16 flex items-center">
+                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+              </div>
+            ) : gmailStatus?.connected ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="text-sm text-foreground">
+                    Connected as <span className="font-medium">{gmailStatus.email ?? "your Gmail account"}</span>
+                  </span>
+                </div>
+                {gmailStatus.lastSyncedAt && (
+                  <p className="text-xs text-muted-foreground">
+                    Last synced: {new Date(gmailStatus.lastSyncedAt).toLocaleString()} &middot; {gmailStatus.postingCount} job email{gmailStatus.postingCount === 1 ? "" : "s"} found
+                  </p>
+                )}
+                {!gmailStatus.lastSyncedAt && (
+                  <p className="text-xs text-muted-foreground">Never synced yet — click Sync now to start.</p>
+                )}
+                <div className="flex items-center gap-2 pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => syncMutation.mutate()}
+                    disabled={syncMutation.isPending}
+                    data-testid="gmail-sync-button"
+                  >
+                    {syncMutation.isPending ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    )}
+                    {syncMutation.isPending ? "Syncing…" : "Sync now"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => disconnectMutation.mutate()}
+                    disabled={disconnectMutation.isPending}
+                    data-testid="gmail-disconnect-button"
+                  >
+                    <Unlink className="w-3.5 h-3.5" />
+                    Disconnect
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Connect your Gmail account so Career Scout can automatically detect job-related emails.
+                </p>
+                <a href="/api/gmail/connect" data-testid="gmail-connect-button">
+                  <Button variant="outline" size="sm" className="gap-1.5">
+                    <Mail className="w-3.5 h-3.5" />
+                    Connect Gmail
+                  </Button>
+                </a>
+              </div>
+            )}
+          </section>
+          </>
         )}
       </div>
     </Layout>

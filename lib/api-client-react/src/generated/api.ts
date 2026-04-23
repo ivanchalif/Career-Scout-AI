@@ -21,6 +21,8 @@ import type {
   DashboardSummary,
   ErrorEnvelope,
   ErrorResponse,
+  GmailStatus,
+  GmailSyncResult,
   HealthStatus,
   JobPosting,
   ListPostingsParams,
@@ -1051,6 +1053,241 @@ export function useGetMatchReport<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Get Gmail connection status
+ */
+export const getGetGmailStatusUrl = () => {
+  return `/api/gmail/status`;
+};
+
+export const getGmailStatus = async (
+  options?: RequestInit,
+): Promise<GmailStatus> => {
+  return customFetch<GmailStatus>(getGetGmailStatusUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetGmailStatusQueryKey = () => {
+  return [`/api/gmail/status`] as const;
+};
+
+export const getGetGmailStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getGmailStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getGmailStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetGmailStatusQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getGmailStatus>>> = ({
+    signal,
+  }) => getGmailStatus({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getGmailStatus>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetGmailStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getGmailStatus>>
+>;
+export type GetGmailStatusQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get Gmail connection status
+ */
+
+export function useGetGmailStatus<
+  TData = Awaited<ReturnType<typeof getGmailStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getGmailStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetGmailStatusQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Disconnect Gmail account
+ */
+export const getDisconnectGmailUrl = () => {
+  return `/api/gmail/disconnect`;
+};
+
+export const disconnectGmail = async (options?: RequestInit): Promise<void> => {
+  return customFetch<void>(getDisconnectGmailUrl(), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDisconnectGmailMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof disconnectGmail>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof disconnectGmail>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["disconnectGmail"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof disconnectGmail>>,
+    void
+  > = () => {
+    return disconnectGmail(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DisconnectGmailMutationResult = NonNullable<
+  Awaited<ReturnType<typeof disconnectGmail>>
+>;
+
+export type DisconnectGmailMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Disconnect Gmail account
+ */
+export const useDisconnectGmail = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof disconnectGmail>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof disconnectGmail>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getDisconnectGmailMutationOptions(options));
+};
+
+/**
+ * @summary Trigger a manual Gmail sync
+ */
+export const getSyncGmailUrl = () => {
+  return `/api/gmail/sync`;
+};
+
+export const syncGmail = async (
+  options?: RequestInit,
+): Promise<GmailSyncResult> => {
+  return customFetch<GmailSyncResult>(getSyncGmailUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getSyncGmailMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof syncGmail>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof syncGmail>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["syncGmail"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof syncGmail>>,
+    void
+  > = () => {
+    return syncGmail(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SyncGmailMutationResult = NonNullable<
+  Awaited<ReturnType<typeof syncGmail>>
+>;
+
+export type SyncGmailMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Trigger a manual Gmail sync
+ */
+export const useSyncGmail = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof syncGmail>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof syncGmail>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getSyncGmailMutationOptions(options));
+};
 
 /**
  * @summary Get dashboard summary statistics

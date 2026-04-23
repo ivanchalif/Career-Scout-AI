@@ -122,6 +122,21 @@ export interface ErrorEnvelope {
   error: string;
 }
 
+export interface GmailStatus {
+  connected: boolean;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  lastSyncedAt?: string | null;
+  postingCount: number;
+}
+
+export interface GmailSyncResult {
+  synced: number;
+  /** @nullable */
+  lastSyncedAt: string | null;
+}
+
 export interface DashboardSummary {
   totalPostings: number;
   /** @nullable */

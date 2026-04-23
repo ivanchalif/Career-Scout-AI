@@ -280,6 +280,24 @@ export const GetMatchReportResponse = zod.object({
 });
 
 /**
+ * @summary Get Gmail connection status
+ */
+export const GetGmailStatusResponse = zod.object({
+  connected: zod.boolean(),
+  email: zod.string().nullish(),
+  lastSyncedAt: zod.coerce.date().nullish(),
+  postingCount: zod.number(),
+});
+
+/**
+ * @summary Trigger a manual Gmail sync
+ */
+export const SyncGmailResponse = zod.object({
+  synced: zod.number(),
+  lastSyncedAt: zod.coerce.date().nullable(),
+});
+
+/**
  * @summary Get dashboard summary statistics
  */
 export const GetDashboardSummaryResponse = zod.object({

@@ -20,6 +20,8 @@ tags:
     description: Dashboard summary data
   - name: Storage
     description: Object storage upload and serving endpoints.
+  - name: gmail
+    description: Gmail OAuth connection and inbox sync
 paths:
   /healthz:
     get:
@@ -281,6 +283,47 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /gmail/status:
+    get:
+      operationId: getGmailStatus
+      tags: [gmail]
+      summary: Get Gmail connection status
+      responses:
+        "200":
+          description: Gmail connection status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GmailStatus"
+
+  /gmail/disconnect:
+    delete:
+      operationId: disconnectGmail
+      tags: [gmail]
+      summary: Disconnect Gmail account
+      responses:
+        "204":
+          description: Disconnected
+
+  /gmail/sync:
+    post:
+      operationId: syncGmail
+      tags: [gmail]
+      summary: Trigger a manual Gmail sync
+      responses:
+        "200":
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GmailSyncResult"
+        "400":
+          description: Gmail not connected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /dashboard/summary:
     get:
       operationId: getDashboardSummary
@@ -533,6 +576,34 @@ components:
       properties:
         error:
           type: string
+
+    GmailStatus:
+      type: object
+      properties:
+        connected:
+          type: boolean
+        email:
+          type: ["string", "null"]
+        lastSyncedAt:
+          type: ["string", "null"]
+          format: date-time
+        postingCount:
+          type: integer
+      required:
+        - connected
+        - postingCount
+
+    GmailSyncResult:
+      type: object
+      properties:
+        synced:
+          type: integer
+        lastSyncedAt:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        - synced
+        - lastSyncedAt
 
     DashboardSummary:
       type: object

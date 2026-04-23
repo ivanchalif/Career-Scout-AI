@@ -5,6 +5,7 @@ import postingsRouter from "./postings";
 import matchReportsRouter from "./matchReports";
 import dashboardRouter from "./dashboard";
 import storageRouter from "./storage";
+import gmailRouter from "./gmail";
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use(profileRouter);
 router.use(postingsRouter);
 router.use(matchReportsRouter);
 router.use(dashboardRouter);
+router.use(gmailRouter);
 
 export default router;
