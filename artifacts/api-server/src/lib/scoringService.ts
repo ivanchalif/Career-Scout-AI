@@ -8,6 +8,7 @@ import {
 import { z } from "zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { logger } from "./logger";
+import { getResumeText } from "./resumeReader";
 
 const parsedJobSchema = z.object({
   title: z.string().default(""),
@@ -28,6 +29,7 @@ const extractedJobsSchema = z
       title: z.string().default(""),
       company: z.string().default(""),
       description: z.string().default(""),
+      url: z.string().optional(),
     }),
   )
   .default([]);
@@ -36,6 +38,7 @@ export interface ExtractedJobListing {
   title: string;
   company: string;
   description: string;
+  url?: string;
 }
 
 /**
@@ -57,22 +60,24 @@ An email may contain:
 
 Email Subject: ${subject}
 Email Sender: ${sender}
-Email Body:
+Email Body (links appear as "link text [URL]"):
 ---
-${emailBody.slice(0, 6000)}
+${emailBody.slice(0, 8000)}
 ---
 
 Return a JSON array of job listings (max 10). Each entry must have:
 {
   "title": "job title (infer from context if not explicit)",
   "company": "company name",
-  "description": "the relevant portion of the email body for THIS specific job (200-2000 chars)"
+  "description": "the relevant portion of the email body for THIS specific job (200-2000 chars)",
+  "url": "the direct URL to THIS specific job posting (from the [URL] markers in the email body) — omit if not found"
 }
 
 Rules:
 - Only include real job opportunities, not articles about hiring trends or company news
 - If the email is a single posting, return exactly 1 item using the full body as description
 - Each description must be self-contained — include the role title, requirements, and any relevant details
+- For "url": extract the most specific link for each job (prefer "Apply" or job-title links over generic "View all jobs" links)
 - Return raw JSON array only, no markdown`;
 
   try {
@@ -191,6 +196,7 @@ async function scoreFit(
     education: string | null;
     targetSalary: number | null;
     remotePreference: string;
+    resumeText?: string;
   },
 ): Promise<FitScoreResult> {
   const yearsOfExperience = userProfile.experienceHistory.reduce((total, exp) => {
@@ -203,6 +209,10 @@ async function scoreFit(
       ? Math.round((parsedJob.salaryMin + parsedJob.salaryMax) / 2)
       : parsedJob.salaryMin ?? parsedJob.salaryMax ?? null;
 
+  const resumeSection = userProfile.resumeText && userProfile.resumeText.length > 50
+    ? `\nRESUME (full text extracted from uploaded document):\n${userProfile.resumeText.slice(0, 4000)}`
+    : "";
+
   const prompt = `You are a conservative career fit scorer. Score how well a candidate matches a job posting.
 
 CANDIDATE PROFILE:
@@ -213,7 +223,7 @@ Experience History: ${userProfile.experienceHistory
     .join("\n") || "None listed"}
 Education: ${userProfile.education ?? "Not specified"}
 Target Salary: ${userProfile.targetSalary ? `$${userProfile.targetSalary.toLocaleString()}/year` : "Not specified"}
-Remote Preference: ${userProfile.remotePreference}
+Remote Preference: ${userProfile.remotePreference}${resumeSection}
 
 JOB REQUIREMENTS:
 Title: ${parsedJob.title}
@@ -319,6 +329,16 @@ export async function scorePosting(
     .from(userProfilesTable)
     .where(eq(userProfilesTable.userId, userId));
 
+  let resumeText = "";
+  if (profile?.resumeUrl) {
+    resumeText = await getResumeText(profile.resumeUrl);
+    if (resumeText) {
+      logger.info({ postingId, userId, chars: resumeText.length }, "scoringService: loaded resume text");
+    } else {
+      logger.warn({ postingId, userId }, "scoringService: resumeUrl present but could not extract text");
+    }
+  }
+
   const userProfile = profile
     ? {
         skills: profile.skills ?? [],
@@ -332,6 +352,7 @@ export async function scorePosting(
         education: profile.education ?? null,
         targetSalary: profile.targetSalary ?? null,
         remotePreference: profile.remotePreference ?? "hybrid",
+        resumeText: resumeText || undefined,
       }
     : {
         skills: [],
@@ -339,6 +360,7 @@ export async function scorePosting(
         education: null,
         targetSalary: null,
         remotePreference: "hybrid",
+        resumeText: undefined,
       };
 
   let parsedJob: ParsedJob;

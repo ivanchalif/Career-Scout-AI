@@ -160,6 +160,16 @@ function stripHtml(html: string): string {
   return html
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    // Preserve anchor hrefs: <a href="URL">text</a> → "text [URL]"
+    .replace(/<a\s[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (_, href, inner) => {
+      const text = inner.replace(/<[^>]+>/g, " ").trim();
+      const cleanHref = href.trim();
+      // Skip tracking pixels, empty hrefs, mailto, and internal anchors
+      if (!cleanHref || cleanHref.startsWith("mailto:") || cleanHref.startsWith("#")) {
+        return text;
+      }
+      return text ? `${text} [${cleanHref}]` : `[${cleanHref}]`;
+    })
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
