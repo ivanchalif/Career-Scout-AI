@@ -280,6 +280,15 @@ export const GetMatchReportResponse = zod.object({
 });
 
 /**
+ * @summary OAuth callback from Google (redirects to frontend)
+ */
+export const GmailCallbackQueryParams = zod.object({
+  code: zod.coerce.string().optional(),
+  state: zod.coerce.string().optional(),
+  error: zod.coerce.string().optional(),
+});
+
+/**
  * @summary Get Gmail connection status
  */
 export const GetGmailStatusResponse = zod.object({

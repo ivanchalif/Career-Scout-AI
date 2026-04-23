@@ -21,6 +21,7 @@ import type {
   DashboardSummary,
   ErrorEnvelope,
   ErrorResponse,
+  GmailCallbackParams,
   GmailStatus,
   GmailSyncResult,
   HealthStatus,
@@ -1046,6 +1047,173 @@ export function useGetMatchReport<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetMatchReportQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Initiate Gmail OAuth flow (redirects to Google)
+ */
+export const getConnectGmailUrl = () => {
+  return `/api/gmail/connect`;
+};
+
+export const connectGmail = async (options?: RequestInit): Promise<unknown> => {
+  return customFetch<unknown>(getConnectGmailUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getConnectGmailQueryKey = () => {
+  return [`/api/gmail/connect`] as const;
+};
+
+export const getConnectGmailQueryOptions = <
+  TData = Awaited<ReturnType<typeof connectGmail>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof connectGmail>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getConnectGmailQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof connectGmail>>> = ({
+    signal,
+  }) => connectGmail({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof connectGmail>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ConnectGmailQueryResult = NonNullable<
+  Awaited<ReturnType<typeof connectGmail>>
+>;
+export type ConnectGmailQueryError = ErrorType<void>;
+
+/**
+ * @summary Initiate Gmail OAuth flow (redirects to Google)
+ */
+
+export function useConnectGmail<
+  TData = Awaited<ReturnType<typeof connectGmail>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof connectGmail>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getConnectGmailQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary OAuth callback from Google (redirects to frontend)
+ */
+export const getGmailCallbackUrl = (params?: GmailCallbackParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/gmail/callback?${stringifiedParams}`
+    : `/api/gmail/callback`;
+};
+
+export const gmailCallback = async (
+  params?: GmailCallbackParams,
+  options?: RequestInit,
+): Promise<unknown> => {
+  return customFetch<unknown>(getGmailCallbackUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGmailCallbackQueryKey = (params?: GmailCallbackParams) => {
+  return [`/api/gmail/callback`, ...(params ? [params] : [])] as const;
+};
+
+export const getGmailCallbackQueryOptions = <
+  TData = Awaited<ReturnType<typeof gmailCallback>>,
+  TError = ErrorType<void>,
+>(
+  params?: GmailCallbackParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof gmailCallback>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGmailCallbackQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof gmailCallback>>> = ({
+    signal,
+  }) => gmailCallback(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof gmailCallback>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GmailCallbackQueryResult = NonNullable<
+  Awaited<ReturnType<typeof gmailCallback>>
+>;
+export type GmailCallbackQueryError = ErrorType<void>;
+
+/**
+ * @summary OAuth callback from Google (redirects to frontend)
+ */
+
+export function useGmailCallback<
+  TData = Awaited<ReturnType<typeof gmailCallback>>,
+  TError = ErrorType<void>,
+>(
+  params?: GmailCallbackParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof gmailCallback>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGmailCallbackQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

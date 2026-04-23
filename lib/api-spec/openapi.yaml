@@ -283,6 +283,37 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /gmail/connect:
+    get:
+      operationId: connectGmail
+      tags: [gmail]
+      summary: Initiate Gmail OAuth flow (redirects to Google)
+      responses:
+        "302":
+          description: Redirect to Google OAuth consent screen
+
+  /gmail/callback:
+    get:
+      operationId: gmailCallback
+      tags: [gmail]
+      summary: OAuth callback from Google (redirects to frontend)
+      parameters:
+        - name: code
+          in: query
+          schema:
+            type: string
+        - name: state
+          in: query
+          schema:
+            type: string
+        - name: error
+          in: query
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to frontend with gmail=connected or gmail=error
+
   /gmail/status:
     get:
       operationId: getGmailStatus

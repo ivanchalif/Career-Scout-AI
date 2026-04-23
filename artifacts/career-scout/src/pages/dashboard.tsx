@@ -2,15 +2,20 @@ import { useState } from "react";
 import { Link } from "wouter";
 import {
   Plus, Search, SlidersHorizontal, Mail, TrendingUp,
-  BriefcaseBusiness, CircleAlert, ExternalLink, Trash2
+  BriefcaseBusiness, CircleAlert, ExternalLink, Trash2,
+  RefreshCw, Unplug
 } from "lucide-react";
 import {
   useGetDashboardSummary,
   useListPostings,
   useCreatePosting,
   useDeletePosting,
+  useGetGmailStatus,
+  useSyncGmail,
+  useDisconnectGmail,
   getListPostingsQueryKey,
   getGetDashboardSummaryQueryKey,
+  getGetGmailStatusQueryKey,
   type CreatePostingBody,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -118,8 +123,11 @@ export default function DashboardPage() {
 
   const dashboardQ = useGetDashboardSummary();
   const postingsQ = useListPostings({ search: search || undefined, minFitScore });
+  const gmailStatusQ = useGetGmailStatus();
   const createMutation = useCreatePosting();
   const deleteMutation = useDeletePosting();
+  const syncMutation = useSyncGmail();
+  const disconnectMutation = useDisconnectGmail();
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<CreatePostingBody>({
     defaultValues: { title: "", company: "", fullDescription: "", source: "manual" },
@@ -127,6 +135,43 @@ export default function DashboardPage() {
 
   const summary = dashboardQ.data;
   const postings = postingsQ.data ?? [];
+  const gmailStatus = gmailStatusQ.data;
+
+  const gmailConnectUrl = "/api/gmail/connect";
+
+  async function onSyncGmail() {
+    await syncMutation.mutateAsync(
+      undefined,
+      {
+        onSuccess: (data) => {
+          qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
+          qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+          qc.invalidateQueries({ queryKey: getGetGmailStatusQueryKey() });
+          toast({
+            title: "Gmail synced",
+            description: data.synced > 0
+              ? `Imported ${data.synced} new job${data.synced === 1 ? "" : "s"} from Gmail.`
+              : "No new job emails found.",
+          });
+        },
+        onError: () => toast({ title: "Sync failed", description: "Could not sync Gmail.", variant: "destructive" }),
+      }
+    );
+  }
+
+  async function onDisconnectGmail() {
+    await disconnectMutation.mutateAsync(
+      undefined,
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: getGetGmailStatusQueryKey() });
+          qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+          toast({ title: "Gmail disconnected" });
+        },
+        onError: () => toast({ title: "Error", description: "Failed to disconnect Gmail.", variant: "destructive" }),
+      }
+    );
+  }
 
   async function onAdd(data: CreatePostingBody) {
     await createMutation.mutateAsync(
@@ -179,16 +224,65 @@ export default function DashboardPage() {
         </div>
 
         {/* Gmail banner */}
-        {summary && !summary.gmailConnected && (
-          <div className="flex items-center gap-3 bg-indigo-950/40 border border-indigo-800/40 rounded-xl px-5 py-3.5 mb-6">
+        {gmailStatus?.connected ? (
+          <div className="flex items-center gap-3 bg-emerald-950/30 border border-emerald-800/30 rounded-xl px-5 py-3.5 mb-6" data-testid="gmail-connected-banner">
+            <Mail className="w-5 h-5 text-emerald-400 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-emerald-300">
+                Gmail connected
+                {gmailStatus.email && (
+                  <span className="text-emerald-400/70 font-normal ml-1">· {gmailStatus.email}</span>
+                )}
+              </p>
+              <p className="text-xs text-emerald-400/60 mt-0.5">
+                {gmailStatus.lastSyncedAt
+                  ? `Last synced ${new Date(gmailStatus.lastSyncedAt).toLocaleString()}`
+                  : "Not yet synced — click Sync to import job emails"}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onSyncGmail}
+                disabled={syncMutation.isPending}
+                className="text-emerald-400 border-emerald-700 hover:bg-emerald-950/50 gap-1.5"
+                data-testid="gmail-sync-button"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${syncMutation.isPending ? "animate-spin" : ""}`} />
+                {syncMutation.isPending ? "Syncing..." : "Sync now"}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onDisconnectGmail}
+                disabled={disconnectMutation.isPending}
+                className="text-muted-foreground hover:text-destructive gap-1.5"
+                data-testid="gmail-disconnect-button"
+              >
+                <Unplug className="w-3.5 h-3.5" />
+                Disconnect
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 bg-indigo-950/40 border border-indigo-800/40 rounded-xl px-5 py-3.5 mb-6" data-testid="gmail-connect-banner">
             <Mail className="w-5 h-5 text-indigo-400 shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-indigo-300">Connect Gmail to auto-import jobs</p>
-              <p className="text-xs text-indigo-400/70 mt-0.5">Gmail integration coming soon — add jobs manually for now</p>
+              <p className="text-xs text-indigo-400/70 mt-0.5">Automatically import job emails and score them against your profile</p>
             </div>
-            <Button variant="outline" size="sm" disabled className="text-indigo-400 border-indigo-700 opacity-60">
-              Coming soon
-            </Button>
+            <a href={gmailConnectUrl}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-indigo-400 border-indigo-700 hover:bg-indigo-950/50 gap-1.5"
+                data-testid="gmail-connect-button"
+              >
+                <Mail className="w-3.5 h-3.5" />
+                Connect Gmail
+              </Button>
+            </a>
           </div>
         )}
 

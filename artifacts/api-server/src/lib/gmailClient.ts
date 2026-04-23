@@ -164,10 +164,21 @@ function stripHtml(html: string): string {
     .trim();
 }
 
+function getStateSecret(): string {
+  const secret = process.env["SESSION_SECRET"];
+  if (!secret) {
+    throw new Error(
+      "SESSION_SECRET environment variable is required but was not set. " +
+      "Set a strong random secret to enable Gmail OAuth state signing."
+    );
+  }
+  return secret;
+}
+
 export function signState(userId: string): string {
   const ts = Date.now().toString();
   const data = `${userId}:${ts}`;
-  const secret = process.env["SESSION_SECRET"] ?? "dev-secret";
+  const secret = getStateSecret();
   const sig = createHmac("sha256", secret).update(data).digest("hex");
   return Buffer.from(JSON.stringify({ data, sig })).toString("base64url");
 }
@@ -179,7 +190,7 @@ export function verifyState(state: string): string | null {
       sig: string;
     };
     const { data, sig } = parsed;
-    const secret = process.env["SESSION_SECRET"] ?? "dev-secret";
+    const secret = getStateSecret();
     const expected = createHmac("sha256", secret).update(data).digest("hex");
     if (sig !== expected) return null;
     const [userId, ts] = data.split(":");

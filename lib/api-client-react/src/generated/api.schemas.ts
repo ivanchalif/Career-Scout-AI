@@ -160,3 +160,9 @@ export type ListPostingsParams = {
    */
   source?: string;
 };
+
+export type GmailCallbackParams = {
+  code?: string;
+  state?: string;
+  error?: string;
+};
