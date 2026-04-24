@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import {
   Plus, Search, SlidersHorizontal, Mail, TrendingUp,
   BriefcaseBusiness, CircleAlert, ExternalLink, Trash2,
-  RefreshCw, Unplug, ArrowUpDown, Sparkles,
+  RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2,
 } from "lucide-react";
 import {
   useGetDashboardSummary,
@@ -162,6 +162,7 @@ export default function DashboardPage() {
     setSortKeyState(key);
   }, []);
   const [reanalyzing, setReanalyzing] = useState(false);
+  const [backfillingLinks, setBackfillingLinks] = useState(false);
 
   const dashboardQ = useGetDashboardSummary();
   const postingsQ = useListPostings({ search: search || undefined, minFitScore });
@@ -252,6 +253,32 @@ export default function DashboardPage() {
     }
   }
 
+  async function onBackfillLinks() {
+    setBackfillingLinks(true);
+    try {
+      const res = await fetch("/api/postings/backfill-links", { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(err.error ?? "Unknown error");
+      }
+      const { updated, skipped } = await res.json() as { updated: number; skipped: number };
+      if (updated === 0 && skipped === 0) {
+        toast({ title: "All links already present", description: "No job postings needed a link update." });
+      } else {
+        toast({
+          title: `Updated ${updated} job${updated === 1 ? "" : "s"}`,
+          description: skipped > 0 ? `${skipped} posting${skipped === 1 ? "" : "s"} had no extractable link.` : "All linkable postings now have job description links.",
+        });
+        qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      toast({ title: "Error", description: msg === "Gmail account not connected" ? "Connect Gmail to backfill links." : "Failed to fetch links from Gmail.", variant: "destructive" });
+    } finally {
+      setBackfillingLinks(false);
+    }
+  }
+
   async function onDisconnectGmail() {
     await disconnectMutation.mutateAsync(
       undefined,
@@ -307,6 +334,22 @@ export default function DashboardPage() {
             <p className="text-sm text-muted-foreground mt-0.5">Your job opportunities, ranked by fit</p>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onBackfillLinks}
+              disabled={backfillingLinks}
+              className="gap-2 text-muted-foreground"
+              data-testid="backfill-links-button"
+              title="Re-fetch original emails to extract job description links for existing postings"
+            >
+              {backfillingLinks ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Link2 className="w-3.5 h-3.5" />
+              )}
+              {backfillingLinks ? "Finding links..." : "Find links"}
+            </Button>
             <Button
               variant="outline"
               size="sm"

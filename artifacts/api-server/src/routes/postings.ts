@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, and, ilike, or, gte, isNotNull } from "drizzle-orm";
-import { db, jobPostingsTable, matchReportsTable, userProfilesTable } from "@workspace/db";
+import { eq, and, ilike, or, gte, isNotNull, isNull } from "drizzle-orm";
+import { db, jobPostingsTable, matchReportsTable, userProfilesTable, gmailConnectionsTable } from "@workspace/db";
 import {
   CreatePostingBody,
   GetPostingParams,
@@ -12,7 +12,9 @@ import {
   AnalyzePostingResponse,
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
-import { scorePosting, scorePostingBackground } from "../lib/scoringService";
+import { scorePosting, scorePostingBackground, extractJobListings } from "../lib/scoringService";
+import { fetchSingleEmail } from "../lib/gmailClient";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -151,6 +153,79 @@ router.post("/postings/rescore-all", requireAuth, async (req, res): Promise<void
   const { rescoreAllPostings } = await import("../lib/scoringService");
   rescoreAllPostings(userId, { forceParse: true }).catch(() => {});
   res.json({ queued: true });
+});
+
+router.post("/postings/backfill-links", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId;
+
+  const [conn] = await db
+    .select()
+    .from(gmailConnectionsTable)
+    .where(eq(gmailConnectionsTable.userId, userId));
+
+  if (!conn) {
+    res.status(400).json({ error: "Gmail account not connected" });
+    return;
+  }
+
+  const postings = await db
+    .select({ id: jobPostingsTable.id, gmailMessageId: jobPostingsTable.gmailMessageId, title: jobPostingsTable.title, company: jobPostingsTable.company })
+    .from(jobPostingsTable)
+    .where(and(eq(jobPostingsTable.userId, userId), eq(jobPostingsTable.source, "gmail"), isNull(jobPostingsTable.link)));
+
+  if (postings.length === 0) {
+    res.json({ updated: 0, skipped: 0 });
+    return;
+  }
+
+  // Group by base Gmail message ID to avoid re-fetching the same email multiple times
+  const byBaseId = new Map<string, typeof postings>();
+  for (const p of postings) {
+    if (!p.gmailMessageId) continue;
+    const baseId = p.gmailMessageId.split(":")[0];
+    if (!byBaseId.has(baseId)) byBaseId.set(baseId, []);
+    byBaseId.get(baseId)!.push(p);
+  }
+
+  let updated = 0;
+  let skipped = 0;
+
+  for (const [baseId, group] of byBaseId.entries()) {
+    try {
+      const email = await fetchSingleEmail(conn.accessToken, conn.refreshToken, baseId);
+      if (!email || !email.body.trim()) {
+        skipped += group.length;
+        continue;
+      }
+
+      const listings = await extractJobListings(email.body, email.subject, email.sender);
+
+      for (const posting of group) {
+        const idx = Number(posting.gmailMessageId!.split(":")[1] ?? "0");
+        const listing = listings[idx];
+        const jobUrl = listing?.url;
+
+        if (!jobUrl) {
+          skipped++;
+          logger.debug({ postingId: posting.id, idx }, "backfill-links: no URL found for listing");
+          continue;
+        }
+
+        await db
+          .update(jobPostingsTable)
+          .set({ link: jobUrl })
+          .where(and(eq(jobPostingsTable.id, posting.id), eq(jobPostingsTable.userId, userId)));
+
+        logger.info({ postingId: posting.id, jobUrl }, "backfill-links: updated link");
+        updated++;
+      }
+    } catch (err) {
+      logger.warn({ baseId, err }, "backfill-links: failed to process email");
+      skipped += group.length;
+    }
+  }
+
+  res.json({ updated, skipped });
 });
 
 router.post("/postings/:id/analyze", requireAuth, async (req, res): Promise<void> => {

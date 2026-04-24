@@ -88,6 +88,26 @@ export interface JobEmail {
   body: string;
 }
 
+export async function fetchSingleEmail(
+  accessToken: string,
+  refreshToken: string,
+  messageId: string,
+): Promise<JobEmail | null> {
+  const client = createOAuth2Client();
+  client.setCredentials({ access_token: accessToken, refresh_token: refreshToken });
+  const gmail = google.gmail({ version: "v1", auth: client });
+  try {
+    const detail = await gmail.users.messages.get({ userId: "me", id: messageId, format: "full" });
+    const headers = detail.data.payload?.headers ?? [];
+    const subject = headers.find((h) => h.name?.toLowerCase() === "subject")?.value ?? "(no subject)";
+    const sender = headers.find((h) => h.name?.toLowerCase() === "from")?.value ?? "";
+    const body = extractBody(detail.data.payload);
+    return { messageId, subject, sender, body };
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchJobEmails(
   accessToken: string,
   refreshToken: string,
