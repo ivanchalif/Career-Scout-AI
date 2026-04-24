@@ -135,7 +135,7 @@ function SignedInHomeGate() {
     (profile.experienceHistory && profile.experienceHistory.length > 0)
   ));
 
-  return <Redirect to={hasProfile ? "/dashboard" : "/onboarding"} />;
+  return <Redirect to={hasProfile ? "/dashboard" : "/profile"} />;
 }
 
 function HomeRoute() {
@@ -172,6 +172,8 @@ function ClerkProviderWithRoutes() {
       appearance={clerkAppearance}
       signInUrl={`${basePath}/sign-in`}
       signUpUrl={`${basePath}/sign-up`}
+      signInFallbackRedirectUrl={`${basePath}/profile`}
+      signUpFallbackRedirectUrl={`${basePath}/profile`}
       localization={{
         signIn: {
           start: {

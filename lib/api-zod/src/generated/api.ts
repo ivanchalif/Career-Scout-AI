@@ -65,6 +65,7 @@ export const GetProfileResponse = zod.object({
   remotePreference: zod.string(),
   resumeUrl: zod.string().nullish(),
   resumeText: zod.string().nullish(),
+  syncScheduleHours: zod.number().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
 });
@@ -90,6 +91,7 @@ export const UpsertProfileBody = zod.object({
   remotePreference: zod.string().optional(),
   resumeUrl: zod.string().nullish(),
   resumeText: zod.string().nullish(),
+  syncScheduleHours: zod.number().nullish(),
 });
 
 export const UpsertProfileResponse = zod.object({
@@ -109,6 +111,7 @@ export const UpsertProfileResponse = zod.object({
   remotePreference: zod.string(),
   resumeUrl: zod.string().nullish(),
   resumeText: zod.string().nullish(),
+  syncScheduleHours: zod.number().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
 });

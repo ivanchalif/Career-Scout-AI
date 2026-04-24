@@ -146,6 +146,7 @@ export default function DashboardPage() {
   const [scoreDetail, setScoreDetail] = useState<{
     title: string;
     company: string;
+    link: string | null;
     fitScore: number;
     reasoning: string | null;
     matchedSkills: string[];
@@ -527,6 +528,7 @@ export default function DashboardPage() {
                     onClick={report?.fitScore != null ? () => setScoreDetail({
                       title: posting.title,
                       company: posting.company,
+                      link: posting.link ?? null,
                       fitScore: report.fitScore as number,
                       reasoning: report.reasoning ?? null,
                       matchedSkills: report.matchedSkills ?? [],
@@ -535,7 +537,7 @@ export default function DashboardPage() {
                     }) : undefined}
                   />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <Link href={`/postings/${posting.id}`}>
                         <span
                           className="font-semibold text-foreground hover:text-indigo-400 transition-colors cursor-pointer"
@@ -547,6 +549,19 @@ export default function DashboardPage() {
                       <Badge variant="secondary" className="text-xs">
                         {posting.source}
                       </Badge>
+                      {posting.link && (
+                        <a
+                          href={posting.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                          data-testid={`posting-link-inline-${posting.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          View job
+                        </a>
+                      )}
                     </div>
                     <p className="text-sm text-muted-foreground mt-0.5">
                       {posting.company}
@@ -671,7 +686,7 @@ export default function DashboardPage() {
       <Dialog open={scoreDetail !== null} onOpenChange={(open) => !open && setScoreDetail(null)}>
         <DialogContent className="sm:max-w-md">
           {scoreDetail && (() => {
-            const { title, company, fitScore, reasoning, matchedSkills, missingSkills, compensationGap } = scoreDetail;
+            const { title, company, link, fitScore, reasoning, matchedSkills, missingSkills, compensationGap } = scoreDetail;
             const color = fitScore >= 80 ? "#22c55e" : fitScore >= 60 ? "#f59e0b" : "#ef4444";
             const radius = 28;
             const circumference = 2 * Math.PI * radius;
@@ -680,7 +695,20 @@ export default function DashboardPage() {
               <>
                 <DialogHeader>
                   <DialogTitle className="pr-6">{title}</DialogTitle>
-                  <DialogDescription>{company}</DialogDescription>
+                  <DialogDescription className="flex items-center gap-2">
+                    <span>{company}</span>
+                    {link && (
+                      <a
+                        href={link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 transition-colors text-xs"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        View job posting
+                      </a>
+                    )}
+                  </DialogDescription>
                 </DialogHeader>
                 <div className="flex flex-col items-center gap-1 py-2">
                   <div className="relative flex items-center justify-center w-20 h-20">

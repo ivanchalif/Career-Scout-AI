@@ -66,6 +66,8 @@ export default function ProfilePage() {
   const [isUploadingResume, setIsUploadingResume] = useState(false);
   const [isParsingResume, setIsParsingResume] = useState(false);
   const [resumeMode, setResumeMode] = useState<"upload" | "paste">("upload");
+  const [syncScheduleHours, setSyncScheduleHours] = useState<number | null>(null);
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
 
   const { data: gmailStatus, isLoading: gmailLoading } = useGetGmailStatus();
   const disconnectMutation = useDisconnectGmail({
@@ -208,6 +210,7 @@ export default function ProfilePage() {
     if (p.resumeText && p.resumeText.length > 0) {
       setResumeMode("paste");
     }
+    setSyncScheduleHours(p.syncScheduleHours ?? null);
   }, [profileQ.data, reset]);
 
   function addSkill() {
@@ -252,6 +255,29 @@ export default function ProfilePage() {
           toast({ title: "Error", description: "Failed to save profile.", variant: "destructive" }),
       }
     );
+  }
+
+  async function saveSyncSchedule(hours: number | null) {
+    setSyncScheduleHours(hours);
+    setIsSavingSchedule(true);
+    try {
+      await upsertMutation.mutateAsync(
+        { data: { syncScheduleHours: hours ?? undefined } },
+        {
+          onSuccess: () => {
+            qc.invalidateQueries({ queryKey: getGetProfileQueryKey() });
+            toast({
+              title: "Sync schedule saved",
+              description: hours ? `Gmail will sync automatically every ${hours} hour${hours === 1 ? "" : "s"}.` : "Automatic sync disabled — use manual sync.",
+            });
+          },
+          onError: () =>
+            toast({ title: "Error", description: "Failed to save sync schedule.", variant: "destructive" }),
+        }
+      );
+    } finally {
+      setIsSavingSchedule(false);
+    }
   }
 
   return (
@@ -619,6 +645,37 @@ export default function ProfilePage() {
                 {!gmailStatus.lastSyncedAt && (
                   <p className="text-xs text-muted-foreground">Never synced yet — click Sync now to start.</p>
                 )}
+                {/* Auto-sync schedule */}
+                <div className="space-y-1.5 pt-1">
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                    <RefreshCw className="w-3 h-3" />
+                    Auto-sync schedule
+                    {isSavingSchedule && <Loader2 className="w-3 h-3 animate-spin ml-1" />}
+                  </Label>
+                  <Select
+                    value={syncScheduleHours === null ? "manual" : String(syncScheduleHours)}
+                    onValueChange={(v) => saveSyncSchedule(v === "manual" ? null : Number(v))}
+                    disabled={isSavingSchedule}
+                    data-testid="sync-schedule-select"
+                  >
+                    <SelectTrigger className="w-48 h-8 text-xs" data-testid="sync-schedule-trigger">
+                      <SelectValue placeholder="Choose frequency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="manual">Manual only</SelectItem>
+                      <SelectItem value="1">Every 1 hour</SelectItem>
+                      <SelectItem value="6">Every 6 hours</SelectItem>
+                      <SelectItem value="12">Every 12 hours</SelectItem>
+                      <SelectItem value="24">Every 24 hours</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {syncScheduleHours
+                      ? `Career Scout will check your inbox every ${syncScheduleHours} hour${syncScheduleHours === 1 ? "" : "s"} automatically.`
+                      : "Sync only runs when you click \"Sync now\"."}
+                  </p>
+                </div>
+
                 <div className="flex items-center gap-2 pt-1">
                   <Button
                     variant="outline"
