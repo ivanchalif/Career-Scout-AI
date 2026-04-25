@@ -137,6 +137,20 @@ function StatCard({
   );
 }
 
+function formatAdded(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffMins = Math.floor(diffMs / 60_000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
+}
+
 export default function DashboardPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -149,6 +163,7 @@ export default function DashboardPage() {
       id: number; title: string; company: string; link?: string | null;
       appliedAt?: string | null; source: string; salaryMin?: number | null;
       salaryMax?: number | null; fullDescription: string; extractedSkills: string[];
+      createdAt: Date | string;
     };
     report: {
       fitScore?: number | null; reasoning?: string | null;
@@ -677,6 +692,9 @@ export default function DashboardPage() {
                             : `up to $${(posting.salaryMax! / 1000).toFixed(0)}k`}
                         </span>
                       )}
+                      <span className="ml-2 text-xs text-muted-foreground/60">
+                        {formatAdded(posting.createdAt)}
+                      </span>
                     </p>
                     {report?.matchedSkills && report.matchedSkills.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-2">
@@ -842,6 +860,9 @@ export default function DashboardPage() {
                           </span>
                         )}
                         <Badge variant="secondary" className="text-xs">{posting.source}</Badge>
+                        <span className="text-xs text-muted-foreground/60">
+                          Added {formatAdded(posting.createdAt)}
+                        </span>
                         {posting.link && (
                           <a href={posting.link} target="_blank" rel="noopener noreferrer"
                             className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 transition-colors text-xs">
