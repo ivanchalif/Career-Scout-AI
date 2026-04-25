@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
+import { useAuth } from "@clerk/react";
 import { Link } from "wouter";
 import {
   Plus, Search, SlidersHorizontal, Mail, TrendingUp,
@@ -154,6 +155,7 @@ function formatAdded(date: Date | string): string {
 export default function DashboardPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { getToken } = useAuth();
   const [search, setSearch] = useState("");
   const [minFitScore, setMinFitScore] = useState<number | undefined>(undefined);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -236,7 +238,19 @@ export default function DashboardPage() {
     }
   }, [rawPostings, sortKey]);
 
-  const gmailConnectUrl = "/api/gmail/connect";
+  async function handleConnectGmail() {
+    try {
+      const token = await getToken();
+      const res = await fetch("/api/gmail/auth-url", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error("Failed to get auth URL");
+      const { url } = await res.json() as { url: string };
+      window.location.href = url;
+    } catch {
+      toast({ title: "Error", description: "Could not start Gmail connection. Try again.", variant: "destructive" });
+    }
+  }
 
   async function onSyncGmail() {
     await syncMutation.mutateAsync(
@@ -470,17 +484,16 @@ export default function DashboardPage() {
               <p className="text-sm font-medium text-indigo-300">Connect Gmail to auto-import jobs</p>
               <p className="text-xs text-indigo-400/70 mt-0.5">Automatically import job emails and score them against your profile</p>
             </div>
-            <a href={gmailConnectUrl}>
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-indigo-400 border-indigo-700 hover:bg-indigo-950/50 gap-1.5"
-                data-testid="gmail-connect-button"
-              >
-                <Mail className="w-3.5 h-3.5" />
-                Connect Gmail
-              </Button>
-            </a>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-indigo-400 border-indigo-700 hover:bg-indigo-950/50 gap-1.5"
+              data-testid="gmail-connect-button"
+              onClick={handleConnectGmail}
+            >
+              <Mail className="w-3.5 h-3.5" />
+              Connect Gmail
+            </Button>
           </div>
         )}
 

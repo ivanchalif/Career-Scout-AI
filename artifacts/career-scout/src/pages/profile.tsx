@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useAuth } from "@clerk/react";
 import {
   useGetProfile,
   useUpsertProfile,
@@ -60,6 +61,21 @@ type ProfileFormData = z.infer<typeof profileSchema>;
 export default function ProfilePage() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { getToken } = useAuth();
+
+  async function handleConnectGmail() {
+    try {
+      const token = await getToken();
+      const res = await fetch("/api/gmail/auth-url", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error("Failed to get auth URL");
+      const { url } = await res.json() as { url: string };
+      window.location.href = url;
+    } catch {
+      toast({ title: "Error", description: "Could not start Gmail connection. Try again.", variant: "destructive" });
+    }
+  }
   const search = useSearch();
   const [skillInput, setSkillInput] = useState("");
   const [resumeFileName, setResumeFileName] = useState<string | null>(null);
@@ -710,12 +726,16 @@ export default function ProfilePage() {
                 <p className="text-sm text-muted-foreground">
                   Connect your Gmail account so Career Scout can automatically detect job-related emails.
                 </p>
-                <a href="/api/gmail/connect" data-testid="gmail-connect-button">
-                  <Button variant="outline" size="sm" className="gap-1.5">
-                    <Mail className="w-3.5 h-3.5" />
-                    Connect Gmail
-                  </Button>
-                </a>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  data-testid="gmail-connect-button"
+                  onClick={handleConnectGmail}
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  Connect Gmail
+                </Button>
               </div>
             )}
           </section>

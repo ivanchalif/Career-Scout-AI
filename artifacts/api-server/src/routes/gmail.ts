@@ -100,6 +100,17 @@ async function isFuzzyDuplicate(
 
 const router: IRouter = Router();
 
+// Returns the Google OAuth URL as JSON — called via fetch so Clerk auth uses
+// the Authorization header and never triggers a browser redirect loop.
+router.get("/gmail/auth-url", requireAuth, (req: Request, res: Response): void => {
+  const state = signState(req.userId);
+  const url = getAuthUrl(state);
+  const redirectUri = new URL(url).searchParams.get("redirect_uri");
+  logger.info({ redirectUri, scope: new URL(url).searchParams.get("scope") }, "gmail/auth-url: returning OAuth URL");
+  res.json({ url });
+});
+
+// Legacy browser-navigation route kept for backwards compat.
 router.get("/gmail/connect", requireAuth, (req: Request, res: Response): void => {
   const state = signState(req.userId);
   const url = getAuthUrl(state);
