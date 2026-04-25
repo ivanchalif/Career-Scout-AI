@@ -3,7 +3,6 @@ import { OAuth2Client } from "google-auth-library";
 import { gmail_v1, google } from "googleapis";
 
 const GMAIL_SCOPES = [
-  "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/gmail.modify",
 ];
 
