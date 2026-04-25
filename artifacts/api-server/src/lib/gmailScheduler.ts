@@ -56,6 +56,36 @@ function extractSender(from: string): string {
   return domainMatch?.[1] ?? from.slice(0, 100);
 }
 
+const APPLICATION_RESPONSE_PHRASES = [
+  "after careful consideration",
+  "unfortunately, we have decided",
+  "we have decided not to move forward",
+  "we've decided not to move forward",
+  "we've decided to move forward with other candidates",
+  "we have decided to move forward with other candidates",
+  "we received many qualified applicants",
+  "we really appreciate you for considering",
+  "we appreciate your interest in",
+  "we will not be moving forward",
+  "not moving forward with your application",
+  "we regret to inform you",
+  "we are unable to offer you",
+  "your application was not selected",
+  "we have chosen to move forward with another candidate",
+  "thank you for your application",
+  "thank you for applying",
+  "we have reviewed your application",
+  "we received your application",
+  "your application has been received",
+  "application confirmation",
+  "application received",
+];
+
+function isApplicationResponseEmail(subject: string, body: string): boolean {
+  const combined = `${subject} ${body.slice(0, 3000)}`.toLowerCase();
+  return APPLICATION_RESPONSE_PHRASES.some((phrase) => combined.includes(phrase));
+}
+
 async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promise<number> {
   const emails = await fetchJobEmails(conn.accessToken, conn.refreshToken);
 
@@ -70,6 +100,11 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
 
   for (const email of newEmails) {
     if (!email.body.trim()) continue;
+
+    if (isApplicationResponseEmail(email.subject, email.body)) {
+      logger.info({ messageId: email.messageId, subject: email.subject }, "gmailScheduler: skipping application response email");
+      continue;
+    }
 
     const listings = await extractJobListings(email.body, email.subject, email.sender);
 
