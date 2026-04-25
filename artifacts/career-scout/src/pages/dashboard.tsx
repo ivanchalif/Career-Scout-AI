@@ -144,15 +144,17 @@ export default function DashboardPage() {
   const [minFitScore, setMinFitScore] = useState<number | undefined>(undefined);
   const [showAddModal, setShowAddModal] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [scoreDetail, setScoreDetail] = useState<{
-    title: string;
-    company: string;
-    link: string | null;
-    fitScore: number;
-    reasoning: string | null;
-    matchedSkills: string[];
-    missingSkills: string[];
-    compensationGap: number | null;
+  const [detailPosting, setDetailPosting] = useState<{
+    posting: {
+      id: number; title: string; company: string; link?: string | null;
+      appliedAt?: string | null; source: string; salaryMin?: number | null;
+      salaryMax?: number | null; fullDescription: string; extractedSkills: string[];
+    };
+    report: {
+      fitScore?: number | null; reasoning?: string | null;
+      matchedSkills: string[]; missingSkills: string[];
+      compensationGap?: number | null;
+    } | null;
   } | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [sortKey, setSortKeyState] = useState<string>(
@@ -335,9 +337,14 @@ export default function DashboardPage() {
     await markAppliedMutation.mutateAsync(
       { id },
       {
-        onSuccess: () => {
+        onSuccess: (result) => {
           qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
           qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+          setDetailPosting((prev) =>
+            prev?.posting.id === id
+              ? { ...prev, posting: { ...prev.posting, appliedAt: result.appliedAt ?? null } }
+              : prev
+          );
           toast({
             title: isCurrentlyApplied ? "Marked as not applied" : "Marked as applied",
             description: isCurrentlyApplied
@@ -636,47 +643,27 @@ export default function DashboardPage() {
               return (
                 <div
                   key={posting.id}
-                  className="flex items-center gap-4 bg-card border border-border rounded-xl px-5 py-4 hover:border-indigo-800/50 transition-colors"
+                  className="flex items-center gap-4 bg-card border border-border rounded-xl px-5 py-4 hover:border-indigo-800/50 transition-colors cursor-pointer"
                   data-testid={`posting-card-${posting.id}`}
+                  onClick={() => setDetailPosting(item)}
                 >
-                  <ScoreRing
-                    score={score}
-                    onClick={report?.fitScore != null ? () => setScoreDetail({
-                      title: posting.title,
-                      company: posting.company,
-                      link: posting.link ?? null,
-                      fitScore: report.fitScore as number,
-                      reasoning: report.reasoning ?? null,
-                      matchedSkills: report.matchedSkills ?? [],
-                      missingSkills: report.missingSkills ?? [],
-                      compensationGap: report.compensationGap ?? null,
-                    }) : undefined}
-                  />
+                  <ScoreRing score={score} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <Link href={`/postings/${posting.id}`}>
-                        <span
-                          className="font-semibold text-foreground hover:text-indigo-400 transition-colors cursor-pointer"
-                          data-testid={`posting-title-${posting.id}`}
-                        >
-                          {posting.title}
-                        </span>
-                      </Link>
+                      <span
+                        className="font-semibold text-foreground"
+                        data-testid={`posting-title-${posting.id}`}
+                      >
+                        {posting.title}
+                      </span>
                       <Badge variant="secondary" className="text-xs">
                         {posting.source}
                       </Badge>
-                      {posting.link && (
-                        <a
-                          href={posting.link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
-                          data-testid={`posting-link-inline-${posting.id}`}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                          View job
-                        </a>
+                      {posting.appliedAt && (
+                        <span className="flex items-center gap-1 text-xs text-emerald-400">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Applied
+                        </span>
                       )}
                     </div>
                     <p className="text-sm text-muted-foreground mt-0.5">
@@ -701,7 +688,7 @@ export default function DashboardPage() {
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                     {posting.link && (
                       <a href={posting.link} target="_blank" rel="noopener noreferrer">
                         <Button variant="ghost" size="icon" className="w-8 h-8" data-testid={`posting-link-${posting.id}`}>
@@ -711,30 +698,15 @@ export default function DashboardPage() {
                     )}
                     <Button
                       variant="ghost"
-                      size="sm"
+                      size="icon"
                       onClick={() => onToggleApplied(posting.id, !!posting.appliedAt)}
                       disabled={markAppliedMutation.isPending}
                       data-testid={`posting-apply-${posting.id}`}
                       title={posting.appliedAt ? "Undo applied" : "Mark as applied"}
-                      className={posting.appliedAt ? "text-emerald-400 hover:text-emerald-300 gap-1.5" : "text-muted-foreground hover:text-emerald-400 gap-1.5"}
+                      className={`w-8 h-8 ${posting.appliedAt ? "text-emerald-400 hover:text-emerald-300" : "text-muted-foreground hover:text-emerald-400"}`}
                     >
-                      {posting.appliedAt ? (
-                        <>
-                          <Undo2 className="w-3.5 h-3.5" />
-                          <span className="text-xs">Applied</span>
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span className="text-xs">Apply</span>
-                        </>
-                      )}
+                      {posting.appliedAt ? <Undo2 className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
                     </Button>
-                    <Link href={`/postings/${posting.id}`}>
-                      <Button variant="outline" size="sm" data-testid={`posting-view-${posting.id}`}>
-                        View
-                      </Button>
-                    </Link>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -819,92 +791,165 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Score detail modal */}
-      <Dialog open={scoreDetail !== null} onOpenChange={(open) => !open && setScoreDetail(null)}>
-        <DialogContent className="sm:max-w-md">
-          {scoreDetail && (() => {
-            const { title, company, link, fitScore, reasoning, matchedSkills, missingSkills, compensationGap } = scoreDetail;
-            const color = fitScore >= 80 ? "#22c55e" : fitScore >= 60 ? "#f59e0b" : "#ef4444";
-            const radius = 28;
+      {/* Job detail modal */}
+      <Dialog open={detailPosting !== null} onOpenChange={(open) => { if (!open) setDetailPosting(null); }}>
+        <DialogContent className="sm:max-w-xl max-h-[90vh] flex flex-col overflow-hidden p-0">
+          {detailPosting && (() => {
+            const { posting, report } = detailPosting;
+            const fitScore = report?.fitScore ?? null;
+            const color = fitScore != null ? (fitScore >= 80 ? "#22c55e" : fitScore >= 60 ? "#f59e0b" : "#ef4444") : "hsl(var(--muted-foreground))";
+            const radius = 26;
             const circumference = 2 * Math.PI * radius;
-            const progress = (fitScore / 100) * circumference;
+            const progress = fitScore != null ? (fitScore / 100) * circumference : 0;
+            const isApplied = !!posting.appliedAt;
             return (
               <>
-                <DialogHeader>
-                  <DialogTitle className="pr-6">{title}</DialogTitle>
-                  <DialogDescription className="flex items-center gap-2">
-                    <span>{company}</span>
-                    {link && (
-                      <a
-                        href={link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 transition-colors text-xs"
-                      >
-                        <ExternalLink className="w-3 h-3" />
-                        View job posting
+                {/* Sticky header */}
+                <div className="px-6 pt-6 pb-4 border-b border-border shrink-0">
+                  <div className="flex items-start gap-4 pr-6">
+                    {/* Score ring */}
+                    <div className="relative flex items-center justify-center w-14 h-14 shrink-0">
+                      {fitScore != null ? (
+                        <>
+                          <svg width="56" height="56" viewBox="0 0 56 56" className="-rotate-90">
+                            <circle cx="28" cy="28" r={radius} fill="none" stroke="hsl(var(--muted))" strokeWidth="3" />
+                            <circle cx="28" cy="28" r={radius} fill="none" stroke={color} strokeWidth="3"
+                              strokeDasharray={`${progress} ${circumference - progress}`} strokeLinecap="round" />
+                          </svg>
+                          <span className="absolute text-xs font-bold" style={{ color }}>{fitScore}</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg width="56" height="56" viewBox="0 0 56 56" className="-rotate-90 animate-spin" style={{ animationDuration: "3s" }}>
+                            <circle cx="28" cy="28" r={radius} fill="none" stroke="hsl(var(--muted))" strokeWidth="3" />
+                            <circle cx="28" cy="28" r={radius} fill="none" stroke="hsl(var(--muted-foreground))" strokeWidth="3"
+                              strokeDasharray="20 118" strokeLinecap="round" opacity="0.4" />
+                          </svg>
+                          <span className="absolute text-[9px] text-muted-foreground font-medium">AI</span>
+                        </>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <DialogTitle className="text-lg leading-snug">{posting.title}</DialogTitle>
+                      <DialogDescription className="flex flex-wrap items-center gap-2 mt-1">
+                        <span>{posting.company}</span>
+                        {(posting.salaryMin || posting.salaryMax) && (
+                          <span className="text-xs text-emerald-400 font-medium">
+                            {posting.salaryMin && posting.salaryMax
+                              ? `$${(posting.salaryMin / 1000).toFixed(0)}k–$${(posting.salaryMax / 1000).toFixed(0)}k`
+                              : posting.salaryMin ? `$${(posting.salaryMin / 1000).toFixed(0)}k+`
+                              : `up to $${(posting.salaryMax! / 1000).toFixed(0)}k`}
+                          </span>
+                        )}
+                        <Badge variant="secondary" className="text-xs">{posting.source}</Badge>
+                        {posting.link && (
+                          <a href={posting.link} target="_blank" rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 transition-colors text-xs">
+                            <ExternalLink className="w-3 h-3" />
+                            View job posting
+                          </a>
+                        )}
+                      </DialogDescription>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Scrollable body */}
+                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+                  {/* AI reasoning */}
+                  {report?.reasoning && (
+                    <div className="rounded-lg bg-muted/40 px-4 py-3 text-sm text-foreground leading-relaxed">
+                      {report.reasoning}
+                    </div>
+                  )}
+
+                  {/* Skills */}
+                  {fitScore != null && (
+                    (report?.matchedSkills?.length ?? 0) === 0 && (report?.missingSkills?.length ?? 0) === 0 ? (
+                      <div className="rounded-lg bg-muted/30 px-4 py-3 text-center">
+                        <p className="text-xs text-muted-foreground">No specific skill requirements were found in this posting.</p>
+                        <p className="text-xs text-muted-foreground mt-1">Use <span className="text-foreground font-medium">Re-analyze</span> to refresh.</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-xs font-medium text-emerald-400 mb-2">Matched skills</p>
+                          {(report?.matchedSkills?.length ?? 0) > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {report!.matchedSkills.map((s) => (
+                                <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-emerald-950/40 text-emerald-400 border border-emerald-800/30">{s}</span>
+                              ))}
+                            </div>
+                          ) : <p className="text-xs text-muted-foreground">None from your profile</p>}
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-red-400 mb-2">Missing skills</p>
+                          {(report?.missingSkills?.length ?? 0) > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {report!.missingSkills.map((s) => (
+                                <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-red-950/40 text-red-400 border border-red-800/30">{s}</span>
+                              ))}
+                            </div>
+                          ) : <p className="text-xs text-muted-foreground">None — full match</p>}
+                        </div>
+                      </div>
+                    )
+                  )}
+
+                  {/* Compensation gap */}
+                  {report?.compensationGap != null && (
+                    <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-4 py-3">
+                      <span className="text-xs text-muted-foreground">Compensation gap</span>
+                      <span className={`ml-auto text-sm font-semibold ${report.compensationGap >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                        {report.compensationGap >= 0 ? "+" : ""}${Math.abs(report.compensationGap).toLocaleString()}
+                      </span>
+                      <span className="text-xs text-muted-foreground">{report.compensationGap >= 0 ? "above target" : "below target"}</span>
+                    </div>
+                  )}
+
+                  {/* Description */}
+                  {posting.fullDescription && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Job description</p>
+                      <div className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap rounded-lg bg-muted/20 px-4 py-3 max-h-64 overflow-y-auto">
+                        {posting.fullDescription}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer actions */}
+                <div className="px-6 py-4 border-t border-border shrink-0 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant={isApplied ? "outline" : "default"}
+                      className={isApplied ? "gap-2 border-emerald-700 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/30" : "gap-2 bg-emerald-700 hover:bg-emerald-600"}
+                      onClick={() => onToggleApplied(posting.id, isApplied)}
+                      disabled={markAppliedMutation.isPending}
+                      data-testid="modal-apply-button"
+                    >
+                      {isApplied ? <><Undo2 className="w-4 h-4" /> Undo applied</> : <><CheckCircle2 className="w-4 h-4" /> Mark as applied</>}
+                    </Button>
+                    {posting.link && (
+                      <a href={posting.link} target="_blank" rel="noopener noreferrer">
+                        <Button variant="outline" size="sm" className="gap-2">
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          Open job
+                        </Button>
                       </a>
                     )}
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="flex flex-col items-center gap-1 py-2">
-                  <div className="relative flex items-center justify-center w-20 h-20">
-                    <svg width="80" height="80" viewBox="0 0 80 80" className="-rotate-90">
-                      <circle cx="40" cy="40" r={radius} fill="none" stroke="hsl(var(--muted))" strokeWidth="4" />
-                      <circle cx="40" cy="40" r={radius} fill="none" stroke={color} strokeWidth="4"
-                        strokeDasharray={`${progress} ${circumference - progress}`} strokeLinecap="round" />
-                    </svg>
-                    <span className="absolute text-xl font-bold" style={{ color }}>{fitScore}</span>
                   </div>
-                  <p className="text-xs text-muted-foreground">fit score</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10 gap-2"
+                    onClick={() => { setDetailPosting(null); setDeleteId(posting.id); }}
+                    data-testid="modal-delete-button"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete
+                  </Button>
                 </div>
-                {reasoning && (
-                  <div className="rounded-lg bg-muted/40 px-4 py-3 text-sm text-foreground leading-relaxed">
-                    {reasoning}
-                  </div>
-                )}
-                {matchedSkills.length === 0 && missingSkills.length === 0 ? (
-                  <div className="rounded-lg bg-muted/30 px-4 py-3 text-center">
-                    <p className="text-xs text-muted-foreground">No specific skill requirements were found in this posting.</p>
-                    <p className="text-xs text-muted-foreground mt-1">Click <span className="text-foreground font-medium">Re-analyze</span> on the dashboard to refresh.</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <p className="text-xs font-medium text-emerald-400 mb-2">Matched skills</p>
-                      {matchedSkills.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {matchedSkills.map((s) => (
-                            <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-emerald-950/40 text-emerald-400 border border-emerald-800/30">{s}</span>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-muted-foreground">None from your profile</p>
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium text-red-400 mb-2">Missing skills</p>
-                      {missingSkills.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {missingSkills.map((s) => (
-                            <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-red-950/40 text-red-400 border border-red-800/30">{s}</span>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-muted-foreground">None — full match</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-                {compensationGap !== null && (
-                  <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-4 py-3">
-                    <span className="text-xs text-muted-foreground">Compensation gap</span>
-                    <span className={`ml-auto text-sm font-semibold ${compensationGap >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                      {compensationGap >= 0 ? "+" : ""}${Math.abs(compensationGap).toLocaleString()}
-                    </span>
-                    <span className="text-xs text-muted-foreground">{compensationGap >= 0 ? "above target" : "below target"}</span>
-                  </div>
-                )}
               </>
             );
           })()}
