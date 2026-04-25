@@ -6,8 +6,10 @@ const GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"];
 
 const JOB_QUERY = [
   "is:unread",
-  "subject:(job OR opportunity OR role OR position OR hiring OR offer",
-  'OR recruiter OR "job alert" OR "job opportunity" OR "open position")',
+  "subject:(job OR jobs OR opportunity OR role OR position OR hiring OR offer",
+  'OR recruiter OR "job alert" OR "job opportunity" OR "open position"',
+  'OR "just posted" OR "great match" OR "job matches" OR "job recommendations"',
+  'OR "recommended jobs" OR "jobs you might like" OR "new jobs")',
   "newer_than:30d",
 ].join(" ");
 
