@@ -1,6 +1,6 @@
 import { eq, and, isNotNull } from "drizzle-orm";
 import { db, gmailConnectionsTable, jobPostingsTable, userProfilesTable, gmailSeenKeysTable } from "@workspace/db";
-import { fetchJobEmails } from "./gmailClient";
+import { fetchJobEmails, markEmailAsRead } from "./gmailClient";
 import { extractJobListings } from "./scoringService";
 import { scorePostingBackground, sweepUnscoredPostings } from "./scoringService";
 import { logger } from "./logger";
@@ -144,6 +144,10 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
         synced++;
       }
     }
+
+    // Mark the email as read in Gmail now that it has been fully processed
+    await markEmailAsRead(conn.accessToken, conn.refreshToken, email.messageId);
+    logger.debug({ messageId: email.messageId }, "gmailScheduler: marked email as read");
   }
 
   const lastSyncedAt = new Date();

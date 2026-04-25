@@ -2,7 +2,10 @@ import { createHmac } from "crypto";
 import { OAuth2Client } from "google-auth-library";
 import { gmail_v1, google } from "googleapis";
 
-const GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"];
+const GMAIL_SCOPES = [
+  "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/gmail.modify",
+];
 
 const JOB_QUERY = [
   "is:unread",
@@ -88,6 +91,26 @@ export interface JobEmail {
   subject: string;
   sender: string;
   body: string;
+}
+
+export async function markEmailAsRead(
+  accessToken: string,
+  refreshToken: string,
+  messageId: string,
+): Promise<void> {
+  const client = createOAuth2Client();
+  client.setCredentials({ access_token: accessToken, refresh_token: refreshToken });
+  const gmail = google.gmail({ version: "v1", auth: client });
+  try {
+    await gmail.users.messages.modify({
+      userId: "me",
+      id: messageId,
+      requestBody: { removeLabelIds: ["UNREAD"] },
+    });
+  } catch {
+    // Silently ignore — may fail for tokens that only have gmail.readonly scope
+    // until the user reconnects with the updated permissions
+  }
 }
 
 export async function fetchSingleEmail(
