@@ -27,6 +27,7 @@ import type {
   HealthStatus,
   JobPosting,
   ListPostingsParams,
+  MarkAppliedResult,
   MatchReport,
   PostingWithReport,
   UploadUrlRequest,
@@ -807,6 +808,86 @@ export const useDeletePosting = <
   TContext
 > => {
   return useMutation(getDeletePostingMutationOptions(options));
+};
+
+/**
+ * @summary Toggle applied status of a job posting
+ */
+export const getMarkAppliedUrl = (id: number) => {
+  return `/api/postings/${id}/applied`;
+};
+
+export const markApplied = async (
+  id: number,
+  options?: RequestInit,
+): Promise<MarkAppliedResult> => {
+  return customFetch<MarkAppliedResult>(getMarkAppliedUrl(id), {
+    ...options,
+    method: "PATCH",
+  });
+};
+
+export const getMarkAppliedMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markApplied>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof markApplied>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["markApplied"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof markApplied>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+    return markApplied(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type MarkAppliedMutationResult = NonNullable<
+  Awaited<ReturnType<typeof markApplied>>
+>;
+
+export type MarkAppliedMutationError = ErrorType<unknown>;
+
+export const useMarkApplied = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markApplied>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof markApplied>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getMarkAppliedMutationOptions(options));
 };
 
 /**

@@ -65,7 +65,15 @@ export interface JobPosting {
   source: string;
   /** @nullable */
   gmailMessageId?: string | null;
+  /** @nullable */
+  appliedAt?: string | null;
   createdAt: string;
+}
+
+export interface MarkAppliedResult {
+  id: number;
+  /** @nullable */
+  appliedAt?: string | null;
 }
 
 export interface MatchReport {
@@ -159,6 +167,10 @@ export type ListPostingsParams = {
    * Filter by source (manual, gmail)
    */
   source?: string;
+  /**
+   * Filter by applied status (true = applied, false = not applied)
+   */
+  applied?: boolean;
 };
 
 export type GmailCallbackParams = {

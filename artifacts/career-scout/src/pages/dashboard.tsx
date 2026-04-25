@@ -3,13 +3,14 @@ import { Link } from "wouter";
 import {
   Plus, Search, SlidersHorizontal, Mail, TrendingUp,
   BriefcaseBusiness, CircleAlert, ExternalLink, Trash2,
-  RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2,
+  RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2, CheckCircle2, Undo2,
 } from "lucide-react";
 import {
   useGetDashboardSummary,
   useListPostings,
   useCreatePosting,
   useDeletePosting,
+  useMarkApplied,
   useGetGmailStatus,
   useSyncGmail,
   useDisconnectGmail,
@@ -163,12 +164,18 @@ export default function DashboardPage() {
   }, []);
   const [reanalyzing, setReanalyzing] = useState(false);
   const [backfillingLinks, setBackfillingLinks] = useState(false);
+  const [activeTab, setActiveTab] = useState<"active" | "applied">("active");
 
   const dashboardQ = useGetDashboardSummary();
-  const postingsQ = useListPostings({ search: search || undefined, minFitScore });
+  const postingsQ = useListPostings({
+    search: search || undefined,
+    minFitScore,
+    applied: activeTab === "applied" ? true : false,
+  });
   const gmailStatusQ = useGetGmailStatus();
   const createMutation = useCreatePosting();
   const deleteMutation = useDeletePosting();
+  const markAppliedMutation = useMarkApplied();
   const syncMutation = useSyncGmail();
   const disconnectMutation = useDisconnectGmail();
 
@@ -324,6 +331,25 @@ export default function DashboardPage() {
     );
   }
 
+  async function onToggleApplied(id: number, isCurrentlyApplied: boolean) {
+    await markAppliedMutation.mutateAsync(
+      { id },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
+          qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+          toast({
+            title: isCurrentlyApplied ? "Marked as not applied" : "Marked as applied",
+            description: isCurrentlyApplied
+              ? "Job moved back to your active list."
+              : "Job moved to your Applied tab.",
+          });
+        },
+        onError: () => toast({ title: "Error", description: "Failed to update status.", variant: "destructive" }),
+      }
+    );
+  }
+
   return (
     <Layout>
       <div className="px-6 py-8 max-w-5xl mx-auto" data-testid="dashboard-page">
@@ -458,6 +484,33 @@ export default function DashboardPage() {
           />
         </div>
 
+        {/* View tabs */}
+        <div className="flex items-center gap-1 mb-5 border-b border-border">
+          <button
+            onClick={() => setActiveTab("active")}
+            data-testid="tab-active"
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
+              activeTab === "active"
+                ? "border-indigo-500 text-indigo-400"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Active
+          </button>
+          <button
+            onClick={() => setActiveTab("applied")}
+            data-testid="tab-applied"
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px flex items-center gap-1.5 ${
+              activeTab === "applied"
+                ? "border-indigo-500 text-indigo-400"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            Applied
+          </button>
+        </div>
+
         {/* Search + filters */}
         <div className="flex justify-end mb-4">
           <Button
@@ -542,18 +595,38 @@ export default function DashboardPage() {
           </div>
         ) : postings.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <BriefcaseBusiness className="w-10 h-10 text-muted-foreground mb-4" />
-            <p className="text-foreground font-medium">No job postings yet</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              Add your first job manually or connect Gmail to auto-import
-            </p>
-            <Button
-              onClick={() => setShowAddModal(true)}
-              className="mt-4 bg-indigo-600 hover:bg-indigo-500"
-              data-testid="empty-add-job-button"
-            >
-              Add a job
-            </Button>
+            {activeTab === "applied" ? (
+              <>
+                <CheckCircle2 className="w-10 h-10 text-muted-foreground mb-4" />
+                <p className="text-foreground font-medium">No applied jobs yet</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Click <span className="text-foreground font-medium">Apply</span> on any job in your Active tab to track it here.
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={() => setActiveTab("active")}
+                  className="mt-4"
+                  data-testid="go-to-active-button"
+                >
+                  View active jobs
+                </Button>
+              </>
+            ) : (
+              <>
+                <BriefcaseBusiness className="w-10 h-10 text-muted-foreground mb-4" />
+                <p className="text-foreground font-medium">No job postings yet</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Add your first job manually or connect Gmail to auto-import
+                </p>
+                <Button
+                  onClick={() => setShowAddModal(true)}
+                  className="mt-4 bg-indigo-600 hover:bg-indigo-500"
+                  data-testid="empty-add-job-button"
+                >
+                  Add a job
+                </Button>
+              </>
+            )}
           </div>
         ) : (
           <div className="flex flex-col gap-3">
@@ -636,6 +709,27 @@ export default function DashboardPage() {
                         </Button>
                       </a>
                     )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onToggleApplied(posting.id, !!posting.appliedAt)}
+                      disabled={markAppliedMutation.isPending}
+                      data-testid={`posting-apply-${posting.id}`}
+                      title={posting.appliedAt ? "Undo applied" : "Mark as applied"}
+                      className={posting.appliedAt ? "text-emerald-400 hover:text-emerald-300 gap-1.5" : "text-muted-foreground hover:text-emerald-400 gap-1.5"}
+                    >
+                      {posting.appliedAt ? (
+                        <>
+                          <Undo2 className="w-3.5 h-3.5" />
+                          <span className="text-xs">Applied</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span className="text-xs">Apply</span>
+                        </>
+                      )}
+                    </Button>
                     <Link href={`/postings/${posting.id}`}>
                       <Button variant="outline" size="sm" data-testid={`posting-view-${posting.id}`}>
                         View

@@ -18,6 +18,7 @@ export const jobPostingsTable = pgTable("job_postings", {
   salaryMax: integer("salary_max"),
   source: text("source").notNull().default("manual"),
   gmailMessageId: text("gmail_message_id"),
+  appliedAt: timestamp("applied_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   unique("job_postings_user_gmail_key").on(table.userId, table.gmailMessageId),

@@ -6,6 +6,7 @@ import {
   GetPostingParams,
   DeletePostingParams,
   AnalyzePostingParams,
+  MarkAppliedParams,
   ListPostingsQueryParams,
   GetPostingResponse,
   ListPostingsResponse,
@@ -42,12 +43,18 @@ router.get("/postings", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const { search, minFitScore, source } = queryParsed.data;
+  const { search, minFitScore, source, applied } = queryParsed.data;
 
   const conditions: ReturnType<typeof eq>[] = [eq(jobPostingsTable.userId, userId)];
 
   if (source) {
     conditions.push(eq(jobPostingsTable.source, source));
+  }
+
+  if (applied === true) {
+    conditions.push(isNotNull(jobPostingsTable.appliedAt));
+  } else if (applied === false) {
+    conditions.push(isNull(jobPostingsTable.appliedAt));
   }
 
   const postings = await db
@@ -146,6 +153,35 @@ router.delete("/postings/:id", requireAuth, async (req, res): Promise<void> => {
   }
 
   res.sendStatus(204);
+});
+
+router.patch("/postings/:id/applied", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId;
+  const params = MarkAppliedParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [existing] = await db
+    .select({ appliedAt: jobPostingsTable.appliedAt })
+    .from(jobPostingsTable)
+    .where(and(eq(jobPostingsTable.id, params.data.id), eq(jobPostingsTable.userId, userId)));
+
+  if (!existing) {
+    res.status(404).json({ error: "Posting not found" });
+    return;
+  }
+
+  const newAppliedAt = existing.appliedAt ? null : new Date();
+
+  const [updated] = await db
+    .update(jobPostingsTable)
+    .set({ appliedAt: newAppliedAt })
+    .where(and(eq(jobPostingsTable.id, params.data.id), eq(jobPostingsTable.userId, userId)))
+    .returning();
+
+  res.json({ id: updated.id, appliedAt: updated.appliedAt });
 });
 
 router.post("/postings/rescore-all", requireAuth, async (req, res): Promise<void> => {

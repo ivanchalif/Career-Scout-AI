@@ -133,6 +133,11 @@ export const ListPostingsQueryParams = zod.object({
     .string()
     .optional()
     .describe("Filter by source (manual, gmail)"),
+  applied: zod
+    .enum(["true", "false"])
+    .transform((v) => v === "true")
+    .optional()
+    .describe("Filter by applied status (true = applied, false = not applied)"),
 });
 
 export const ListPostingsResponseItem = zod.object({
@@ -148,6 +153,7 @@ export const ListPostingsResponseItem = zod.object({
     salaryMax: zod.number().nullish(),
     source: zod.string(),
     gmailMessageId: zod.string().nullish(),
+    appliedAt: zod.coerce.date().nullish(),
     createdAt: zod.coerce.date(),
   }),
   report: zod.union([
@@ -202,6 +208,7 @@ export const GetPostingResponse = zod.object({
     salaryMax: zod.number().nullish(),
     source: zod.string(),
     gmailMessageId: zod.string().nullish(),
+    appliedAt: zod.coerce.date().nullish(),
     createdAt: zod.coerce.date(),
   }),
   report: zod.union([
@@ -226,6 +233,18 @@ export const GetPostingResponse = zod.object({
  */
 export const DeletePostingParams = zod.object({
   id: zod.coerce.number(),
+});
+
+/**
+ * @summary Toggle applied status of a job posting
+ */
+export const MarkAppliedParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const MarkAppliedResponse = zod.object({
+  id: zod.number(),
+  appliedAt: zod.coerce.date().nullish(),
 });
 
 /**
