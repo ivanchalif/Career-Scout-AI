@@ -69,21 +69,22 @@ Return a JSON array of job listings (max 10). Each entry must have:
 {
   "title": "job title (infer from context if not explicit)",
   "company": "company name",
-  "description": "the relevant portion of the email body for THIS specific job (200-2000 chars)",
+  "description": "ONLY the text from the email that describes THIS specific job — role, requirements, and details for this role only (100-1500 chars)",
   "url": "the direct URL to THIS specific job posting (from the [URL] markers in the email body) — omit if not found"
 }
 
 Rules:
 - Only include real job opportunities, not articles about hiring trends or company news
 - If the email is a single posting, return exactly 1 item using the full body as description
-- Each description must be self-contained — include the role title, requirements, and any relevant details
+- CRITICAL for digest/roundup emails: each description must contain ONLY the text for that one role — never copy text from other listings into it
+- Each description should be self-contained for its role: include the job title, company, requirements, and relevant details found in that section
 - For "url": extract the most specific link for each job (prefer "Apply" or job-title links over generic "View all jobs" links)
 - Return raw JSON array only, no markdown`;
 
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      max_completion_tokens: 2048,
+      max_completion_tokens: 4096,
       messages: [{ role: "user", content: prompt }],
     });
 
