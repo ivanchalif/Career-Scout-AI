@@ -33,16 +33,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -159,7 +149,7 @@ export default function DashboardPage() {
   const [search, setSearch] = useState("");
   const [minFitScore, setMinFitScore] = useState<number | undefined>(undefined);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [deleteId, setDeleteId] = useState<number | null>(null);
+
   const [detailPosting, setDetailPosting] = useState<{
     posting: {
       id: number; title: string; company: string; link?: string | null;
@@ -354,7 +344,6 @@ export default function DashboardPage() {
         onSuccess: () => {
           qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
           qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
-          setDeleteId(null);
           toast({ title: "Deleted", description: "Job posting removed." });
         },
         onError: () => toast({ title: "Error", description: "Failed to delete.", variant: "destructive" }),
@@ -742,7 +731,7 @@ export default function DashboardPage() {
                       variant="ghost"
                       size="icon"
                       className="w-8 h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => setDeleteId(posting.id)}
+                      onClick={() => onDelete(posting.id)}
                       data-testid={`posting-delete-${posting.id}`}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -977,7 +966,7 @@ export default function DashboardPage() {
                     variant="ghost"
                     size="sm"
                     className="text-destructive hover:text-destructive hover:bg-destructive/10 gap-2"
-                    onClick={() => { setDetailPosting(null); setDeleteId(posting.id); }}
+                    onClick={() => { setDetailPosting(null); onDelete(posting.id); }}
                     data-testid="modal-delete-button"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -990,28 +979,6 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete confirmation */}
-      <AlertDialog open={deleteId !== null} onOpenChange={(open) => !open && setDeleteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete job posting?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. The posting and its match report will be permanently removed.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive hover:bg-destructive/90"
-              onClick={() => deleteId !== null && onDelete(deleteId)}
-              disabled={deleteMutation.isPending}
-              data-testid="confirm-delete"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </Layout>
   );
 }
