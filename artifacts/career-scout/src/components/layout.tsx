@@ -12,7 +12,7 @@ import {
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/inbox", icon: Mail, label: "Gmail" },
+  { href: "/inbox", icon: Mail, label: "Email" },
   { href: "/profile", icon: User, label: "Profile" },
 ];
 
