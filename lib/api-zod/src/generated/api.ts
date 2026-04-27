@@ -343,39 +343,7 @@ export const SyncGmailResponse = zod.object({
 export const GetDashboardSummaryResponse = zod.object({
   totalPostings: zod.number(),
   avgFitScore: zod.number().nullable(),
-  topMatches: zod.array(
-    zod.object({
-      posting: zod.object({
-        id: zod.number(),
-        userId: zod.string(),
-        title: zod.string(),
-        company: zod.string(),
-        link: zod.string().nullish(),
-        fullDescription: zod.string(),
-        extractedSkills: zod.array(zod.string()),
-        salaryMin: zod.number().nullish(),
-        salaryMax: zod.number().nullish(),
-        source: zod.string(),
-        gmailMessageId: zod.string().nullish(),
-        createdAt: zod.coerce.date(),
-      }),
-      report: zod.union([
-        zod.object({
-          id: zod.number(),
-          jobPostingId: zod.number(),
-          userId: zod.string(),
-          fitScore: zod.number().nullish(),
-          reasoning: zod.string().nullish(),
-          compensationGap: zod.number().nullish(),
-          matchedSkills: zod.array(zod.string()),
-          missingSkills: zod.array(zod.string()),
-          createdAt: zod.coerce.date(),
-          updatedAt: zod.coerce.date(),
-        }),
-        zod.null(),
-      ]),
-    }),
-  ),
+  strongMatches: zod.number(),
   hasProfile: zod.boolean(),
   gmailConnected: zod.boolean(),
 });

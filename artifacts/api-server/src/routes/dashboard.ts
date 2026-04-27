@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, avg, isNotNull } from "drizzle-orm";
+import { eq, isNull, isNotNull } from "drizzle-orm";
 import { db, jobPostingsTable, matchReportsTable, userProfilesTable, gmailConnectionsTable } from "@workspace/db";
 import { GetDashboardSummaryResponse } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -19,45 +19,46 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     .from(gmailConnectionsTable)
     .where(eq(gmailConnectionsTable.userId, userId));
 
-  const postings = await db
+  // Only count non-deleted, non-applied (active) postings
+  const activePostings = await db
+    .select({ id: jobPostingsTable.id })
+    .from(jobPostingsTable)
+    .where(
+      eq(jobPostingsTable.userId, userId),
+    )
+    .then((rows) => rows); // fetch all, filter in JS to reuse for scoring below
+
+  const allNonDeleted = await db
     .select()
     .from(jobPostingsTable)
-    .where(eq(jobPostingsTable.userId, userId));
+    .where(eq(jobPostingsTable.userId, userId))
+    .then((rows) => rows.filter((p) => !p.deletedAt));
 
-  const totalPostings = postings.length;
+  const activeOnly = allNonDeleted.filter((p) => !p.appliedAt);
+  const totalPostings = activeOnly.length;
+
+  const activeIds = new Set(activeOnly.map((p) => p.id));
 
   const reports = await db
     .select()
     .from(matchReportsTable)
     .where(eq(matchReportsTable.userId, userId));
 
-  const scoredReports = reports.filter((r) => r.fitScore != null);
+  // Avg fit score across active (non-deleted, non-applied) scored postings
+  const activeReports = reports.filter((r) => activeIds.has(r.jobPostingId) && r.fitScore != null);
   const avgFitScore =
-    scoredReports.length > 0
-      ? scoredReports.reduce((sum, r) => sum + (r.fitScore ?? 0), 0) / scoredReports.length
+    activeReports.length > 0
+      ? activeReports.reduce((sum, r) => sum + (r.fitScore ?? 0), 0) / activeReports.length
       : null;
 
-  const postingMap = new Map(postings.map((p) => [p.id, p]));
-  const reportMap = new Map(reports.map((r) => [r.jobPostingId, r]));
-
-  const postingsWithReports = postings
-    .map((posting) => ({
-      posting,
-      report: reportMap.get(posting.id) ?? null,
-    }))
-    .sort((a, b) => {
-      const sa = a.report?.fitScore ?? -1;
-      const sb = b.report?.fitScore ?? -1;
-      return sb - sa;
-    });
-
-  const topMatches = postingsWithReports.slice(0, 5);
+  // Strong matches: active jobs scoring >= 70
+  const strongMatches = activeReports.filter((r) => (r.fitScore ?? 0) >= 70).length;
 
   res.json(
     GetDashboardSummaryResponse.parse({
       totalPostings,
       avgFitScore,
-      topMatches,
+      strongMatches,
       hasProfile: !!profile,
       gmailConnected: !!gmailConn,
     }),

@@ -3,7 +3,7 @@ import { useAuth } from "@clerk/react";
 import { Link } from "wouter";
 import {
   Plus, Search, SlidersHorizontal, Mail, TrendingUp,
-  BriefcaseBusiness, CircleAlert, ExternalLink, Trash2,
+  BriefcaseBusiness, Star, ExternalLink, Trash2,
   RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2, CheckCircle2, Undo2,
 } from "lucide-react";
 import {
@@ -503,9 +503,9 @@ export default function DashboardPage() {
             loading={dashboardQ.isLoading}
           />
           <StatCard
-            icon={CircleAlert}
-            label="Top matches"
-            value={summary?.topMatches?.length ?? 0}
+            icon={Star}
+            label="Strong matches (70+)"
+            value={summary?.strongMatches ?? 0}
             loading={dashboardQ.isLoading}
           />
         </div>
