@@ -149,9 +149,33 @@ export interface DashboardSummary {
   totalPostings: number;
   /** @nullable */
   avgFitScore: number | null;
-  topMatches: PostingWithReport[];
+  strongMatches: number;
   hasProfile: boolean;
   gmailConnected: boolean;
+}
+
+export type ImapStatus =
+  | { connected: false }
+  | { connected: true; host: string; port: number; username: string; tls: boolean; lastSyncedAt: string | null; postingCount: number };
+
+export interface ConnectImapBody {
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+  tls: boolean;
+}
+
+export interface ImapConnected {
+  connected: true;
+  host: string;
+  port: number;
+  username: string;
+  tls: boolean;
+}
+
+export interface ImapSyncResult {
+  synced: number;
 }
 
 export type ListPostingsParams = {

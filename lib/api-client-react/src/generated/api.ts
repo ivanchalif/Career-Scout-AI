@@ -17,6 +17,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  ConnectImapBody,
   CreatePostingBody,
   DashboardSummary,
   ErrorEnvelope,
@@ -25,6 +26,9 @@ import type {
   GmailStatus,
   GmailSyncResult,
   HealthStatus,
+  ImapConnected,
+  ImapStatus,
+  ImapSyncResult,
   JobPosting,
   ListPostingsParams,
   MarkAppliedResult,
@@ -1612,3 +1616,151 @@ export function useGetDashboardSummary<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Get IMAP connection status
+ */
+export const getGetImapStatusUrl = () => `/api/imap/status`;
+
+export const getImapStatus = async (options?: RequestInit): Promise<ImapStatus> =>
+  customFetch<ImapStatus>(getGetImapStatusUrl(), { ...options, method: "GET" });
+
+export const getGetImapStatusQueryKey = () => [`/api/imap/status`] as const;
+
+export const getGetImapStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getImapStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof getImapStatus>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getGetImapStatusQueryKey();
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getImapStatus>>> = ({ signal }) =>
+    getImapStatus({ signal, ...requestOptions });
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getImapStatus>>, TError, TData
+  > & { queryKey: QueryKey };
+};
+
+export function useGetImapStatus<
+  TData = Awaited<ReturnType<typeof getImapStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof getImapStatus>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetImapStatusQueryOptions(options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Connect / update IMAP credentials
+ */
+export const getConnectImapUrl = () => `/api/imap/connect`;
+
+export const connectImap = async (body: ConnectImapBody, options?: RequestInit): Promise<ImapConnected> =>
+  customFetch<ImapConnected>(getConnectImapUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(body),
+  });
+
+export const getConnectImapMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof connectImap>>, TError, ConnectImapBody, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<Awaited<ReturnType<typeof connectImap>>, TError, ConnectImapBody, TContext> => {
+  const mutationKey = ["connectImap"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof connectImap>>, ConnectImapBody> = (body) =>
+    connectImap(body, requestOptions);
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useConnectImap = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof connectImap>>, TError, ConnectImapBody, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<Awaited<ReturnType<typeof connectImap>>, TError, ConnectImapBody, TContext> =>
+  useMutation(getConnectImapMutationOptions(options));
+
+/**
+ * @summary Disconnect IMAP account
+ */
+export const getDisconnectImapUrl = () => `/api/imap/disconnect`;
+
+export const disconnectImap = async (options?: RequestInit): Promise<void> =>
+  customFetch<void>(getDisconnectImapUrl(), { ...options, method: "DELETE" });
+
+export const getDisconnectImapMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof disconnectImap>>, TError, void, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<Awaited<ReturnType<typeof disconnectImap>>, TError, void, TContext> => {
+  const mutationKey = ["disconnectImap"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof disconnectImap>>, void> = () =>
+    disconnectImap(requestOptions);
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useDisconnectImap = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof disconnectImap>>, TError, void, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<Awaited<ReturnType<typeof disconnectImap>>, TError, void, TContext> =>
+  useMutation(getDisconnectImapMutationOptions(options));
+
+/**
+ * @summary Trigger a manual IMAP sync
+ */
+export const getSyncImapUrl = () => `/api/imap/sync`;
+
+export const syncImap = async (options?: RequestInit): Promise<ImapSyncResult> =>
+  customFetch<ImapSyncResult>(getSyncImapUrl(), { ...options, method: "POST" });
+
+export const getSyncImapMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof syncImap>>, TError, void, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<Awaited<ReturnType<typeof syncImap>>, TError, void, TContext> => {
+  const mutationKey = ["syncImap"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof syncImap>>, void> = () =>
+    syncImap(requestOptions);
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useSyncImap = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof syncImap>>, TError, void, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<Awaited<ReturnType<typeof syncImap>>, TError, void, TContext> =>
+  useMutation(getSyncImapMutationOptions(options));

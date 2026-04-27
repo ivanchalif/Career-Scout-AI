@@ -338,6 +338,49 @@ export const SyncGmailResponse = zod.object({
 });
 
 /**
+ * @summary Get IMAP connection status
+ */
+export const GetImapStatusResponse = zod.discriminatedUnion("connected", [
+  zod.object({ connected: zod.literal(false) }),
+  zod.object({
+    connected: zod.literal(true),
+    host: zod.string(),
+    port: zod.number(),
+    username: zod.string(),
+    tls: zod.boolean(),
+    lastSyncedAt: zod.coerce.date().nullable(),
+    postingCount: zod.number(),
+  }),
+]);
+export type ImapStatus = zod.infer<typeof GetImapStatusResponse>;
+
+/**
+ * @summary Connect / update IMAP credentials
+ */
+export const ConnectImapBody = zod.object({
+  host: zod.string().min(1),
+  port: zod.number().int().min(1).max(65535),
+  username: zod.string().min(1),
+  password: zod.string().min(1),
+  tls: zod.boolean().default(true),
+});
+
+export const ConnectImapResponse = zod.object({
+  connected: zod.literal(true),
+  host: zod.string(),
+  port: zod.number(),
+  username: zod.string(),
+  tls: zod.boolean(),
+});
+
+/**
+ * @summary Trigger a manual IMAP sync
+ */
+export const SyncImapResponse = zod.object({
+  synced: zod.number(),
+});
+
+/**
  * @summary Get dashboard summary statistics
  */
 export const GetDashboardSummaryResponse = zod.object({
