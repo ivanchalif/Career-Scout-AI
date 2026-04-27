@@ -8,6 +8,7 @@ import {
   getGmailEmail,
   revokeTokens,
   fetchJobEmails,
+  markEmailAsRead,
   signState,
   verifyState,
 } from "../lib/gmailClient";
@@ -245,6 +246,9 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
         synced++;
       }
     }
+
+    // Mark the email as read in Gmail now that all its listings have been processed
+    await markEmailAsRead(conn.accessToken, conn.refreshToken, email.messageId);
   }
 
   const lastSyncedAt = new Date();
