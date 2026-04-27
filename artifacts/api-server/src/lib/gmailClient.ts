@@ -11,7 +11,7 @@ const JOB_QUERY = [
   "subject:(job OR jobs OR opportunity OR role OR position OR hiring OR offer",
   'OR recruiter OR "job alert" OR "job opportunity" OR "open position"',
   'OR "just posted" OR "great match" OR "job matches" OR "job recommendations"',
-  'OR "recommended jobs" OR "jobs you might like" OR "new jobs" OR "you may be a fit")',
+  'OR "recommended jobs" OR "jobs you might like" OR "new jobs" OR "you may be a fit" OR "new job:")',
   "newer_than:30d",
 ].join(" ");
 
