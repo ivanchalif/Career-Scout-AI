@@ -181,6 +181,8 @@ export default function DashboardPage() {
     minFitScore,
     applied: activeTab === "applied" ? true : false,
   });
+  const activeCountQ = useListPostings({ applied: false });
+  const appliedCountQ = useListPostings({ applied: true });
   const gmailStatusQ = useGetGmailStatus();
   const createMutation = useCreatePosting();
   const deleteMutation = useDeletePosting();
@@ -513,18 +515,25 @@ export default function DashboardPage() {
           <button
             onClick={() => setActiveTab("active")}
             data-testid="tab-active"
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px flex items-center gap-2 ${
               activeTab === "active"
                 ? "border-indigo-500 text-indigo-400"
                 : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
             Active
+            {activeCountQ.data != null && (
+              <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${
+                activeTab === "active" ? "bg-indigo-500/20 text-indigo-300" : "bg-muted text-muted-foreground"
+              }`}>
+                {activeCountQ.data.length}
+              </span>
+            )}
           </button>
           <button
             onClick={() => setActiveTab("applied")}
             data-testid="tab-applied"
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px flex items-center gap-1.5 ${
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px flex items-center gap-2 ${
               activeTab === "applied"
                 ? "border-indigo-500 text-indigo-400"
                 : "border-transparent text-muted-foreground hover:text-foreground"
@@ -532,6 +541,13 @@ export default function DashboardPage() {
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
             Applied
+            {appliedCountQ.data != null && (
+              <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${
+                activeTab === "applied" ? "bg-indigo-500/20 text-indigo-300" : "bg-muted text-muted-foreground"
+              }`}>
+                {appliedCountQ.data.length}
+              </span>
+            )}
           </button>
         </div>
 
