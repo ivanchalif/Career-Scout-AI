@@ -125,13 +125,13 @@ router.get("/gmail/callback", async (req: Request, res: Response): Promise<void>
     : "http://localhost:5173";
 
   if (error || !code || !state) {
-    res.redirect(`${frontendBase}/profile?gmail=error`);
+    res.redirect(`${frontendBase}/inbox?gmail=error`);
     return;
   }
 
   const userId = verifyState(state);
   if (!userId) {
-    res.redirect(`${frontendBase}/profile?gmail=error`);
+    res.redirect(`${frontendBase}/inbox?gmail=error`);
     return;
   }
 
@@ -147,9 +147,9 @@ router.get("/gmail/callback", async (req: Request, res: Response): Promise<void>
         set: { accessToken, refreshToken, email, updatedAt: new Date() },
       });
 
-    res.redirect(`${frontendBase}/profile?gmail=connected`);
+    res.redirect(`${frontendBase}/inbox?gmail=connected`);
   } catch {
-    res.redirect(`${frontendBase}/profile?gmail=error`);
+    res.redirect(`${frontendBase}/inbox?gmail=error`);
   }
 });
 

@@ -1,15 +1,8 @@
 import { useUser, useClerk } from "@clerk/react";
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, User, LogOut, Radar } from "lucide-react";
+import { LayoutDashboard, User, LogOut, Radar, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Tooltip,
   TooltipContent,
@@ -19,6 +12,7 @@ import {
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+  { href: "/inbox", icon: Mail, label: "Gmail" },
   { href: "/profile", icon: User, label: "Profile" },
 ];
 
@@ -44,6 +38,26 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <span className="hidden md:block font-semibold text-foreground tracking-tight">
               Career Scout
             </span>
+          </div>
+
+          {/* Account info */}
+          <div className="flex items-center gap-3 px-4 py-3 border-b border-sidebar-border">
+            <Avatar className="w-8 h-8 shrink-0">
+              <AvatarImage src={user?.imageUrl} />
+              <AvatarFallback className="bg-indigo-700 text-white text-xs">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+            <div className="hidden md:flex flex-col min-w-0">
+              <span className="text-sm font-medium text-foreground truncate max-w-[140px]">
+                {user?.firstName && user?.lastName
+                  ? `${user.firstName} ${user.lastName}`
+                  : user?.firstName || user?.emailAddresses[0]?.emailAddress?.split("@")[0]}
+              </span>
+              <span className="text-xs text-muted-foreground truncate max-w-[140px]">
+                {user?.emailAddresses[0]?.emailAddress}
+              </span>
+            </div>
           </div>
 
           {/* Navigation */}
@@ -75,49 +89,24 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             })}
           </nav>
 
-          {/* User menu */}
+          {/* Sign out */}
           <div className="p-2 border-t border-sidebar-border">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="w-full flex items-center gap-3 justify-start px-3 py-2.5 h-auto"
-                  data-testid="user-menu-trigger"
-                >
-                  <Avatar className="w-7 h-7 shrink-0">
-                    <AvatarImage src={user?.imageUrl} />
-                    <AvatarFallback className="bg-indigo-700 text-white text-xs">
-                      {initials}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="hidden md:flex flex-col items-start min-w-0">
-                    <span className="text-sm font-medium text-foreground truncate max-w-[120px]">
-                      {user?.firstName || user?.emailAddresses[0]?.emailAddress?.split("@")[0]}
-                    </span>
-                    <span className="text-xs text-muted-foreground truncate max-w-[120px]">
-                      {user?.emailAddresses[0]?.emailAddress}
-                    </span>
-                  </div>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem asChild>
-                  <Link href="/profile">
-                    <User className="w-4 h-4 mr-2" />
-                    Profile
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
+                  className="w-full flex items-center gap-3 justify-start px-3 py-2.5 h-auto text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                   onClick={() => signOut({ redirectUrl: "/" })}
-                  className="text-destructive focus:text-destructive"
                   data-testid="sign-out-button"
                 >
-                  <LogOut className="w-4 h-4 mr-2" />
-                  Sign out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <LogOut className="w-5 h-5 shrink-0" />
+                  <span className="hidden md:block text-sm font-medium">Sign out</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="md:hidden">
+                Sign out
+              </TooltipContent>
+            </Tooltip>
           </div>
         </aside>
 

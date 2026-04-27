@@ -4,21 +4,16 @@ import {
   useGetProfile,
   useUpsertProfile,
   getGetProfileQueryKey,
-  useGetGmailStatus,
-  getGetGmailStatusQueryKey,
-  useDisconnectGmail,
-  useSyncGmail,
   type UpsertProfileBody,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useSearch } from "wouter";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
   Plus, Trash2, Save, User, Briefcase, GraduationCap,
   DollarSign, Wifi, CheckCircle2, Upload, FileText, Loader2,
-  Mail, RefreshCw, Unlink, Sparkles, MapPin, X,
+  Sparkles, MapPin, X, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,13 +21,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import Layout from "@/components/layout";
 
@@ -60,64 +48,84 @@ const profileSchema = z.object({
 
 type ProfileFormData = z.infer<typeof profileSchema>;
 
+function CollapsibleSection({
+  icon: Icon,
+  title,
+  badge,
+  isOpen,
+  onToggle,
+  headerActions,
+  children,
+}: {
+  icon: React.ElementType;
+  title: string;
+  badge?: number;
+  isOpen: boolean;
+  onToggle: () => void;
+  headerActions?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="bg-card border border-border rounded-xl overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4">
+        <button
+          type="button"
+          className="flex items-center gap-2 flex-1 text-left hover:opacity-80 transition-opacity"
+          onClick={onToggle}
+        >
+          <Icon className="w-4 h-4 text-indigo-400" />
+          <h2 className="font-semibold text-foreground text-sm">{title}</h2>
+          {badge !== undefined && badge > 0 && (
+            <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
+              {badge}
+            </span>
+          )}
+        </button>
+        <div className="flex items-center gap-2">
+          {headerActions}
+          <button
+            type="button"
+            className="p-1 rounded hover:bg-muted/40 transition-colors"
+            onClick={onToggle}
+          >
+            {isOpen ? (
+              <ChevronUp className="w-4 h-4 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-muted-foreground" />
+            )}
+          </button>
+        </div>
+      </div>
+      {isOpen && (
+        <div className="px-5 pb-5 pt-4 border-t border-border space-y-4">
+          {children}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function ProfilePage() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { getToken } = useAuth();
 
-  async function handleConnectGmail() {
-    try {
-      const token = await getToken();
-      const res = await fetch("/api/gmail/auth-url", {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (!res.ok) throw new Error("Failed to get auth URL");
-      const { url } = await res.json() as { url: string };
-      window.location.href = url;
-    } catch {
-      toast({ title: "Error", description: "Could not start Gmail connection. Try again.", variant: "destructive" });
-    }
-  }
-  const search = useSearch();
   const [skillInput, setSkillInput] = useState("");
   const [locationInput, setLocationInput] = useState("");
   const [resumeFileName, setResumeFileName] = useState<string | null>(null);
   const [isUploadingResume, setIsUploadingResume] = useState(false);
   const [isParsingResume, setIsParsingResume] = useState(false);
   const [resumeMode, setResumeMode] = useState<"upload" | "paste">("upload");
-  const [syncScheduleHours, setSyncScheduleHours] = useState<number | null>(null);
-  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set());
 
-  const { data: gmailStatus, isLoading: gmailLoading } = useGetGmailStatus();
-  const disconnectMutation = useDisconnectGmail({
-    mutation: {
-      onSuccess: () => {
-        qc.invalidateQueries({ queryKey: getGetGmailStatusQueryKey() });
-        toast({ title: "Gmail disconnected", description: "Your Gmail account has been unlinked." });
-      },
-      onError: () => toast({ title: "Error", description: "Failed to disconnect Gmail.", variant: "destructive" }),
-    },
-  });
-  const syncMutation = useSyncGmail({
-    mutation: {
-      onSuccess: (data) => {
-        qc.invalidateQueries({ queryKey: getGetGmailStatusQueryKey() });
-        toast({ title: "Inbox synced", description: `Found ${data.synced} new job email${data.synced === 1 ? "" : "s"}.` });
-      },
-      onError: () => toast({ title: "Sync failed", description: "Could not sync Gmail inbox. Please try again.", variant: "destructive" }),
-    },
-  });
-
-  useEffect(() => {
-    const params = new URLSearchParams(search);
-    const gmail = params.get("gmail");
-    if (gmail === "connected") {
-      qc.invalidateQueries({ queryKey: getGetGmailStatusQueryKey() });
-      toast({ title: "Gmail connected", description: "Your Gmail account is now linked to Career Scout." });
-    } else if (gmail === "error") {
-      toast({ title: "Gmail connection failed", description: "Could not connect your Gmail account. Please try again.", variant: "destructive" });
-    }
-  }, []);
+  function toggleSection(id: string) {
+    setOpenSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   async function handleResumeFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -233,7 +241,6 @@ export default function ProfilePage() {
     if (p.resumeText && p.resumeText.length > 0) {
       setResumeMode("paste");
     }
-    setSyncScheduleHours(p.syncScheduleHours ?? null);
   }, [profileQ.data, reset]);
 
   function addSkill() {
@@ -303,29 +310,6 @@ export default function ProfilePage() {
     );
   }
 
-  async function saveSyncSchedule(hours: number | null) {
-    setSyncScheduleHours(hours);
-    setIsSavingSchedule(true);
-    try {
-      await upsertMutation.mutateAsync(
-        { data: { syncScheduleHours: hours ?? undefined } },
-        {
-          onSuccess: () => {
-            qc.invalidateQueries({ queryKey: getGetProfileQueryKey() });
-            toast({
-              title: "Sync schedule saved",
-              description: hours ? `Gmail will sync automatically every ${hours} hour${hours === 1 ? "" : "s"}.` : "Automatic sync disabled — use manual sync.",
-            });
-          },
-          onError: () =>
-            toast({ title: "Error", description: "Failed to save sync schedule.", variant: "destructive" }),
-        }
-      );
-    } finally {
-      setIsSavingSchedule(false);
-    }
-  }
-
   return (
     <Layout>
       <div className="px-6 py-8 max-w-3xl mx-auto" data-testid="profile-page">
@@ -346,19 +330,21 @@ export default function ProfilePage() {
 
         {profileQ.isLoading ? (
           <div className="space-y-4">
-            <Skeleton className="h-40 rounded-xl" />
-            <Skeleton className="h-40 rounded-xl" />
+            <Skeleton className="h-14 rounded-xl" />
+            <Skeleton className="h-14 rounded-xl" />
+            <Skeleton className="h-14 rounded-xl" />
           </div>
         ) : (
-          <>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             {/* Skills */}
-            <section className="bg-card border border-border rounded-xl p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <User className="w-4 h-4 text-indigo-400" />
-                <h2 className="font-semibold text-foreground">Skills</h2>
-              </div>
-              <div className="flex gap-2 mb-3">
+            <CollapsibleSection
+              icon={User}
+              title="Skills"
+              badge={skills.length}
+              isOpen={openSections.has("skills")}
+              onToggle={() => toggleSection("skills")}
+            >
+              <div className="flex gap-2">
                 <Input
                   placeholder="Add a skill (e.g. TypeScript)"
                   value={skillInput}
@@ -390,125 +376,135 @@ export default function ProfilePage() {
               ) : (
                 <p className="text-sm text-muted-foreground">No skills added yet</p>
               )}
-            </section>
+            </CollapsibleSection>
 
             {/* Experience */}
-            <section className="bg-card border border-border rounded-xl p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <Briefcase className="w-4 h-4 text-indigo-400" />
-                  <h2 className="font-semibold text-foreground">Experience</h2>
-                </div>
-                <div className="flex items-center gap-2">
+            <CollapsibleSection
+              icon={Briefcase}
+              title="Experience"
+              badge={expFields.length}
+              isOpen={openSections.has("experience")}
+              onToggle={() => toggleSection("experience")}
+              headerActions={
+                <div className="flex items-center gap-1.5">
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="gap-1.5 text-indigo-400 border-indigo-800/50 hover:bg-indigo-950/30 hover:text-indigo-300"
-                    onClick={parseResumeExperience}
+                    className="gap-1.5 text-indigo-400 border-indigo-800/50 hover:bg-indigo-950/30 hover:text-indigo-300 h-7 text-xs"
+                    onClick={() => {
+                      parseResumeExperience();
+                      if (!openSections.has("experience")) toggleSection("experience");
+                    }}
                     disabled={isParsingResume}
                     data-testid="parse-resume-button"
                   >
                     {isParsingResume ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <Loader2 className="w-3 h-3 animate-spin" />
                     ) : (
-                      <Sparkles className="w-3.5 h-3.5" />
+                      <Sparkles className="w-3 h-3" />
                     )}
-                    {isParsingResume ? "Parsing…" : "Import from resume"}
+                    {isParsingResume ? "Parsing…" : "Import"}
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="gap-1.5"
-                    onClick={() => appendExp({ title: "", company: "", startYear: new Date().getFullYear(), endYear: null, description: "" })}
+                    className="gap-1.5 h-7 text-xs"
+                    onClick={() => {
+                      appendExp({ title: "", company: "", startYear: new Date().getFullYear(), endYear: null, description: "" });
+                      if (!openSections.has("experience")) toggleSection("experience");
+                    }}
                     data-testid="add-experience-button"
                   >
-                    <Plus className="w-3.5 h-3.5" />
+                    <Plus className="w-3 h-3" />
                     Add
                   </Button>
                 </div>
-              </div>
-              {expFields.length === 0 && (
+              }
+            >
+              {expFields.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No experience entries yet</p>
+              ) : (
+                <div className="space-y-4">
+                  {expFields.map((field, i) => (
+                    <div key={field.id} className="p-4 bg-background border border-border rounded-lg space-y-3" data-testid={`experience-${i}`}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground font-medium">Position {i + 1}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="w-7 h-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => removeExp(i)}
+                          data-testid={`remove-experience-${i}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Job title</Label>
+                          <Input
+                            placeholder="Software Engineer"
+                            data-testid={`exp-title-${i}`}
+                            {...register(`experienceHistory.${i}.title`)}
+                          />
+                          {errors.experienceHistory?.[i]?.title && (
+                            <p className="text-xs text-destructive">{errors.experienceHistory[i]?.title?.message}</p>
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Company</Label>
+                          <Input
+                            placeholder="Acme Corp"
+                            data-testid={`exp-company-${i}`}
+                            {...register(`experienceHistory.${i}.company`)}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Start year</Label>
+                          <Input
+                            type="number"
+                            placeholder="2020"
+                            data-testid={`exp-start-${i}`}
+                            {...register(`experienceHistory.${i}.startYear`, { valueAsNumber: true })}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">End year (leave blank if current)</Label>
+                          <Input
+                            type="number"
+                            placeholder="Present"
+                            data-testid={`exp-end-${i}`}
+                            {...register(`experienceHistory.${i}.endYear`, {
+                              setValueAs: (v) => (v === "" || v === null ? null : Number(v)),
+                            })}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Description (optional)</Label>
+                        <Textarea
+                          placeholder="Brief description of your role..."
+                          rows={2}
+                          data-testid={`exp-description-${i}`}
+                          {...register(`experienceHistory.${i}.description`)}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
-              <div className="space-y-4">
-                {expFields.map((field, i) => (
-                  <div key={field.id} className="p-4 bg-background border border-border rounded-lg space-y-3" data-testid={`experience-${i}`}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground font-medium">Position {i + 1}</span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="w-7 h-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => removeExp(i)}
-                        data-testid={`remove-experience-${i}`}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <Label className="text-xs">Job title</Label>
-                        <Input
-                          placeholder="Software Engineer"
-                          data-testid={`exp-title-${i}`}
-                          {...register(`experienceHistory.${i}.title`)}
-                        />
-                        {errors.experienceHistory?.[i]?.title && (
-                          <p className="text-xs text-destructive">{errors.experienceHistory[i]?.title?.message}</p>
-                        )}
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Company</Label>
-                        <Input
-                          placeholder="Acme Corp"
-                          data-testid={`exp-company-${i}`}
-                          {...register(`experienceHistory.${i}.company`)}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Start year</Label>
-                        <Input
-                          type="number"
-                          placeholder="2020"
-                          data-testid={`exp-start-${i}`}
-                          {...register(`experienceHistory.${i}.startYear`, { valueAsNumber: true })}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">End year (leave blank if current)</Label>
-                        <Input
-                          type="number"
-                          placeholder="Present"
-                          data-testid={`exp-end-${i}`}
-                          {...register(`experienceHistory.${i}.endYear`, {
-                            setValueAs: (v) => (v === "" || v === null ? null : Number(v)),
-                          })}
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Description (optional)</Label>
-                      <Textarea
-                        placeholder="Brief description of your role..."
-                        rows={2}
-                        data-testid={`exp-description-${i}`}
-                        {...register(`experienceHistory.${i}.description`)}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
+            </CollapsibleSection>
 
-            {/* Education + Target Salary + Remote */}
-            <section className="bg-card border border-border rounded-xl p-5 space-y-4">
-              <div className="flex items-center gap-2 mb-1">
-                <GraduationCap className="w-4 h-4 text-indigo-400" />
-                <h2 className="font-semibold text-foreground">Preferences</h2>
-              </div>
+            {/* Preferences (Education + Salary + Work type + Location) */}
+            <CollapsibleSection
+              icon={GraduationCap}
+              title="Preferences"
+              isOpen={openSections.has("preferences")}
+              onToggle={() => toggleSection("preferences")}
+            >
               <div className="space-y-1.5">
                 <Label>Education</Label>
                 <Input
@@ -566,7 +562,7 @@ export default function ProfilePage() {
                   Location preferences
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Add cities, states, countries, or metro areas you'd consider (e.g. "New York", "SF Bay Area", "Remote", "Texas").
+                  Add cities, states, countries, or metro areas you'd consider (e.g. "New York", "SF Bay Area", "Texas").
                 </p>
                 <div className="flex gap-2">
                   <Input
@@ -603,92 +599,95 @@ export default function ProfilePage() {
                   </div>
                 )}
               </div>
-              <div className="space-y-2">
-                <Label className="flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5" />
-                  Resume
-                </Label>
-                {/* Mode toggle */}
-                <div className="flex items-center gap-1 p-1 bg-muted/40 rounded-lg w-fit">
-                  <button
-                    type="button"
-                    onClick={() => setResumeMode("upload")}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${resumeMode === "upload" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                    data-testid="resume-mode-upload"
-                  >
-                    Upload PDF
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setResumeMode("paste")}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${resumeMode === "paste" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                    data-testid="resume-mode-paste"
-                  >
-                    Paste text
-                  </button>
-                </div>
+            </CollapsibleSection>
 
-                {resumeMode === "upload" ? (
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-3">
-                      <label
-                        htmlFor="resume-upload"
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-background text-sm font-medium cursor-pointer hover:bg-muted/50 transition-colors ${isUploadingResume ? "opacity-60 pointer-events-none" : ""}`}
-                        data-testid="resume-upload-label"
-                      >
-                        {isUploadingResume ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Upload className="w-4 h-4" />
-                        )}
-                        {isUploadingResume ? "Uploading…" : "Choose PDF"}
-                      </label>
-                      <input
-                        id="resume-upload"
-                        type="file"
-                        accept="application/pdf"
-                        className="sr-only"
-                        onChange={handleResumeFile}
-                        data-testid="resume-file-input"
-                      />
-                      {(resumeFileName || watch("resumeUrl")) && (
-                        <span className="text-xs text-muted-foreground truncate max-w-[200px]">
-                          {resumeFileName ?? "Resume saved"}
-                        </span>
+            {/* Resume */}
+            <CollapsibleSection
+              icon={FileText}
+              title="Resume"
+              isOpen={openSections.has("resume")}
+              onToggle={() => toggleSection("resume")}
+            >
+              {/* Mode toggle */}
+              <div className="flex items-center gap-1 p-1 bg-muted/40 rounded-lg w-fit">
+                <button
+                  type="button"
+                  onClick={() => setResumeMode("upload")}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${resumeMode === "upload" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                  data-testid="resume-mode-upload"
+                >
+                  Upload PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setResumeMode("paste")}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${resumeMode === "paste" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                  data-testid="resume-mode-paste"
+                >
+                  Paste text
+                </button>
+              </div>
+
+              {resumeMode === "upload" ? (
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-3">
+                    <label
+                      htmlFor="resume-upload"
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-background text-sm font-medium cursor-pointer hover:bg-muted/50 transition-colors ${isUploadingResume ? "opacity-60 pointer-events-none" : ""}`}
+                      data-testid="resume-upload-label"
+                    >
+                      {isUploadingResume ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Upload className="w-4 h-4" />
                       )}
-                    </div>
-                    {watch("resumeUrl") && (
-                      <a
-                        href={watch("resumeUrl")}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-indigo-400 hover:underline"
-                        data-testid="resume-view-link"
-                      >
-                        View current resume
-                      </a>
+                      {isUploadingResume ? "Uploading…" : "Choose PDF"}
+                    </label>
+                    <input
+                      id="resume-upload"
+                      type="file"
+                      accept="application/pdf"
+                      className="sr-only"
+                      onChange={handleResumeFile}
+                      data-testid="resume-file-input"
+                    />
+                    {(resumeFileName || watch("resumeUrl")) && (
+                      <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                        {resumeFileName ?? "Resume saved"}
+                      </span>
                     )}
                   </div>
-                ) : (
-                  <div className="space-y-1.5">
-                    <Textarea
-                      placeholder="Paste your resume text here — include your work history, skills, education, and any other relevant details…"
-                      rows={12}
-                      className="text-sm font-mono resize-y"
-                      data-testid="resume-text-input"
-                      {...register("resumeText")}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Paste plain text from your resume. This will be used for scoring and "Import from resume" — no file upload needed.
-                    </p>
-                  </div>
-                )}
-                <input type="hidden" {...register("resumeUrl")} />
-              </div>
-            </section>
+                  {watch("resumeUrl") && (
+                    <a
+                      href={watch("resumeUrl")}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-indigo-400 hover:underline"
+                      data-testid="resume-view-link"
+                    >
+                      View current resume
+                    </a>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <Textarea
+                    placeholder="Paste your resume text here — include your work history, skills, education, and any other relevant details…"
+                    rows={12}
+                    className="text-sm font-mono resize-y"
+                    data-testid="resume-text-input"
+                    {...register("resumeText")}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Paste plain text from your resume. This will be used for scoring and "Import from resume" — no file upload needed.
+                  </p>
+                </div>
+              )}
+              <input type="hidden" {...register("resumeUrl")} />
+            </CollapsibleSection>
 
             {/* Save button */}
-            <div className="flex justify-end">
+            <div className="flex justify-end pt-2">
               <Button
                 type="submit"
                 className="gap-2 bg-indigo-600 hover:bg-indigo-500 min-w-[120px]"
@@ -714,113 +713,6 @@ export default function ProfilePage() {
               </Button>
             </div>
           </form>
-
-          {/* Gmail integration section */}
-          <section className="bg-card border border-border rounded-xl p-5 mt-5" data-testid="gmail-section">
-            <div className="flex items-center gap-2 mb-4">
-              <Mail className="w-4 h-4 text-indigo-400" />
-              <h2 className="font-semibold text-foreground">Gmail integration</h2>
-            </div>
-
-            {gmailLoading ? (
-              <div className="h-16 flex items-center">
-                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-              </div>
-            ) : gmailStatus?.connected ? (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span className="text-sm text-foreground">
-                    Connected as <span className="font-medium">{gmailStatus.email ?? "your Gmail account"}</span>
-                  </span>
-                </div>
-                {gmailStatus.lastSyncedAt && (
-                  <p className="text-xs text-muted-foreground">
-                    Last synced: {new Date(gmailStatus.lastSyncedAt).toLocaleString()} &middot; {gmailStatus.postingCount} job email{gmailStatus.postingCount === 1 ? "" : "s"} found
-                  </p>
-                )}
-                {!gmailStatus.lastSyncedAt && (
-                  <p className="text-xs text-muted-foreground">Never synced yet — click Sync now to start.</p>
-                )}
-                {/* Auto-sync schedule */}
-                <div className="space-y-1.5 pt-1">
-                  <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <RefreshCw className="w-3 h-3" />
-                    Auto-sync schedule
-                    {isSavingSchedule && <Loader2 className="w-3 h-3 animate-spin ml-1" />}
-                  </Label>
-                  <Select
-                    value={syncScheduleHours === null ? "manual" : String(syncScheduleHours)}
-                    onValueChange={(v) => saveSyncSchedule(v === "manual" ? null : Number(v))}
-                    disabled={isSavingSchedule}
-                    data-testid="sync-schedule-select"
-                  >
-                    <SelectTrigger className="w-48 h-8 text-xs" data-testid="sync-schedule-trigger">
-                      <SelectValue placeholder="Choose frequency" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="manual">Manual only</SelectItem>
-                      <SelectItem value="1">Every 1 hour</SelectItem>
-                      <SelectItem value="6">Every 6 hours</SelectItem>
-                      <SelectItem value="12">Every 12 hours</SelectItem>
-                      <SelectItem value="24">Every 24 hours</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    {syncScheduleHours
-                      ? `Career Scout will check your inbox every ${syncScheduleHours} hour${syncScheduleHours === 1 ? "" : "s"} automatically.`
-                      : "Sync only runs when you click \"Sync now\"."}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 pt-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5"
-                    onClick={() => syncMutation.mutate()}
-                    disabled={syncMutation.isPending}
-                    data-testid="gmail-sync-button"
-                  >
-                    {syncMutation.isPending ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <RefreshCw className="w-3.5 h-3.5" />
-                    )}
-                    {syncMutation.isPending ? "Syncing…" : "Sync now"}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => disconnectMutation.mutate()}
-                    disabled={disconnectMutation.isPending}
-                    data-testid="gmail-disconnect-button"
-                  >
-                    <Unlink className="w-3.5 h-3.5" />
-                    Disconnect
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Connect your Gmail account so Career Scout can automatically detect job-related emails.
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
-                  data-testid="gmail-connect-button"
-                  onClick={handleConnectGmail}
-                >
-                  <Mail className="w-3.5 h-3.5" />
-                  Connect Gmail
-                </Button>
-              </div>
-            )}
-          </section>
-          </>
         )}
       </div>
     </Layout>

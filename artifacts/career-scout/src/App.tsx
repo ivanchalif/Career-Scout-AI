@@ -8,6 +8,7 @@ import LandingPage from "@/pages/landing";
 import DashboardPage from "@/pages/dashboard";
 import PostingDetailPage from "@/pages/posting-detail";
 import ProfilePage from "@/pages/profile";
+import InboxPage from "@/pages/inbox";
 import OnboardingPage from "@/pages/onboarding";
 import NotFound from "@/pages/not-found";
 import { useGetProfile, getGetProfileQueryKey } from "@workspace/api-client-react";
@@ -212,6 +213,11 @@ function ClerkProviderWithRoutes() {
           <Route path="/profile">
             <ProtectedRoute>
               <ProfilePage />
+            </ProtectedRoute>
+          </Route>
+          <Route path="/inbox">
+            <ProtectedRoute>
+              <InboxPage />
             </ProtectedRoute>
           </Route>
           <Route path="/onboarding">
