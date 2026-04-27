@@ -29,7 +29,7 @@ async function isFuzzyDuplicate(
   for (const row of existing) {
     const titleSim = titleSimilarity(row.title, title);
     const companySim = titleSimilarity(row.company, company);
-    if (titleSim > 0.75 && companySim > 0.65) {
+    if (titleSim >= 0.70 && companySim >= 0.60) {
       return { isDuplicate: true, matchedTitle: row.title, matchedCompany: row.company };
     }
   }

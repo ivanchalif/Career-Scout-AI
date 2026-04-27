@@ -23,7 +23,7 @@ async function getPostingWithReport(postingId: number, userId: string) {
   const [posting] = await db
     .select()
     .from(jobPostingsTable)
-    .where(and(eq(jobPostingsTable.id, postingId), eq(jobPostingsTable.userId, userId)));
+    .where(and(eq(jobPostingsTable.id, postingId), eq(jobPostingsTable.userId, userId), isNull(jobPostingsTable.deletedAt)));
 
   if (!posting) return null;
 
@@ -45,7 +45,10 @@ router.get("/postings", requireAuth, async (req, res): Promise<void> => {
 
   const { search, minFitScore, source, applied } = queryParsed.data;
 
-  const conditions: ReturnType<typeof eq>[] = [eq(jobPostingsTable.userId, userId)];
+  const conditions: ReturnType<typeof eq>[] = [
+    eq(jobPostingsTable.userId, userId),
+    isNull(jobPostingsTable.deletedAt),
+  ];
 
   if (source) {
     conditions.push(eq(jobPostingsTable.source, source));
@@ -143,8 +146,9 @@ router.delete("/postings/:id", requireAuth, async (req, res): Promise<void> => {
   }
 
   const [posting] = await db
-    .delete(jobPostingsTable)
-    .where(and(eq(jobPostingsTable.id, params.data.id), eq(jobPostingsTable.userId, userId)))
+    .update(jobPostingsTable)
+    .set({ deletedAt: new Date() })
+    .where(and(eq(jobPostingsTable.id, params.data.id), eq(jobPostingsTable.userId, userId), isNull(jobPostingsTable.deletedAt)))
     .returning();
 
   if (!posting) {
@@ -275,7 +279,7 @@ router.post("/postings/:id/analyze", requireAuth, async (req, res): Promise<void
   const [posting] = await db
     .select()
     .from(jobPostingsTable)
-    .where(and(eq(jobPostingsTable.id, params.data.id), eq(jobPostingsTable.userId, userId)));
+    .where(and(eq(jobPostingsTable.id, params.data.id), eq(jobPostingsTable.userId, userId), isNull(jobPostingsTable.deletedAt)));
 
   if (!posting) {
     res.status(404).json({ error: "Posting not found" });
