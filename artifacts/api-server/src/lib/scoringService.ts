@@ -197,6 +197,8 @@ async function scoreFit(
     education: string | null;
     targetSalary: number | null;
     remotePreference: string;
+    remotePreferences?: string[];
+    locationPreferences?: string[];
     resumeText?: string;
   },
 ): Promise<FitScoreResult> {
@@ -224,7 +226,8 @@ Experience History: ${userProfile.experienceHistory
     .join("\n") || "None listed"}
 Education: ${userProfile.education ?? "Not specified"}
 Target Salary: ${userProfile.targetSalary ? `$${userProfile.targetSalary.toLocaleString()}/year` : "Not specified"}
-Remote Preference: ${userProfile.remotePreference}${resumeSection}
+Work Type Preference: ${userProfile.remotePreferences && userProfile.remotePreferences.length > 0 ? userProfile.remotePreferences.join(", ") : userProfile.remotePreference}
+Location Preferences: ${userProfile.locationPreferences && userProfile.locationPreferences.length > 0 ? userProfile.locationPreferences.join(", ") : "No preference"}${resumeSection}
 
 JOB REQUIREMENTS:
 Title: ${parsedJob.title}
@@ -356,6 +359,8 @@ export async function scorePosting(
         education: profile.education ?? null,
         targetSalary: profile.targetSalary ?? null,
         remotePreference: profile.remotePreference ?? "hybrid",
+        remotePreferences: profile.remotePreferences ?? [],
+        locationPreferences: profile.locationPreferences ?? [],
         resumeText: resumeText || undefined,
       }
     : {
@@ -364,6 +369,8 @@ export async function scorePosting(
         education: null,
         targetSalary: null,
         remotePreference: "hybrid",
+        remotePreferences: [],
+        locationPreferences: [],
         resumeText: undefined,
       };
 

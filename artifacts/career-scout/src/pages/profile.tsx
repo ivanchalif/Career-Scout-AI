@@ -18,7 +18,7 @@ import { z } from "zod";
 import {
   Plus, Trash2, Save, User, Briefcase, GraduationCap,
   DollarSign, Wifi, CheckCircle2, Upload, FileText, Loader2,
-  Mail, RefreshCw, Unlink, Sparkles,
+  Mail, RefreshCw, Unlink, Sparkles, MapPin, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,6 +52,8 @@ const profileSchema = z.object({
   education: z.string().optional(),
   targetSalary: z.number().int().min(0).optional().nullable(),
   remotePreference: z.enum(["remote", "hybrid", "onsite"]).default("hybrid"),
+  remotePreferences: z.array(z.enum(["remote", "hybrid", "onsite"])).default([]),
+  locationPreferences: z.array(z.string()).default([]),
   resumeUrl: z.string().optional().or(z.literal("")),
   resumeText: z.string().optional().or(z.literal("")),
 });
@@ -78,6 +80,7 @@ export default function ProfilePage() {
   }
   const search = useSearch();
   const [skillInput, setSkillInput] = useState("");
+  const [locationInput, setLocationInput] = useState("");
   const [resumeFileName, setResumeFileName] = useState<string | null>(null);
   const [isUploadingResume, setIsUploadingResume] = useState(false);
   const [isParsingResume, setIsParsingResume] = useState(false);
@@ -206,6 +209,8 @@ export default function ProfilePage() {
   }
 
   const skills = watch("skills") ?? [];
+  const remotePreferences = watch("remotePreferences") ?? [];
+  const locationPreferences = watch("locationPreferences") ?? [];
 
   useEffect(() => {
     const p = profileQ.data;
@@ -220,6 +225,8 @@ export default function ProfilePage() {
       education: p.education ?? "",
       targetSalary: p.targetSalary ?? null,
       remotePreference: (p.remotePreference as "remote" | "hybrid" | "onsite") ?? "hybrid",
+      remotePreferences: ((p.remotePreferences ?? []) as Array<"remote" | "hybrid" | "onsite">),
+      locationPreferences: p.locationPreferences ?? [],
       resumeUrl: p.resumeUrl ?? "",
       resumeText: p.resumeText ?? "",
     });
@@ -244,14 +251,37 @@ export default function ProfilePage() {
     setValue("skills", skills.filter((s) => s !== skill));
   }
 
+  function addLocation() {
+    const newLocs = locationInput
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0 && !locationPreferences.includes(s));
+    if (newLocs.length > 0) {
+      setValue("locationPreferences", [...locationPreferences, ...newLocs]);
+    }
+    setLocationInput("");
+  }
+
+  function removeLocation(loc: string) {
+    setValue("locationPreferences", locationPreferences.filter((l) => l !== loc));
+  }
+
+  function toggleRemotePreference(val: "remote" | "hybrid" | "onsite") {
+    if (remotePreferences.includes(val)) {
+      setValue("remotePreferences", remotePreferences.filter((v) => v !== val));
+    } else {
+      setValue("remotePreferences", [...remotePreferences, val]);
+    }
+  }
+
   async function onSubmit(data: ProfileFormData) {
     const payload: UpsertProfileBody = {
       ...data,
       targetSalary: data.targetSalary || undefined,
       resumeUrl: data.resumeUrl || undefined,
-      // When in upload mode, clear any stored pasted text so PDF is used for scoring
-      // When in paste mode, the pasted text takes priority in scoring
       resumeText: resumeMode === "paste" ? (data.resumeText || undefined) : undefined,
+      remotePreferences: data.remotePreferences,
+      locationPreferences: data.locationPreferences,
       experienceHistory: data.experienceHistory.map((e) => ({
         title: e.title,
         company: e.company,
@@ -503,24 +533,75 @@ export default function ProfilePage() {
                 <div className="space-y-1.5">
                   <Label className="flex items-center gap-1.5">
                     <Wifi className="w-3.5 h-3.5" />
-                    Work preference
+                    Work type (select all that apply)
                   </Label>
-                  <Select
-                    defaultValue={profileQ.data?.remotePreference ?? "hybrid"}
-                    onValueChange={(val) =>
-                      setValue("remotePreference", val as "remote" | "hybrid" | "onsite")
-                    }
-                  >
-                    <SelectTrigger data-testid="remote-select">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="remote">Remote</SelectItem>
-                      <SelectItem value="hybrid">Hybrid</SelectItem>
-                      <SelectItem value="onsite">On-site</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="flex gap-2 pt-1">
+                    {(["remote", "hybrid", "onsite"] as const).map((type) => {
+                      const labels = { remote: "Remote", hybrid: "Hybrid", onsite: "On-site" };
+                      const active = remotePreferences.includes(type);
+                      return (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => toggleRemotePreference(type)}
+                          data-testid={`remote-pref-${type}`}
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                            active
+                              ? "bg-indigo-500/20 border-indigo-500/50 text-indigo-300"
+                              : "border-border text-muted-foreground hover:border-muted-foreground"
+                          }`}
+                        >
+                          {labels[type]}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
+              </div>
+
+              {/* Location preferences */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5" />
+                  Location preferences
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Add cities, states, countries, or metro areas you'd consider (e.g. "New York", "SF Bay Area", "Remote", "Texas").
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="e.g. New York, SF Bay Area"
+                    value={locationInput}
+                    onChange={(e) => setLocationInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { e.preventDefault(); addLocation(); }
+                    }}
+                    data-testid="location-input"
+                  />
+                  <Button type="button" variant="outline" size="sm" onClick={addLocation} className="shrink-0">
+                    Add
+                  </Button>
+                </div>
+                {locationPreferences.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {locationPreferences.map((loc) => (
+                      <Badge
+                        key={loc}
+                        variant="secondary"
+                        className="flex items-center gap-1 pr-1 text-xs"
+                      >
+                        {loc}
+                        <button
+                          type="button"
+                          onClick={() => removeLocation(loc)}
+                          className="ml-0.5 rounded-full hover:bg-muted-foreground/20 p-0.5"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="space-y-2">
                 <Label className="flex items-center gap-1.5">

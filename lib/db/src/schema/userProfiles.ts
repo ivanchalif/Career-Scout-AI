@@ -9,6 +9,8 @@ export const userProfilesTable = pgTable("user_profiles", {
   education: text("education"),
   targetSalary: integer("target_salary"),
   remotePreference: text("remote_preference").notNull().default("hybrid"),
+  remotePreferences: text("remote_preferences").array().notNull().default([]),
+  locationPreferences: text("location_preferences").array().notNull().default([]),
   resumeUrl: text("resume_url"),
   resumeText: text("resume_text"),
   syncScheduleHours: integer("sync_schedule_hours"),
