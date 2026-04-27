@@ -4,6 +4,7 @@ import { db, imapConnectionsTable, jobPostingsTable, gmailSeenKeysTable } from "
 import { requireAuth } from "../middlewares/requireAuth";
 import { testImapConnection, fetchImapJobEmails } from "../lib/imapClient";
 import { extractJobListings, scorePostingBackground, sweepUnscoredPostings } from "../lib/scoringService";
+import { isFuzzyDuplicate } from "../lib/dedup";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -119,6 +120,15 @@ router.post("/imap/sync", requireAuth, async (req, res): Promise<void> => {
 
         const title = listing.title || email.subject.slice(0, 200) || "Job Opportunity";
         const company = listing.company || email.sender.replace(/<[^>]+>/g, "").trim().split("@")[0] || "Unknown";
+
+        const { isDuplicate, matchedTitle, matchedCompany } = await isFuzzyDuplicate(userId, title, company);
+        if (isDuplicate) {
+          logger.info(
+            { userId, title, company, matchedTitle, matchedCompany },
+            "imap sync: skipping fuzzy duplicate posting",
+          );
+          continue;
+        }
 
         const [newPosting] = await db
           .insert(jobPostingsTable)

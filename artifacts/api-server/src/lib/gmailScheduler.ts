@@ -3,50 +3,11 @@ import { db, gmailConnectionsTable, jobPostingsTable, userProfilesTable, gmailSe
 import { fetchJobEmails, markEmailAsRead } from "./gmailClient";
 import { extractJobListings } from "./scoringService";
 import { scorePostingBackground, sweepUnscoredPostings } from "./scoringService";
+import { isFuzzyDuplicate } from "./dedup";
 import { logger } from "./logger";
 
 const CHECK_INTERVAL_MS = 30 * 60 * 1000; // check every 30 minutes
 
-async function isFuzzyDuplicate(
-  userId: string,
-  title: string,
-  company: string,
-): Promise<{ isDuplicate: boolean; matchedTitle?: string; matchedCompany?: string }> {
-  const { ilike, or } = await import("drizzle-orm");
-  const existing = await db
-    .select({ title: jobPostingsTable.title, company: jobPostingsTable.company })
-    .from(jobPostingsTable)
-    .where(
-      and(
-        eq(jobPostingsTable.userId, userId),
-        or(
-          ilike(jobPostingsTable.title, `%${title.slice(0, 40)}%`),
-          ilike(jobPostingsTable.company, `%${company.slice(0, 40)}%`),
-        ),
-      ),
-    );
-
-  for (const row of existing) {
-    const titleSim = titleSimilarity(row.title, title);
-    const companySim = titleSimilarity(row.company, company);
-    if (titleSim >= 0.70 && companySim >= 0.60) {
-      return { isDuplicate: true, matchedTitle: row.title, matchedCompany: row.company };
-    }
-  }
-  return { isDuplicate: false };
-}
-
-function titleSimilarity(a: string, b: string): number {
-  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
-  const na = normalize(a);
-  const nb = normalize(b);
-  if (na === nb) return 1;
-  const wordsA = new Set(na.split(/\s+/).filter(Boolean));
-  const wordsB = new Set(nb.split(/\s+/).filter(Boolean));
-  const intersection = [...wordsA].filter((w) => wordsB.has(w)).length;
-  const union = new Set([...wordsA, ...wordsB]).size;
-  return union > 0 ? intersection / union : 0;
-}
 
 function extractSender(from: string): string {
   const match = from.match(/^(?:"?([^"<]+)"?\s*)?<?.+>?$/);
