@@ -1,13 +1,7 @@
 import { ImapFlow } from "imapflow";
 import { logger } from "./logger";
-import type { JobEmail } from "./gmailClient";
-
-const JOB_SUBJECT_KEYWORDS = [
-  "job", "jobs", "opportunity", "role", "position", "hiring", "offer",
-  "recruiter", "job alert", "job opportunity", "open position",
-  "just posted", "great match", "job matches", "job recommendations",
-  "recommended jobs", "jobs you might like", "new jobs", "you may be a fit", "new job:",
-];
+import type { JobEmail, EmailFilterCriteria } from "./gmailClient";
+import { DEFAULT_EMAIL_FILTER_CRITERIA } from "./gmailClient";
 
 export interface ImapCredentials {
   host: string;
@@ -43,9 +37,19 @@ export async function testImapConnection(creds: ImapCredentials): Promise<void> 
   }
 }
 
-function isJobEmail(subject: string): boolean {
-  const lower = subject.toLowerCase();
-  return JOB_SUBJECT_KEYWORDS.some((kw) => lower.includes(kw));
+function isJobEmail(subject: string, sender: string, body: string, criteria: EmailFilterCriteria): boolean {
+  const subjectLower = subject.toLowerCase();
+  const senderLower = sender.toLowerCase();
+  const bodyLower = body.toLowerCase();
+
+  const subjectMatch = criteria.subjectKeywords.length === 0
+    || criteria.subjectKeywords.some((kw) => subjectLower.includes(kw.toLowerCase()));
+  const fromMatch = criteria.fromAddresses.length === 0
+    || criteria.fromAddresses.some((addr) => senderLower.includes(addr.toLowerCase()));
+  const bodyMatch = criteria.bodyKeywords.length === 0
+    || criteria.bodyKeywords.some((kw) => bodyLower.includes(kw.toLowerCase()));
+
+  return subjectMatch && fromMatch && bodyMatch;
 }
 
 function stripHtml(html: string): string {
@@ -69,7 +73,8 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-export async function fetchImapJobEmails(creds: ImapCredentials): Promise<JobEmail[]> {
+export async function fetchImapJobEmails(creds: ImapCredentials, criteria?: EmailFilterCriteria): Promise<JobEmail[]> {
+  const effectiveCriteria = criteria ?? DEFAULT_EMAIL_FILTER_CRITERIA;
   const client = createImapClient(creds);
   const results: JobEmail[] = [];
 
@@ -93,8 +98,6 @@ export async function fetchImapJobEmails(creds: ImapCredentials): Promise<JobEma
           });
 
           const subject = msg.envelope?.subject ?? "(no subject)";
-          if (!isJobEmail(subject)) continue;
-
           const sender = msg.envelope?.from?.[0]
             ? `${msg.envelope.from[0].name ?? ""} <${msg.envelope.from[0].address ?? ""}>`.trim()
             : "";
@@ -103,6 +106,7 @@ export async function fetchImapJobEmails(creds: ImapCredentials): Promise<JobEma
           const body = extractBodyFromRaw(rawSource);
 
           if (!body.trim()) continue;
+          if (!isJobEmail(subject, sender, body, effectiveCriteria)) continue;
 
           results.push({
             messageId: `imap:${uid}`,

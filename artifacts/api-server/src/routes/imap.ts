@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, imapConnectionsTable, jobPostingsTable, gmailSeenKeysTable } from "@workspace/db";
+import { db, imapConnectionsTable, jobPostingsTable, gmailSeenKeysTable, userProfilesTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import { testImapConnection, fetchImapJobEmails } from "../lib/imapClient";
 import { extractJobListings, scorePostingBackground, sweepUnscoredPostings } from "../lib/scoringService";
@@ -85,13 +85,15 @@ router.post("/imap/sync", requireAuth, async (req, res): Promise<void> => {
   }
 
   try {
+    const [userProfile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, userId));
+    const filterCriteria = userProfile?.emailFilterSettings ?? undefined;
     const emails = await fetchImapJobEmails({
       host: conn.host,
       port: conn.port,
       username: conn.username,
       password: conn.password,
       tls: conn.tls,
-    });
+    }, filterCriteria);
 
     const seenKeys = await db
       .select({ gmailKey: gmailSeenKeysTable.gmailKey })

@@ -13,11 +13,16 @@ import {
   useConnectImap,
   useDisconnectImap,
   useSyncImap,
+  useGetFilterSettings,
+  useUpdateFilterSettings,
+  getGetFilterSettingsQueryKey,
+  type EmailFilterSettings,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSearch } from "wouter";
 import {
   Mail, CheckCircle2, RefreshCw, Unlink, Loader2, Server, Eye, EyeOff,
+  SlidersHorizontal, Plus, X,
 } from "lucide-react";
 import {
   Select,
@@ -33,7 +38,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import Layout from "@/components/layout";
 
-type Tab = "google" | "imap";
+type Tab = "google" | "imap" | "filters";
 
 export default function InboxPage() {
   const { toast } = useToast();
@@ -232,6 +237,18 @@ export default function InboxPage() {
               <span className="w-2 h-2 rounded-full bg-emerald-400 ml-0.5" />
             )}
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("filters")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === "filters"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <SlidersHorizontal className="w-4 h-4" />
+            Filter Criteria
+          </button>
         </div>
 
         {/* Google (Gmail) tab */}
@@ -347,6 +364,9 @@ export default function InboxPage() {
             )}
           </section>
         )}
+
+        {/* Filter Criteria tab */}
+        {activeTab === "filters" && <FilterSettingsTab />}
 
         {/* IMAP tab */}
         {activeTab === "imap" && (
@@ -484,6 +504,194 @@ export default function InboxPage() {
         )}
       </div>
     </Layout>
+  );
+}
+
+function FilterSettingsTab() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const { data: settings, isLoading } = useGetFilterSettings();
+  const updateMutation = useUpdateFilterSettings({
+    mutation: {
+      onSuccess: (data) => {
+        qc.setQueryData(getGetFilterSettingsQueryKey(), data);
+        toast({ title: "Filter criteria saved", description: "Your email filter settings have been updated." });
+      },
+      onError: () => {
+        toast({ title: "Save failed", description: "Could not save filter settings.", variant: "destructive" });
+      },
+    },
+  });
+
+  const [subjectInput, setSubjectInput] = useState("");
+  const [fromInput, setFromInput] = useState("");
+  const [bodyInput, setBodyInput] = useState("");
+
+  const [localSettings, setLocalSettings] = useState<EmailFilterSettings>({
+    subjectKeywords: [],
+    fromAddresses: [],
+    bodyKeywords: [],
+  });
+
+  useEffect(() => {
+    if (settings) setLocalSettings(settings);
+  }, [settings]);
+
+  function addItem(field: keyof EmailFilterSettings, value: string, setInput: (v: string) => void) {
+    const trimmed = value.trim().toLowerCase();
+    if (!trimmed) return;
+    if (localSettings[field].includes(trimmed)) return;
+    setLocalSettings((prev) => ({ ...prev, [field]: [...prev[field], trimmed] }));
+    setInput("");
+  }
+
+  function removeItem(field: keyof EmailFilterSettings, item: string) {
+    setLocalSettings((prev) => ({ ...prev, [field]: prev[field].filter((v) => v !== item) }));
+  }
+
+  function handleSave() {
+    updateMutation.mutate(localSettings);
+  }
+
+  if (isLoading) {
+    return (
+      <section className="bg-card border border-border rounded-xl p-6">
+        <div className="space-y-3">
+          <Skeleton className="h-5 w-48" />
+          <Skeleton className="h-4 w-72" />
+          <Skeleton className="h-32 w-full" />
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="bg-card border border-border rounded-xl p-6 space-y-6" data-testid="filter-settings-section">
+      <div>
+        <div className="flex items-center gap-2 mb-1">
+          <SlidersHorizontal className="w-4 h-4 text-indigo-400" />
+          <h2 className="font-semibold text-foreground">Email Filter Criteria</h2>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Control which emails are picked up as job postings. An email matches if it satisfies at least one keyword in each non-empty group.
+        </p>
+      </div>
+
+      {/* Subject Keywords */}
+      <div className="space-y-3">
+        <div>
+          <Label className="text-sm font-medium">Subject line keywords</Label>
+          <p className="text-xs text-muted-foreground mt-0.5">Email subject must contain at least one of these.</p>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {localSettings.subjectKeywords.map((kw) => (
+            <span key={kw} className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-indigo-950/40 text-indigo-300 border border-indigo-800/30">
+              {kw}
+              <button type="button" onClick={() => removeItem("subjectKeywords", kw)} className="text-indigo-400 hover:text-indigo-200 ml-0.5">
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <Input
+            placeholder="e.g. are hiring"
+            value={subjectInput}
+            onChange={(e) => setSubjectInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addItem("subjectKeywords", subjectInput, setSubjectInput)}
+            className="h-8 text-sm max-w-xs"
+            data-testid="subject-keyword-input"
+          />
+          <Button type="button" size="sm" variant="outline" className="h-8 gap-1" onClick={() => addItem("subjectKeywords", subjectInput, setSubjectInput)}>
+            <Plus className="w-3.5 h-3.5" /> Add
+          </Button>
+        </div>
+      </div>
+
+      {/* From Addresses */}
+      <div className="space-y-3">
+        <div>
+          <Label className="text-sm font-medium">From address / domain</Label>
+          <p className="text-xs text-muted-foreground mt-0.5">Leave empty to match any sender. Matches substrings (e.g. <code className="text-xs bg-muted px-1 rounded">@greenhouse.io</code>).</p>
+        </div>
+        {localSettings.fromAddresses.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {localSettings.fromAddresses.map((addr) => (
+              <span key={addr} className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-violet-950/40 text-violet-300 border border-violet-800/30">
+                {addr}
+                <button type="button" onClick={() => removeItem("fromAddresses", addr)} className="text-violet-400 hover:text-violet-200 ml-0.5">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        {localSettings.fromAddresses.length === 0 && (
+          <p className="text-xs text-muted-foreground/60 italic">Matching any sender — add addresses to restrict</p>
+        )}
+        <div className="flex gap-2">
+          <Input
+            placeholder="e.g. jobs@linkedin.com or @greenhouse.io"
+            value={fromInput}
+            onChange={(e) => setFromInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addItem("fromAddresses", fromInput, setFromInput)}
+            className="h-8 text-sm max-w-xs"
+            data-testid="from-address-input"
+          />
+          <Button type="button" size="sm" variant="outline" className="h-8 gap-1" onClick={() => addItem("fromAddresses", fromInput, setFromInput)}>
+            <Plus className="w-3.5 h-3.5" /> Add
+          </Button>
+        </div>
+      </div>
+
+      {/* Body Keywords */}
+      <div className="space-y-3">
+        <div>
+          <Label className="text-sm font-medium">Body text keywords</Label>
+          <p className="text-xs text-muted-foreground mt-0.5">Leave empty to skip body filtering. Useful for requiring specific phrases in the email body.</p>
+        </div>
+        {localSettings.bodyKeywords.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {localSettings.bodyKeywords.map((kw) => (
+              <span key={kw} className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-emerald-950/40 text-emerald-300 border border-emerald-800/30">
+                {kw}
+                <button type="button" onClick={() => removeItem("bodyKeywords", kw)} className="text-emerald-400 hover:text-emerald-200 ml-0.5">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        {localSettings.bodyKeywords.length === 0 && (
+          <p className="text-xs text-muted-foreground/60 italic">No body filter — add keywords to require them in the email body</p>
+        )}
+        <div className="flex gap-2">
+          <Input
+            placeholder="e.g. apply now"
+            value={bodyInput}
+            onChange={(e) => setBodyInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addItem("bodyKeywords", bodyInput, setBodyInput)}
+            className="h-8 text-sm max-w-xs"
+            data-testid="body-keyword-input"
+          />
+          <Button type="button" size="sm" variant="outline" className="h-8 gap-1" onClick={() => addItem("bodyKeywords", bodyInput, setBodyInput)}>
+            <Plus className="w-3.5 h-3.5" /> Add
+          </Button>
+        </div>
+      </div>
+
+      <div className="pt-2 border-t border-border">
+        <Button
+          onClick={handleSave}
+          disabled={updateMutation.isPending}
+          className="gap-2 bg-indigo-600 hover:bg-indigo-500"
+          data-testid="save-filter-settings"
+        >
+          {updateMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+          Save filter criteria
+        </Button>
+      </div>
+    </section>
   );
 }
 

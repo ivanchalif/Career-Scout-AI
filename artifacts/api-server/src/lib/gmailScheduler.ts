@@ -1,6 +1,6 @@
 import { eq, and, isNotNull } from "drizzle-orm";
 import { db, gmailConnectionsTable, jobPostingsTable, userProfilesTable, gmailSeenKeysTable } from "@workspace/db";
-import { fetchJobEmails, markEmailAsRead } from "./gmailClient";
+import { fetchJobEmails, markEmailAsRead, DEFAULT_EMAIL_FILTER_CRITERIA } from "./gmailClient";
 import { extractJobListings } from "./scoringService";
 import { scorePostingBackground, sweepUnscoredPostings } from "./scoringService";
 import { isFuzzyDuplicate } from "./dedup";
@@ -48,7 +48,9 @@ function isApplicationResponseEmail(subject: string, body: string): boolean {
 }
 
 async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promise<number> {
-  const emails = await fetchJobEmails(conn.accessToken, conn.refreshToken);
+  const [userProfile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, conn.userId));
+  const filterCriteria = userProfile?.emailFilterSettings ?? DEFAULT_EMAIL_FILTER_CRITERIA;
+  const emails = await fetchJobEmails(conn.accessToken, conn.refreshToken, filterCriteria);
 
   const seenKeys = await db
     .select({ gmailKey: gmailSeenKeysTable.gmailKey })

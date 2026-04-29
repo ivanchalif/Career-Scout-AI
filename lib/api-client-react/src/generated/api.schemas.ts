@@ -74,6 +74,12 @@ export interface JobPosting {
   createdAt: string;
 }
 
+export interface EmailFilterSettings {
+  subjectKeywords: string[];
+  fromAddresses: string[];
+  bodyKeywords: string[];
+}
+
 export interface MarkAppliedResult {
   id: number;
   /** @nullable */

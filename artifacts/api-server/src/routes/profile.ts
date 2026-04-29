@@ -153,4 +153,39 @@ Rules:
   }
 });
 
+const emailFilterSettingsSchema = z.object({
+  subjectKeywords: z.array(z.string()).default([]),
+  fromAddresses: z.array(z.string()).default([]),
+  bodyKeywords: z.array(z.string()).default([]),
+});
+
+router.get("/filter-settings", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId;
+  const [profile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, userId));
+  if (!profile) {
+    res.json({ subjectKeywords: [], fromAddresses: [], bodyKeywords: [] });
+    return;
+  }
+  res.json(profile.emailFilterSettings ?? { subjectKeywords: [], fromAddresses: [], bodyKeywords: [] });
+});
+
+router.put("/filter-settings", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId;
+  const parsed = emailFilterSettingsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  await db
+    .insert(userProfilesTable)
+    .values({ userId, emailFilterSettings: parsed.data })
+    .onConflictDoUpdate({
+      target: userProfilesTable.userId,
+      set: { emailFilterSettings: parsed.data, updatedAt: new Date() },
+    });
+
+  res.json(parsed.data);
+});
+
 export default router;

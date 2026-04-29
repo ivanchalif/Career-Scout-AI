@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { eq } from "drizzle-orm";
-import { db, gmailConnectionsTable, jobPostingsTable, gmailSeenKeysTable } from "@workspace/db";
+import { db, gmailConnectionsTable, jobPostingsTable, gmailSeenKeysTable, userProfilesTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
   getAuthUrl,
@@ -173,7 +173,9 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
     return;
   }
 
-  const emails = await fetchJobEmails(conn.accessToken, conn.refreshToken);
+  const [userProfile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, userId));
+  const filterCriteria = userProfile?.emailFilterSettings ?? undefined;
+  const emails = await fetchJobEmails(conn.accessToken, conn.refreshToken, filterCriteria);
 
   const seenKeys = await db
     .select({ gmailKey: gmailSeenKeysTable.gmailKey })

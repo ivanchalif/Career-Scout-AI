@@ -6,14 +6,42 @@ const GMAIL_SCOPES = [
   "https://www.googleapis.com/auth/gmail.modify",
 ];
 
-const JOB_QUERY = [
-  "is:unread",
-  "subject:(job OR jobs OR opportunity OR role OR position OR hiring OR offer",
-  'OR recruiter OR "job alert" OR "job opportunity" OR "open position"',
-  'OR "just posted" OR "great match" OR "job matches" OR "job recommendations"',
-  'OR "recommended jobs" OR "jobs you might like" OR "new jobs" OR "you may be a fit" OR "new job:")',
-  "newer_than:30d",
-].join(" ");
+export const DEFAULT_SUBJECT_KEYWORDS = [
+  "job", "jobs", "opportunity", "role", "position", "hiring", "offer",
+  "recruiter", "job alert", "job opportunity", "open position",
+  "just posted", "great match", "job matches", "job recommendations",
+  "recommended jobs", "jobs you might like", "new jobs", "you may be a fit",
+  "new job:", "are hiring",
+];
+
+export interface EmailFilterCriteria {
+  subjectKeywords: string[];
+  fromAddresses: string[];
+  bodyKeywords: string[];
+}
+
+export const DEFAULT_EMAIL_FILTER_CRITERIA: EmailFilterCriteria = {
+  subjectKeywords: DEFAULT_SUBJECT_KEYWORDS,
+  fromAddresses: [],
+  bodyKeywords: [],
+};
+
+function buildGmailQuery(criteria: EmailFilterCriteria): string {
+  const subjectTerms = criteria.subjectKeywords.length > 0
+    ? criteria.subjectKeywords.map((kw) => kw.includes(" ") ? `"${kw}"` : kw).join(" OR ")
+    : "job";
+  const fromTerms = criteria.fromAddresses.length > 0
+    ? `from:(${criteria.fromAddresses.join(" OR ")})`
+    : "";
+
+  const parts = [
+    "is:unread",
+    `subject:(${subjectTerms})`,
+    fromTerms,
+    "newer_than:30d",
+  ].filter(Boolean);
+  return parts.join(" ");
+}
 
 export function getGmailRedirectUri(): string {
   if (process.env["GMAIL_REDIRECT_URI"]) {
@@ -135,6 +163,7 @@ export async function fetchSingleEmail(
 export async function fetchJobEmails(
   accessToken: string,
   refreshToken: string,
+  criteria?: EmailFilterCriteria,
 ): Promise<JobEmail[]> {
   const client = createOAuth2Client();
   client.setCredentials({
@@ -142,10 +171,13 @@ export async function fetchJobEmails(
     refresh_token: refreshToken,
   });
 
+  const effectiveCriteria = criteria ?? DEFAULT_EMAIL_FILTER_CRITERIA;
+  const query = buildGmailQuery(effectiveCriteria);
+
   const gmail = google.gmail({ version: "v1", auth: client });
   const listRes = await gmail.users.messages.list({
     userId: "me",
-    q: JOB_QUERY,
+    q: query,
     maxResults: 50,
   });
 
@@ -168,6 +200,13 @@ export async function fetchJobEmails(
       const sender =
         headers.find((h) => h.name?.toLowerCase() === "from")?.value ?? "";
       const body = extractBody(detail.data.payload);
+
+      // Apply body keyword filter if specified
+      if (effectiveCriteria.bodyKeywords.length > 0) {
+        const bodyLower = body.toLowerCase();
+        const bodyMatch = effectiveCriteria.bodyKeywords.some((kw) => bodyLower.includes(kw.toLowerCase()));
+        if (!bodyMatch) continue;
+      }
 
       results.push({ messageId: msg.id, subject, sender, body });
     } catch {

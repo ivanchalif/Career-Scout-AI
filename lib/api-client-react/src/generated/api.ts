@@ -20,6 +20,7 @@ import type {
   ConnectImapBody,
   CreatePostingBody,
   DashboardSummary,
+  EmailFilterSettings,
   ErrorEnvelope,
   ErrorResponse,
   GmailCallbackParams,
@@ -1764,3 +1765,74 @@ export const useSyncImap = <
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<Awaited<ReturnType<typeof syncImap>>, TError, void, TContext> =>
   useMutation(getSyncImapMutationOptions(options));
+
+// ─── Email Filter Settings ───────────────────────────────────────────────────
+
+export const getGetFilterSettingsUrl = () => `/api/filter-settings`;
+
+export const getFilterSettings = async (options?: RequestInit): Promise<EmailFilterSettings> =>
+  customFetch<EmailFilterSettings>(getGetFilterSettingsUrl(), { ...options, method: "GET" });
+
+export const getGetFilterSettingsQueryKey = () => [`/api/filter-settings`] as const;
+
+export const getGetFilterSettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getFilterSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof getFilterSettings>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getGetFilterSettingsQueryKey();
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getFilterSettings>>> = () =>
+    getFilterSettings(requestOptions);
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getFilterSettings>>, TError, TData
+  >;
+};
+
+export const useGetFilterSettings = <
+  TData = Awaited<ReturnType<typeof getFilterSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof getFilterSettings>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> => useQuery(getGetFilterSettingsQueryOptions(options));
+
+export const updateFilterSettings = async (
+  settings: EmailFilterSettings,
+  options?: RequestInit,
+): Promise<EmailFilterSettings> =>
+  customFetch<EmailFilterSettings>(getGetFilterSettingsUrl(), {
+    ...options,
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+
+export const getUpdateFilterSettingsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateFilterSettings>>, TError, EmailFilterSettings, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const mutationKey = ["updateFilterSettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateFilterSettings>>, EmailFilterSettings> = (
+    settings,
+  ) => updateFilterSettings(settings, requestOptions);
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useUpdateFilterSettings = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateFilterSettings>>, TError, EmailFilterSettings, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<Awaited<ReturnType<typeof updateFilterSettings>>, TError, EmailFilterSettings, TContext> =>
+  useMutation(getUpdateFilterSettingsMutationOptions(options));

@@ -14,6 +14,21 @@ export const userProfilesTable = pgTable("user_profiles", {
   resumeUrl: text("resume_url"),
   resumeText: text("resume_text"),
   syncScheduleHours: integer("sync_schedule_hours"),
+  emailFilterSettings: jsonb("email_filter_settings").$type<{
+    subjectKeywords: string[];
+    fromAddresses: string[];
+    bodyKeywords: string[];
+  }>().notNull().default({
+    subjectKeywords: [
+      "job", "jobs", "opportunity", "role", "position", "hiring", "offer",
+      "recruiter", "job alert", "job opportunity", "open position",
+      "just posted", "great match", "job matches", "job recommendations",
+      "recommended jobs", "jobs you might like", "new jobs", "you may be a fit",
+      "new job:", "are hiring",
+    ],
+    fromAddresses: [],
+    bodyKeywords: [],
+  }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
