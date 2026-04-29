@@ -137,9 +137,12 @@ export default function ProfilePage() {
     setResumeFileName(file.name);
     setIsUploadingResume(true);
     try {
+      const token = await getToken();
+      const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
+
       const uploadRes = await fetch("/api/storage/uploads/request-url", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeader },
         body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
       });
       if (!uploadRes.ok) throw new Error("Failed to get upload URL");
@@ -154,7 +157,7 @@ export default function ProfilePage() {
 
       await fetch("/api/storage/uploads/confirm", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeader },
         body: JSON.stringify({ objectPath }),
       });
 
@@ -194,7 +197,11 @@ export default function ProfilePage() {
     }
     setIsParsingResume(true);
     try {
-      const res = await fetch("/api/profile/parse-resume", { method: "POST" });
+      const token = await getToken();
+      const res = await fetch("/api/profile/parse-resume", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       const body = await res.json() as { experienceHistory?: Array<{ title: string; company: string; startYear: number; endYear?: number | null; description?: string }>; error?: string };
       if (!res.ok) {
         toast({ title: "Parsing failed", description: body.error ?? "Could not parse resume.", variant: "destructive" });
