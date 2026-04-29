@@ -38,18 +38,23 @@ export async function testImapConnection(creds: ImapCredentials): Promise<void> 
 }
 
 function isJobEmail(subject: string, sender: string, body: string, criteria: EmailFilterCriteria): boolean {
+  const allEmpty = criteria.subjectKeywords.length === 0
+    && criteria.fromAddresses.length === 0
+    && criteria.bodyKeywords.length === 0;
+  if (allEmpty) return true;
+
   const subjectLower = subject.toLowerCase();
   const senderLower = sender.toLowerCase();
   const bodyLower = body.toLowerCase();
 
-  const subjectMatch = criteria.subjectKeywords.length === 0
-    || criteria.subjectKeywords.some((kw) => subjectLower.includes(kw.toLowerCase()));
-  const fromMatch = criteria.fromAddresses.length === 0
-    || criteria.fromAddresses.some((addr) => senderLower.includes(addr.toLowerCase()));
-  const bodyMatch = criteria.bodyKeywords.length === 0
-    || criteria.bodyKeywords.some((kw) => bodyLower.includes(kw.toLowerCase()));
+  const subjectMatch = criteria.subjectKeywords.length > 0
+    && criteria.subjectKeywords.some((kw) => subjectLower.includes(kw.toLowerCase()));
+  const fromMatch = criteria.fromAddresses.length > 0
+    && criteria.fromAddresses.some((addr) => senderLower.includes(addr.toLowerCase()));
+  const bodyMatch = criteria.bodyKeywords.length > 0
+    && criteria.bodyKeywords.some((kw) => bodyLower.includes(kw.toLowerCase()));
 
-  return subjectMatch && fromMatch && bodyMatch;
+  return subjectMatch || fromMatch || bodyMatch;
 }
 
 function stripHtml(html: string): string {

@@ -27,20 +27,33 @@ export const DEFAULT_EMAIL_FILTER_CRITERIA: EmailFilterCriteria = {
 };
 
 function buildGmailQuery(criteria: EmailFilterCriteria): string {
-  const subjectTerms = criteria.subjectKeywords.length > 0
-    ? criteria.subjectKeywords.map((kw) => kw.includes(" ") ? `"${kw}"` : kw).join(" OR ")
-    : "job";
-  const fromTerms = criteria.fromAddresses.length > 0
-    ? `from:(${criteria.fromAddresses.join(" OR ")})`
-    : "";
+  const orParts: string[] = [];
 
-  const parts = [
-    "is:unread",
-    `subject:(${subjectTerms})`,
-    fromTerms,
-    "newer_than:30d",
-  ].filter(Boolean);
-  return parts.join(" ");
+  if (criteria.subjectKeywords.length > 0) {
+    const terms = criteria.subjectKeywords
+      .map((kw) => kw.includes(" ") ? `"${kw}"` : kw)
+      .join(" OR ");
+    orParts.push(`subject:(${terms})`);
+  }
+
+  if (criteria.fromAddresses.length > 0) {
+    orParts.push(`from:(${criteria.fromAddresses.join(" OR ")})`);
+  }
+
+  if (criteria.bodyKeywords.length > 0) {
+    const bodyTerms = criteria.bodyKeywords
+      .map((kw) => kw.includes(" ") ? `"${kw}"` : kw)
+      .join(" OR ");
+    orParts.push(`(${bodyTerms})`);
+  }
+
+  const criteriaClause = orParts.length === 0
+    ? "job"
+    : orParts.length === 1
+    ? orParts[0]
+    : `{${orParts.join(" ")}}`;
+
+  return `is:unread ${criteriaClause} newer_than:30d`;
 }
 
 export function getGmailRedirectUri(): string {
@@ -200,13 +213,6 @@ export async function fetchJobEmails(
       const sender =
         headers.find((h) => h.name?.toLowerCase() === "from")?.value ?? "";
       const body = extractBody(detail.data.payload);
-
-      // Apply body keyword filter if specified
-      if (effectiveCriteria.bodyKeywords.length > 0) {
-        const bodyLower = body.toLowerCase();
-        const bodyMatch = effectiveCriteria.bodyKeywords.some((kw) => bodyLower.includes(kw.toLowerCase()));
-        if (!bodyMatch) continue;
-      }
 
       results.push({ messageId: msg.id, subject, sender, body });
     } catch {

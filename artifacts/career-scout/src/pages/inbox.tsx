@@ -573,7 +573,7 @@ function FilterSettingsTab() {
           <h2 className="font-semibold text-foreground">Email Filter Criteria</h2>
         </div>
         <p className="text-sm text-muted-foreground">
-          Control which emails are picked up as job postings. An email matches if it satisfies at least one keyword in each non-empty group.
+          Control which emails are picked up as job postings. An email matches if it satisfies at least one keyword in <strong className="text-foreground">any</strong> of the groups — the groups are connected by OR.
         </p>
       </div>
 
