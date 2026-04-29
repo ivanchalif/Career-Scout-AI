@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import {
   ArrowLeft, Zap, ExternalLink, RotateCcw,
   Building2, Calendar, DollarSign, CheckCircle, XCircle,
-  Lightbulb, BookOpen, ClipboardList
+  Lightbulb, BookOpen, ClipboardList, MapPin
 } from "lucide-react";
 import {
   useGetPosting,
@@ -142,9 +142,15 @@ export default function PostingDetailPage({ id }: { id: number }) {
                   <h1 className="text-xl font-bold text-foreground" data-testid="posting-title">
                     {posting.title}
                   </h1>
-                  <div className="flex items-center gap-2 mt-1">
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
                     <Building2 className="w-4 h-4 text-muted-foreground" />
                     <span className="text-muted-foreground">{posting.company}</span>
+                    {posting.location && (
+                      <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                        <MapPin className="w-3.5 h-3.5" />
+                        {posting.location}
+                      </span>
+                    )}
                     <Badge variant="secondary" className="text-xs">{posting.source}</Badge>
                   </div>
                 </div>

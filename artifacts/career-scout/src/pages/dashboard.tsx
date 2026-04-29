@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import {
   Plus, Search, SlidersHorizontal, Mail, TrendingUp,
   BriefcaseBusiness, Star, ExternalLink, Trash2,
-  RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2, CheckCircle2, Undo2,
+  RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2, CheckCircle2, Undo2, MapPin,
 } from "lucide-react";
 import {
   useGetDashboardSummary,
@@ -699,10 +699,16 @@ export default function DashboardPage() {
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground mt-0.5">
-                      {posting.company}
+                    <p className="text-sm text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2">
+                      <span>{posting.company}</span>
+                      {posting.location && (
+                        <span className="flex items-center gap-0.5 text-xs text-muted-foreground/80">
+                          <MapPin className="w-3 h-3" />
+                          {posting.location}
+                        </span>
+                      )}
                       {(posting.salaryMin || posting.salaryMax) && (
-                        <span className="ml-2 text-xs text-emerald-400 font-medium">
+                        <span className="text-xs text-emerald-400 font-medium">
                           {posting.salaryMin && posting.salaryMax
                             ? `$${(posting.salaryMin / 1000).toFixed(0)}k–$${(posting.salaryMax / 1000).toFixed(0)}k`
                             : posting.salaryMin
@@ -710,7 +716,7 @@ export default function DashboardPage() {
                             : `up to $${(posting.salaryMax! / 1000).toFixed(0)}k`}
                         </span>
                       )}
-                      <span className="ml-2 text-xs text-muted-foreground/60">
+                      <span className="text-xs text-muted-foreground/60">
                         {formatAdded(posting.createdAt)}
                       </span>
                     </p>
@@ -869,6 +875,12 @@ export default function DashboardPage() {
                       <DialogTitle className="text-lg leading-snug">{posting.title}</DialogTitle>
                       <DialogDescription className="flex flex-wrap items-center gap-2 mt-1">
                         <span>{posting.company}</span>
+                        {posting.location && (
+                          <span className="flex items-center gap-0.5 text-xs text-muted-foreground/80">
+                            <MapPin className="w-3 h-3" />
+                            {posting.location}
+                          </span>
+                        )}
                         {(posting.salaryMin || posting.salaryMax) && (
                           <span className="text-xs text-emerald-400 font-medium">
                             {posting.salaryMin && posting.salaryMax

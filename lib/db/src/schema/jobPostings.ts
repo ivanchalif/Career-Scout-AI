@@ -13,6 +13,7 @@ export const jobPostingsTable = pgTable("job_postings", {
   requiredSkills: text("required_skills").array().notNull().default([]),
   niceToHaveSkills: text("nice_to_have_skills").array().notNull().default([]),
   minYearsExperience: integer("min_years_experience"),
+  location: text("location"),
   remoteType: text("remote_type"),
   salaryMin: integer("salary_min"),
   salaryMax: integer("salary_max"),

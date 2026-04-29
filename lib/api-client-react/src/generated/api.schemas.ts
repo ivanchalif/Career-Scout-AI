@@ -55,6 +55,8 @@ export interface JobPosting {
   title: string;
   company: string;
   /** @nullable */
+  location?: string | null;
+  /** @nullable */
   link?: string | null;
   fullDescription: string;
   extractedSkills: string[];
@@ -62,6 +64,8 @@ export interface JobPosting {
   salaryMin?: number | null;
   /** @nullable */
   salaryMax?: number | null;
+  /** @nullable */
+  remoteType?: string | null;
   source: string;
   /** @nullable */
   gmailMessageId?: string | null;

@@ -13,6 +13,7 @@ import { getResumeText } from "./resumeReader";
 const parsedJobSchema = z.object({
   title: z.string().default(""),
   company: z.string().default(""),
+  location: z.string().nullable().default(null),
   requiredSkills: z.array(z.string()).default([]),
   niceToHaveSkills: z.array(z.string()).default([]),
   minYearsExperience: z.number().nullable().default(null),
@@ -140,6 +141,7 @@ Return a JSON object with EXACTLY these fields (no markdown, just raw JSON):
 {
   "title": "canonical job title from the description",
   "company": "company name",
+  "location": "city, state or country if mentioned (e.g. \"San Francisco, CA\" or \"New York, NY\" or \"London, UK\"), or null if not mentioned",
   "requiredSkills": ["skill1", "skill2"],
   "niceToHaveSkills": ["skill3"],
   "minYearsExperience": null or integer,
@@ -383,6 +385,7 @@ export async function scorePosting(
     parsedJob = {
       title: posting.title,
       company: posting.company,
+      location: posting.location ?? null,
       requiredSkills: posting.requiredSkills,
       niceToHaveSkills: posting.niceToHaveSkills,
       minYearsExperience: posting.minYearsExperience ?? null,
@@ -413,6 +416,7 @@ export async function scorePosting(
       .set({
         title: canonicalTitle,
         company: canonicalCompany,
+        location: parsedJob.location ?? posting.location,
         extractedSkills: updatedSkills,
         requiredSkills: parsedJob.requiredSkills,
         niceToHaveSkills: parsedJob.niceToHaveSkills,
