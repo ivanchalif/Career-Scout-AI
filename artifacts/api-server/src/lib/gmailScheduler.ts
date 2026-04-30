@@ -84,8 +84,16 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
         .values({ userId: conn.userId, gmailKey })
         .onConflictDoNothing();
 
-      const { isDuplicate } = await isFuzzyDuplicate(conn.userId, title, company);
-      if (isDuplicate) continue;
+      const { isDuplicate, matchedTitle, matchedCompany, wasDeleted } = await isFuzzyDuplicate(conn.userId, title, company);
+      if (isDuplicate) {
+        logger.info(
+          { userId: conn.userId, title, company, matchedTitle, matchedCompany, wasDeleted },
+          wasDeleted
+            ? "gmailScheduler: skipping posting previously dismissed by user"
+            : "gmailScheduler: skipping fuzzy duplicate posting",
+        );
+        continue;
+      }
 
       const [newPosting] = await db
         .insert(jobPostingsTable)

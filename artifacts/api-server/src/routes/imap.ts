@@ -123,11 +123,13 @@ router.post("/imap/sync", requireAuth, async (req, res): Promise<void> => {
         const title = listing.title || email.subject.slice(0, 200) || "Job Opportunity";
         const company = listing.company || email.sender.replace(/<[^>]+>/g, "").trim().split("@")[0] || "Unknown";
 
-        const { isDuplicate, matchedTitle, matchedCompany } = await isFuzzyDuplicate(userId, title, company);
+        const { isDuplicate, matchedTitle, matchedCompany, wasDeleted } = await isFuzzyDuplicate(userId, title, company);
         if (isDuplicate) {
           logger.info(
-            { userId, title, company, matchedTitle, matchedCompany },
-            "imap sync: skipping fuzzy duplicate posting",
+            { userId, title, company, matchedTitle, matchedCompany, wasDeleted },
+            wasDeleted
+              ? "imap sync: skipping posting previously dismissed by user"
+              : "imap sync: skipping fuzzy duplicate posting",
           );
           continue;
         }

@@ -19,28 +19,34 @@ export function normalizeFuzzy(text: string): string {
  * exists for this user — regardless of source (Gmail, IMAP, manual, etc.).
  *
  * Thresholds:
- *   title   > 0.70  (was 0.75 — slightly looser to catch minor wording diffs)
- *   company > 0.60  (was 0.65 — catches suffix/abbrev variants)
+ *   title   > 0.70  (slightly looser to catch minor wording diffs)
+ *   company > 0.60  (catches suffix/abbrev variants)
  *
  * Both must match simultaneously to flag a duplicate.
- * Soft-deleted rows are excluded so a previously dismissed job can be re-imported
- * if the user later encounters it again.
+ *
+ * Soft-deleted rows ARE included: if the user previously dismissed a posting
+ * it won't be re-imported on the next sync. `wasDeleted` in the return value
+ * lets callers log this distinction.
  */
 export async function isFuzzyDuplicate(
   userId: string,
   title: string,
   company: string,
-): Promise<{ isDuplicate: boolean; matchedTitle?: string; matchedCompany?: string }> {
+): Promise<{
+  isDuplicate: boolean;
+  matchedTitle?: string;
+  matchedCompany?: string;
+  wasDeleted?: boolean;
+}> {
   const normTitle = normalizeFuzzy(title);
   const normCompany = normalizeFuzzy(company);
 
   if (!normTitle || !normCompany) return { isDuplicate: false };
 
   const rows = await db.execute(sql`
-    SELECT id, title, company
+    SELECT id, title, company, deleted_at
     FROM job_postings
     WHERE user_id = ${userId}
-      AND deleted_at IS NULL
       AND similarity(
         regexp_replace(lower(title), '[^a-z0-9 ]', ' ', 'g'),
         ${normTitle}
@@ -52,12 +58,18 @@ export async function isFuzzyDuplicate(
         ),
         ${normCompany}
       ) > 0.60
+    ORDER BY deleted_at IS NOT NULL   -- prefer active matches first
     LIMIT 1
   `);
 
   if (rows.rows.length > 0) {
-    const match = rows.rows[0] as { title: string; company: string };
-    return { isDuplicate: true, matchedTitle: match.title, matchedCompany: match.company };
+    const match = rows.rows[0] as { title: string; company: string; deleted_at: string | null };
+    return {
+      isDuplicate: true,
+      matchedTitle: match.title,
+      matchedCompany: match.company,
+      wasDeleted: match.deleted_at !== null,
+    };
   }
   return { isDuplicate: false };
 }
