@@ -207,12 +207,14 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
         .values({ userId, gmailKey })
         .onConflictDoNothing();
 
-      const { isDuplicate, matchedTitle, matchedCompany, wasDeleted } = await isFuzzyDuplicate(userId, title, company);
+      const { isDuplicate, matchedTitle, matchedCompany, wasDeleted, wasApplied } = await isFuzzyDuplicate(userId, title, company);
       if (isDuplicate) {
         logger.info(
-          { userId, title, company, matchedTitle, matchedCompany, wasDeleted },
+          { userId, title, company, matchedTitle, matchedCompany, wasDeleted, wasApplied },
           wasDeleted
             ? "gmail sync: skipping posting previously dismissed by user"
+            : wasApplied
+            ? "gmail sync: skipping posting already applied to"
             : "gmail sync: skipping fuzzy duplicate posting",
         );
         continue;

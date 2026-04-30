@@ -24,9 +24,10 @@ export function normalizeFuzzy(text: string): string {
  *
  * Both must match simultaneously to flag a duplicate.
  *
- * Soft-deleted rows ARE included: if the user previously dismissed a posting
- * it won't be re-imported on the next sync. `wasDeleted` in the return value
- * lets callers log this distinction.
+ * All row states are included — active, applied, and soft-deleted — so that
+ * previously applied or dismissed postings are never re-imported.
+ * `wasDeleted` / `wasApplied` in the return value let callers log the reason.
+ * Preference order: active-unapplied > applied > deleted.
  */
 export async function isFuzzyDuplicate(
   userId: string,
@@ -37,6 +38,7 @@ export async function isFuzzyDuplicate(
   matchedTitle?: string;
   matchedCompany?: string;
   wasDeleted?: boolean;
+  wasApplied?: boolean;
 }> {
   const normTitle = normalizeFuzzy(title);
   const normCompany = normalizeFuzzy(company);
@@ -44,7 +46,7 @@ export async function isFuzzyDuplicate(
   if (!normTitle || !normCompany) return { isDuplicate: false };
 
   const rows = await db.execute(sql`
-    SELECT id, title, company, deleted_at
+    SELECT id, title, company, deleted_at, applied_at
     FROM job_postings
     WHERE user_id = ${userId}
       AND similarity(
@@ -58,17 +60,25 @@ export async function isFuzzyDuplicate(
         ),
         ${normCompany}
       ) > 0.60
-    ORDER BY deleted_at IS NOT NULL   -- prefer active matches first
+    ORDER BY
+      deleted_at IS NOT NULL,   -- active rows first
+      applied_at IS NOT NULL    -- unapplied before applied
     LIMIT 1
   `);
 
   if (rows.rows.length > 0) {
-    const match = rows.rows[0] as { title: string; company: string; deleted_at: string | null };
+    const match = rows.rows[0] as {
+      title: string;
+      company: string;
+      deleted_at: string | null;
+      applied_at: string | null;
+    };
     return {
       isDuplicate: true,
       matchedTitle: match.title,
       matchedCompany: match.company,
       wasDeleted: match.deleted_at !== null,
+      wasApplied: match.applied_at !== null,
     };
   }
   return { isDuplicate: false };
