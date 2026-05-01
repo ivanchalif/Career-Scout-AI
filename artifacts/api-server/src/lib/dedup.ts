@@ -45,19 +45,31 @@ export async function isFuzzyDuplicate(
 
   if (!normTitle || !normCompany) return { isDuplicate: false };
 
+  // DB-side normalization must match normalizeFuzzy() in JS:
+  //   1. lowercase
+  //   2. replace non-alphanumeric chars (incl. punctuation, parens) with spaces
+  //   3. collapse runs of spaces to a single space
+  //   4. trim
+  // Note: '\s*\([^)]*\)' was previously used for paren-stripping but
+  // PostgreSQL ARE treats \( as a group start (not a literal paren), which
+  // caused the regex to match the entire company string and zero it out.
+  // Simply removing non-alphanumeric chars achieves the same effect safely.
   const rows = await db.execute(sql`
     SELECT id, title, company, deleted_at, applied_at
     FROM job_postings
     WHERE user_id = ${userId}
       AND similarity(
-        regexp_replace(lower(title), '[^a-z0-9 ]', ' ', 'g'),
+        btrim(regexp_replace(
+          regexp_replace(lower(title), '[^a-z0-9 ]', ' ', 'g'),
+          ' +', ' ', 'g'
+        )),
         ${normTitle}
       ) > 0.70
       AND similarity(
-        regexp_replace(
-          regexp_replace(lower(company), '\s*\([^)]*\)', ' ', 'g'),
-          '[^a-z0-9 ]', ' ', 'g'
-        ),
+        btrim(regexp_replace(
+          regexp_replace(lower(company), '[^a-z0-9 ]', ' ', 'g'),
+          ' +', ' ', 'g'
+        )),
         ${normCompany}
       ) > 0.60
     ORDER BY
