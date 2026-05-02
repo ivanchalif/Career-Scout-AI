@@ -72,9 +72,20 @@ export default function InboxPage() {
     const params = new URLSearchParams(search);
     const gmail = params.get("gmail");
     if (gmail === "connected") {
+      // If we're in an OAuth popup, notify the opener and close
+      if (window.opener) {
+        window.opener.postMessage({ type: "gmail_connected" }, "*");
+        window.close();
+        return;
+      }
       qc.invalidateQueries({ queryKey: getGetGmailStatusQueryKey() });
       toast({ title: "Gmail connected", description: "Your Gmail account is now linked to Career Scout." });
     } else if (gmail === "error") {
+      if (window.opener) {
+        window.opener.postMessage({ type: "gmail_error" }, "*");
+        window.close();
+        return;
+      }
       toast({ title: "Gmail connection failed", description: "Could not connect your Gmail account. Please try again.", variant: "destructive" });
     }
   }, []);
@@ -166,7 +177,44 @@ export default function InboxPage() {
       });
       if (!res.ok) throw new Error("Failed to get auth URL");
       const { url } = await res.json() as { url: string };
-      window.location.href = url;
+
+      // Open Google OAuth in a popup to avoid X-Frame-Options issues
+      // when the app itself is running inside an iframe (Replit preview pane).
+      const popup = window.open(url, "gmail_oauth", "width=520,height=640,left=200,top=100");
+
+      if (!popup) {
+        // Popup blocked — fall back to same-window navigation
+        window.location.href = url;
+        return;
+      }
+
+      // Listen for the postMessage sent by the callback page when it loads
+      function onMessage(event: MessageEvent) {
+        if (event.data?.type === "gmail_connected") {
+          qc.invalidateQueries({ queryKey: getGetGmailStatusQueryKey() });
+          toast({ title: "Gmail connected", description: "Your Gmail account is now linked to Career Scout." });
+          cleanup();
+        } else if (event.data?.type === "gmail_error") {
+          toast({ title: "Gmail connection failed", description: "Could not connect your Gmail account. Please try again.", variant: "destructive" });
+          cleanup();
+        }
+      }
+
+      // Also poll in case popup closes without sending a message (user cancelled)
+      const pollTimer = setInterval(() => {
+        if (popup.closed) {
+          // Refresh status in case auth completed but message was missed
+          qc.invalidateQueries({ queryKey: getGetGmailStatusQueryKey() });
+          cleanup();
+        }
+      }, 800);
+
+      function cleanup() {
+        window.removeEventListener("message", onMessage);
+        clearInterval(pollTimer);
+      }
+
+      window.addEventListener("message", onMessage);
     } catch {
       toast({ title: "Error", description: "Could not start Gmail connection. Try again.", variant: "destructive" });
     }
