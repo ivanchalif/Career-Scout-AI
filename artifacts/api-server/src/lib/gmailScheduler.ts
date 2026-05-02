@@ -50,7 +50,18 @@ function isApplicationResponseEmail(subject: string, body: string): boolean {
 async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promise<number> {
   const [userProfile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, conn.userId));
   const filterCriteria = userProfile?.emailFilterSettings ?? DEFAULT_EMAIL_FILTER_CRITERIA;
-  const emails = await fetchJobEmails(conn.accessToken, conn.refreshToken, filterCriteria);
+
+  let emails: Awaited<ReturnType<typeof fetchJobEmails>>;
+  try {
+    emails = await fetchJobEmails(conn.accessToken, conn.refreshToken, filterCriteria);
+  } catch (err) {
+    if ((err as Error)?.message?.includes("invalid_grant")) {
+      logger.warn({ userId: conn.userId }, "gmailScheduler: invalid_grant — removing stale connection");
+      await db.delete(gmailConnectionsTable).where(eq(gmailConnectionsTable.userId, conn.userId));
+      return 0;
+    }
+    throw err;
+  }
 
   const seenKeys = await db
     .select({ gmailKey: gmailSeenKeysTable.gmailKey })

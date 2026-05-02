@@ -107,7 +107,19 @@ export default function InboxPage() {
         qc.invalidateQueries({ queryKey: getGetGmailStatusQueryKey() });
         toast({ title: "Inbox synced", description: `Found ${data.synced} new job email${data.synced === 1 ? "" : "s"}.` });
       },
-      onError: () => toast({ title: "Sync failed", description: "Could not sync Gmail inbox. Please try again.", variant: "destructive" }),
+      onError: (err) => {
+        const code = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+        if (code === "gmail_token_expired") {
+          qc.invalidateQueries({ queryKey: getGetGmailStatusQueryKey() });
+          toast({
+            title: "Gmail reconnection required",
+            description: "Your Gmail authorization has expired. Please reconnect your account.",
+            variant: "destructive",
+          });
+        } else {
+          toast({ title: "Sync failed", description: "Could not sync Gmail inbox. Please try again.", variant: "destructive" });
+        }
+      },
     },
   });
 

@@ -175,7 +175,22 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
 
   const [userProfile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, userId));
   const filterCriteria = userProfile?.emailFilterSettings ?? undefined;
-  const emails = await fetchJobEmails(conn.accessToken, conn.refreshToken, filterCriteria);
+
+  let emails: Awaited<ReturnType<typeof fetchJobEmails>>;
+  try {
+    emails = await fetchJobEmails(conn.accessToken, conn.refreshToken, filterCriteria);
+  } catch (err) {
+    if ((err as Error)?.message?.includes("invalid_grant")) {
+      logger.warn({ userId }, "gmail sync: invalid_grant — removing stale connection");
+      await db.delete(gmailConnectionsTable).where(eq(gmailConnectionsTable.userId, userId));
+      res.status(401).json({
+        error: "gmail_token_expired",
+        message: "Gmail authorization has expired. Please reconnect your Gmail account.",
+      });
+      return;
+    }
+    throw err;
+  }
 
   const seenKeys = await db
     .select({ gmailKey: gmailSeenKeysTable.gmailKey })
