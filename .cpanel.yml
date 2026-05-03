@@ -1,0 +1,5 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home2/bluemarl/public_html/CSAI/
+    - /bin/cp -R images $DEPLOYPATH
