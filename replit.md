@@ -39,11 +39,13 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 All routes are protected by Clerk auth (`requireAuth` middleware reads session cookies).
 
 - `GET/PUT /api/profile` — career profile CRUD
-- `GET/POST /api/postings` — list/create job postings
+- `GET/POST /api/postings` — list/create job postings (applies companyFilterSettings server-side)
 - `GET/DELETE /api/postings/:id` — get/delete a specific posting
 - `POST /api/postings/:id/analyze` — re-trigger AI scoring for a posting (LLM parse + fit score, updates match report)
 - `GET/POST /api/match-reports` — match report management
 - `GET /api/dashboard/summary` — aggregated stats (totalPostings, avgFitScore, topMatches, hasProfile, gmailConnected)
+- `GET/PUT /api/filter-settings` — email import filter (subjectKeywords, fromAddresses, bodyKeywords, blockedBodyKeywords)
+- `GET/PUT /api/company-filter-settings` — dashboard company filter (mode: off/include/exclude, companies[])
 - `POST /api/storage/uploads/request-url` — request a presigned URL for file upload
 - `GET /api/storage/public-objects/*` — serve public objects from object storage
 - `GET /api/gmail/connect` — initiate Google OAuth (redirect) — requires GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET secrets

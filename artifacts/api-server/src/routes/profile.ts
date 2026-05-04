@@ -157,16 +157,26 @@ const emailFilterSettingsSchema = z.object({
   subjectKeywords: z.array(z.string()).default([]),
   fromAddresses: z.array(z.string()).default([]),
   bodyKeywords: z.array(z.string()).default([]),
+  blockedBodyKeywords: z.array(z.string()).default([]),
 });
+
+const companyFilterSettingsSchema = z.object({
+  mode: z.enum(["off", "include", "exclude"]).default("off"),
+  companies: z.array(z.string()).default([]),
+});
+
+const EMPTY_EMAIL_FILTER = { subjectKeywords: [], fromAddresses: [], bodyKeywords: [], blockedBodyKeywords: [] };
+const EMPTY_COMPANY_FILTER = { mode: "off" as const, companies: [] };
 
 router.get("/filter-settings", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId;
   const [profile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, userId));
   if (!profile) {
-    res.json({ subjectKeywords: [], fromAddresses: [], bodyKeywords: [] });
+    res.json(EMPTY_EMAIL_FILTER);
     return;
   }
-  res.json(profile.emailFilterSettings ?? { subjectKeywords: [], fromAddresses: [], bodyKeywords: [] });
+  const s = profile.emailFilterSettings ?? EMPTY_EMAIL_FILTER;
+  res.json({ ...EMPTY_EMAIL_FILTER, ...s });
 });
 
 router.put("/filter-settings", requireAuth, async (req, res): Promise<void> => {
@@ -183,6 +193,35 @@ router.put("/filter-settings", requireAuth, async (req, res): Promise<void> => {
     .onConflictDoUpdate({
       target: userProfilesTable.userId,
       set: { emailFilterSettings: parsed.data, updatedAt: new Date() },
+    });
+
+  res.json(parsed.data);
+});
+
+router.get("/company-filter-settings", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId;
+  const [profile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, userId));
+  if (!profile) {
+    res.json(EMPTY_COMPANY_FILTER);
+    return;
+  }
+  res.json(profile.companyFilterSettings ?? EMPTY_COMPANY_FILTER);
+});
+
+router.put("/company-filter-settings", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId;
+  const parsed = companyFilterSettingsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  await db
+    .insert(userProfilesTable)
+    .values({ userId, companyFilterSettings: parsed.data })
+    .onConflictDoUpdate({
+      target: userProfilesTable.userId,
+      set: { companyFilterSettings: parsed.data, updatedAt: new Date() },
     });
 
   res.json(parsed.data);

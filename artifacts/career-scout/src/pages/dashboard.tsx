@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import {
   Plus, Search, SlidersHorizontal, Mail, TrendingUp,
   BriefcaseBusiness, Star, ExternalLink, Trash2,
-  RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2, CheckCircle2, Undo2, MapPin,
+  RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2, CheckCircle2, Undo2, MapPin, Ban,
 } from "lucide-react";
 import {
   useGetDashboardSummary,
@@ -15,9 +15,12 @@ import {
   useGetGmailStatus,
   useSyncGmail,
   useDisconnectGmail,
+  useGetCompanyFilterSettings,
+  useUpdateCompanyFilterSettings,
   getListPostingsQueryKey,
   getGetDashboardSummaryQueryKey,
   getGetGmailStatusQueryKey,
+  getGetCompanyFilterSettingsQueryKey,
   type CreatePostingBody,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -174,6 +177,36 @@ export default function DashboardPage() {
   const [reanalyzing, setReanalyzing] = useState(false);
   const [backfillingLinks, setBackfillingLinks] = useState(false);
   const [activeTab, setActiveTab] = useState<"active" | "applied">("active");
+
+  const companyFilterQ = useGetCompanyFilterSettings();
+  const updateCompanyFilterMutation = useUpdateCompanyFilterSettings();
+
+  async function blockCompany(companyName: string) {
+    const current = companyFilterQ.data ?? { mode: "off" as const, companies: [] };
+    const alreadyBlocked = current.mode === "exclude" &&
+      current.companies.some((c) => companyName.toLowerCase().includes(c.toLowerCase()) || c.toLowerCase().includes(companyName.toLowerCase()));
+    if (alreadyBlocked) {
+      toast({ title: "Already blocked", description: `${companyName} is already in your company block list.` });
+      return;
+    }
+    const newSettings = {
+      mode: "exclude" as const,
+      companies: [...(current.mode === "exclude" ? current.companies : []), companyName],
+    };
+    await updateCompanyFilterMutation.mutateAsync(newSettings, {
+      onSuccess: () => {
+        qc.setQueryData(getGetCompanyFilterSettingsQueryKey(), newSettings);
+        qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
+        toast({
+          title: "Company blocked",
+          description: `${companyName} added to your block list. Jobs from this company are now hidden.`,
+        });
+      },
+      onError: () => {
+        toast({ title: "Error", description: "Could not block company.", variant: "destructive" });
+      },
+    });
+  }
 
   const dashboardQ = useGetDashboardSummary();
   const postingsQ = useListPostings({
@@ -748,6 +781,17 @@ export default function DashboardPage() {
                       className={`w-8 h-8 ${posting.appliedAt ? "text-emerald-400 hover:text-emerald-300" : "text-muted-foreground hover:text-emerald-400"}`}
                     >
                       {posting.appliedAt ? <Undo2 className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="w-8 h-8 text-muted-foreground hover:text-red-400 hover:bg-red-950/20"
+                      onClick={() => blockCompany(posting.company)}
+                      disabled={updateCompanyFilterMutation.isPending}
+                      title={`Block all jobs from ${posting.company}`}
+                      data-testid={`posting-block-company-${posting.id}`}
+                    >
+                      <Ban className="w-3.5 h-3.5" />
                     </Button>
                     <Button
                       variant="ghost"

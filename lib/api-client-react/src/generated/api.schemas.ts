@@ -78,6 +78,12 @@ export interface EmailFilterSettings {
   subjectKeywords: string[];
   fromAddresses: string[];
   bodyKeywords: string[];
+  blockedBodyKeywords: string[];
+}
+
+export interface CompanyFilterSettings {
+  mode: 'off' | 'include' | 'exclude';
+  companies: string[];
 }
 
 export interface MarkAppliedResult {

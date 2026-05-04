@@ -54,7 +54,15 @@ function isJobEmail(subject: string, sender: string, body: string, criteria: Ema
   const bodyMatch = criteria.bodyKeywords.length > 0
     && criteria.bodyKeywords.some((kw) => bodyLower.includes(kw.toLowerCase()));
 
-  return subjectMatch || fromMatch || bodyMatch;
+  if (!(subjectMatch || fromMatch || bodyMatch)) return false;
+
+  if (criteria.blockedBodyKeywords?.length) {
+    if (criteria.blockedBodyKeywords.some((kw) => bodyLower.includes(kw.toLowerCase()))) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function stripHtml(html: string): string {

@@ -1766,6 +1766,77 @@ export const useSyncImap = <
 }): UseMutationResult<Awaited<ReturnType<typeof syncImap>>, TError, void, TContext> =>
   useMutation(getSyncImapMutationOptions(options));
 
+// ─── Company Filter Settings ──────────────────────────────────────────────────
+
+export const getGetCompanyFilterSettingsUrl = () => `/api/company-filter-settings`;
+
+export const getCompanyFilterSettings = async (options?: RequestInit): Promise<CompanyFilterSettings> =>
+  customFetch<CompanyFilterSettings>(getGetCompanyFilterSettingsUrl(), { ...options, method: "GET" });
+
+export const getGetCompanyFilterSettingsQueryKey = () => [`/api/company-filter-settings`] as const;
+
+export const getGetCompanyFilterSettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCompanyFilterSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof getCompanyFilterSettings>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getGetCompanyFilterSettingsQueryKey();
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getCompanyFilterSettings>>> = () =>
+    getCompanyFilterSettings(requestOptions);
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCompanyFilterSettings>>, TError, TData
+  >;
+};
+
+export const useGetCompanyFilterSettings = <
+  TData = Awaited<ReturnType<typeof getCompanyFilterSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof getCompanyFilterSettings>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> => useQuery(getGetCompanyFilterSettingsQueryOptions(options));
+
+export const updateCompanyFilterSettings = async (
+  settings: CompanyFilterSettings,
+  options?: RequestInit,
+): Promise<CompanyFilterSettings> =>
+  customFetch<CompanyFilterSettings>(getGetCompanyFilterSettingsUrl(), {
+    ...options,
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+
+export const getUpdateCompanyFilterSettingsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateCompanyFilterSettings>>, TError, CompanyFilterSettings, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const mutationKey = ["updateCompanyFilterSettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCompanyFilterSettings>>, CompanyFilterSettings> = (
+    settings,
+  ) => updateCompanyFilterSettings(settings, requestOptions);
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useUpdateCompanyFilterSettings = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateCompanyFilterSettings>>, TError, CompanyFilterSettings, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<Awaited<ReturnType<typeof updateCompanyFilterSettings>>, TError, CompanyFilterSettings, TContext> =>
+  useMutation(getUpdateCompanyFilterSettingsMutationOptions(options));
+
 // ─── Email Filter Settings ───────────────────────────────────────────────────
 
 export const getGetFilterSettingsUrl = () => `/api/filter-settings`;

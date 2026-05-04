@@ -16,7 +16,11 @@ import {
   useGetFilterSettings,
   useUpdateFilterSettings,
   getGetFilterSettingsQueryKey,
+  useGetCompanyFilterSettings,
+  useUpdateCompanyFilterSettings,
+  getGetCompanyFilterSettingsQueryKey,
   type EmailFilterSettings,
+  type CompanyFilterSettings,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSearch } from "wouter";
@@ -571,11 +575,13 @@ function FilterSettingsTab() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { data: settings, isLoading } = useGetFilterSettings();
+  const { data: companyFilter, isLoading: companyFilterLoading } = useGetCompanyFilterSettings();
+
   const updateMutation = useUpdateFilterSettings({
     mutation: {
       onSuccess: (data) => {
         qc.setQueryData(getGetFilterSettingsQueryKey(), data);
-        toast({ title: "Filter criteria saved", description: "Your email filter settings have been updated." });
+        toast({ title: "Email filter criteria saved", description: "Your email filter settings have been updated." });
       },
       onError: () => {
         toast({ title: "Save failed", description: "Could not save filter settings.", variant: "destructive" });
@@ -583,19 +589,44 @@ function FilterSettingsTab() {
     },
   });
 
+  const updateCompanyMutation = useUpdateCompanyFilterSettings({
+    mutation: {
+      onSuccess: (data) => {
+        qc.setQueryData(getGetCompanyFilterSettingsQueryKey(), data);
+        qc.invalidateQueries({ queryKey: ["/api/postings"] });
+        toast({ title: "Company filter saved", description: "Your company filter has been updated." });
+      },
+      onError: () => {
+        toast({ title: "Save failed", description: "Could not save company filter.", variant: "destructive" });
+      },
+    },
+  });
+
   const [subjectInput, setSubjectInput] = useState("");
   const [fromInput, setFromInput] = useState("");
   const [bodyInput, setBodyInput] = useState("");
+  const [blockedBodyInput, setBlockedBodyInput] = useState("");
+  const [companyInput, setCompanyInput] = useState("");
 
   const [localSettings, setLocalSettings] = useState<EmailFilterSettings>({
     subjectKeywords: [],
     fromAddresses: [],
     bodyKeywords: [],
+    blockedBodyKeywords: [],
+  });
+
+  const [localCompanySettings, setLocalCompanySettings] = useState<CompanyFilterSettings>({
+    mode: "off",
+    companies: [],
   });
 
   useEffect(() => {
-    if (settings) setLocalSettings(settings);
+    if (settings) setLocalSettings({ blockedBodyKeywords: [], ...settings });
   }, [settings]);
+
+  useEffect(() => {
+    if (companyFilter) setLocalCompanySettings(companyFilter);
+  }, [companyFilter]);
 
   function addItem(field: keyof EmailFilterSettings, value: string, setInput: (v: string) => void) {
     const trimmed = value.trim().toLowerCase();
@@ -609,11 +640,27 @@ function FilterSettingsTab() {
     setLocalSettings((prev) => ({ ...prev, [field]: prev[field].filter((v) => v !== item) }));
   }
 
+  function addCompany(value: string) {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    if (localCompanySettings.companies.map((c) => c.toLowerCase()).includes(trimmed.toLowerCase())) return;
+    setLocalCompanySettings((prev) => ({ ...prev, companies: [...prev.companies, trimmed] }));
+    setCompanyInput("");
+  }
+
+  function removeCompany(company: string) {
+    setLocalCompanySettings((prev) => ({ ...prev, companies: prev.companies.filter((c) => c !== company) }));
+  }
+
   function handleSave() {
     updateMutation.mutate(localSettings);
   }
 
-  if (isLoading) {
+  function handleSaveCompanyFilter() {
+    updateCompanyMutation.mutate(localCompanySettings);
+  }
+
+  if (isLoading || companyFilterLoading) {
     return (
       <section className="bg-card border border-border rounded-xl p-6">
         <div className="space-y-3">
@@ -740,6 +787,42 @@ function FilterSettingsTab() {
         </div>
       </div>
 
+      {/* Blocked Body Keywords */}
+      <div className="space-y-3">
+        <div>
+          <Label className="text-sm font-medium">Blocked body keywords</Label>
+          <p className="text-xs text-muted-foreground mt-0.5">Emails containing any of these in the body are <strong className="text-foreground">rejected</strong> even if they match other criteria.</p>
+        </div>
+        {localSettings.blockedBodyKeywords.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {localSettings.blockedBodyKeywords.map((kw) => (
+              <span key={kw} className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-red-950/40 text-red-300 border border-red-800/30">
+                {kw}
+                <button type="button" onClick={() => removeItem("blockedBodyKeywords", kw)} className="text-red-400 hover:text-red-200 ml-0.5">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        {localSettings.blockedBodyKeywords.length === 0 && (
+          <p className="text-xs text-muted-foreground/60 italic">No blocked keywords — add keywords to reject emails containing them</p>
+        )}
+        <div className="flex gap-2">
+          <Input
+            placeholder="e.g. unsubscribe"
+            value={blockedBodyInput}
+            onChange={(e) => setBlockedBodyInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addItem("blockedBodyKeywords", blockedBodyInput, setBlockedBodyInput)}
+            className="h-8 text-sm max-w-xs"
+            data-testid="blocked-body-keyword-input"
+          />
+          <Button type="button" size="sm" variant="outline" className="h-8 gap-1" onClick={() => addItem("blockedBodyKeywords", blockedBodyInput, setBlockedBodyInput)}>
+            <Plus className="w-3.5 h-3.5" /> Add
+          </Button>
+        </div>
+      </div>
+
       <div className="pt-2 border-t border-border">
         <Button
           onClick={handleSave}
@@ -748,8 +831,112 @@ function FilterSettingsTab() {
           data-testid="save-filter-settings"
         >
           {updateMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-          Save filter criteria
+          Save email filter criteria
         </Button>
+      </div>
+
+      {/* Company Filter */}
+      <div className="pt-4 border-t-2 border-border space-y-5">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <SlidersHorizontal className="w-4 h-4 text-amber-400" />
+            <h2 className="font-semibold text-foreground">Company Filter</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Control which companies appear on your dashboard. Affects all job postings immediately.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Filter mode</Label>
+          <div className="flex gap-2">
+            {(["off", "include", "exclude"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setLocalCompanySettings((prev) => ({ ...prev, mode }))}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                  localCompanySettings.mode === mode
+                    ? mode === "exclude"
+                      ? "bg-red-950/50 border-red-700 text-red-300"
+                      : mode === "include"
+                      ? "bg-emerald-950/50 border-emerald-700 text-emerald-300"
+                      : "bg-muted border-border text-foreground"
+                    : "border-border text-muted-foreground hover:text-foreground hover:border-border/80"
+                }`}
+                data-testid={`company-filter-mode-${mode}`}
+              >
+                {mode === "off" ? "Off" : mode === "include" ? "Include only" : "Exclude"}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground/70">
+            {localCompanySettings.mode === "off" && "No company filter — all companies visible."}
+            {localCompanySettings.mode === "include" && "Only show jobs from companies in the list below."}
+            {localCompanySettings.mode === "exclude" && "Hide jobs from companies in the list below."}
+          </p>
+        </div>
+
+        {localCompanySettings.mode !== "off" && (
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">
+              {localCompanySettings.mode === "include" ? "Allowed companies" : "Blocked companies"}
+            </Label>
+            {localCompanySettings.companies.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {localCompanySettings.companies.map((company) => (
+                  <span
+                    key={company}
+                    className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border ${
+                      localCompanySettings.mode === "include"
+                        ? "bg-emerald-950/40 text-emerald-300 border-emerald-800/30"
+                        : "bg-red-950/40 text-red-300 border-red-800/30"
+                    }`}
+                  >
+                    {company}
+                    <button
+                      type="button"
+                      onClick={() => removeCompany(company)}
+                      className={`ml-0.5 ${localCompanySettings.mode === "include" ? "text-emerald-400 hover:text-emerald-200" : "text-red-400 hover:text-red-200"}`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            {localCompanySettings.companies.length === 0 && (
+              <p className="text-xs text-muted-foreground/60 italic">
+                {localCompanySettings.mode === "include" ? "No companies added — add companies to show only their jobs" : "No companies blocked — add companies to hide their jobs"}
+              </p>
+            )}
+            <div className="flex gap-2">
+              <Input
+                placeholder="e.g. Acme Corp"
+                value={companyInput}
+                onChange={(e) => setCompanyInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addCompany(companyInput)}
+                className="h-8 text-sm max-w-xs"
+                data-testid="company-filter-input"
+              />
+              <Button type="button" size="sm" variant="outline" className="h-8 gap-1" onClick={() => addCompany(companyInput)}>
+                <Plus className="w-3.5 h-3.5" /> Add
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <div>
+          <Button
+            onClick={handleSaveCompanyFilter}
+            disabled={updateCompanyMutation.isPending}
+            className="gap-2 bg-amber-700 hover:bg-amber-600"
+            data-testid="save-company-filter"
+          >
+            {updateCompanyMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            Save company filter
+          </Button>
+        </div>
       </div>
     </section>
   );

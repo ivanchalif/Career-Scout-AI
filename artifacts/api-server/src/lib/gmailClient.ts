@@ -18,6 +18,7 @@ export interface EmailFilterCriteria {
   subjectKeywords: string[];
   fromAddresses: string[];
   bodyKeywords: string[];
+  blockedBodyKeywords?: string[];
 }
 
 export const DEFAULT_EMAIL_FILTER_CRITERIA: EmailFilterCriteria = {
@@ -218,6 +219,14 @@ export async function fetchJobEmails(
     } catch {
       // Skip individual message failures
     }
+  }
+
+  if (effectiveCriteria.blockedBodyKeywords?.length) {
+    const blocked = effectiveCriteria.blockedBodyKeywords;
+    return results.filter((email) => {
+      const bodyLower = email.body.toLowerCase();
+      return !blocked.some((kw) => bodyLower.includes(kw.toLowerCase()));
+    });
   }
 
   return results;

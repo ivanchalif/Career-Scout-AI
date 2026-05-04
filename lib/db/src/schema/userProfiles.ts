@@ -14,10 +14,15 @@ export const userProfilesTable = pgTable("user_profiles", {
   resumeUrl: text("resume_url"),
   resumeText: text("resume_text"),
   syncScheduleHours: integer("sync_schedule_hours"),
+  companyFilterSettings: jsonb("company_filter_settings").$type<{
+    mode: "off" | "include" | "exclude";
+    companies: string[];
+  }>().notNull().default({ mode: "off", companies: [] }),
   emailFilterSettings: jsonb("email_filter_settings").$type<{
     subjectKeywords: string[];
     fromAddresses: string[];
     bodyKeywords: string[];
+    blockedBodyKeywords: string[];
   }>().notNull().default({
     subjectKeywords: [
       "job", "jobs", "opportunity", "role", "position", "hiring", "offer",
@@ -28,6 +33,7 @@ export const userProfilesTable = pgTable("user_profiles", {
     ],
     fromAddresses: [],
     bodyKeywords: [],
+    blockedBodyKeywords: [],
   }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

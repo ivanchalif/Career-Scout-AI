@@ -45,6 +45,13 @@ router.get("/postings", requireAuth, async (req, res): Promise<void> => {
 
   const { search, minFitScore, source, applied } = queryParsed.data;
 
+  const [userProfile] = await db
+    .select({ companyFilterSettings: userProfilesTable.companyFilterSettings })
+    .from(userProfilesTable)
+    .where(eq(userProfilesTable.userId, userId));
+
+  const companyFilter = userProfile?.companyFilterSettings ?? { mode: "off" as const, companies: [] };
+
   const conditions: ReturnType<typeof eq>[] = [
     eq(jobPostingsTable.userId, userId),
     isNull(jobPostingsTable.deletedAt),
@@ -70,6 +77,12 @@ router.get("/postings", requireAuth, async (req, res): Promise<void> => {
     if (search) {
       const q = search.toLowerCase();
       if (!p.title.toLowerCase().includes(q) && !p.company.toLowerCase().includes(q)) return false;
+    }
+    if (companyFilter.mode !== "off" && companyFilter.companies.length > 0) {
+      const company = p.company.toLowerCase();
+      const matches = companyFilter.companies.some((c: string) => company.includes(c.toLowerCase()));
+      if (companyFilter.mode === "include" && !matches) return false;
+      if (companyFilter.mode === "exclude" && matches) return false;
     }
     return true;
   });
