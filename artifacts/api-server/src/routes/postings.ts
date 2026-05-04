@@ -133,6 +133,50 @@ router.post("/postings", requireAuth, async (req, res): Promise<void> => {
   scorePostingBackground(posting.id, userId);
 });
 
+router.get("/postings/deleted", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId;
+
+  const postings = await db
+    .select()
+    .from(jobPostingsTable)
+    .where(and(eq(jobPostingsTable.userId, userId), isNotNull(jobPostingsTable.deletedAt)))
+    .orderBy(jobPostingsTable.deletedAt);
+
+  const results = await Promise.all(
+    postings.map(async (posting) => {
+      const [report] = await db
+        .select()
+        .from(matchReportsTable)
+        .where(and(eq(matchReportsTable.jobPostingId, posting.id), eq(matchReportsTable.userId, userId)));
+      return { posting, report: report ?? null };
+    }),
+  );
+
+  res.json(ListPostingsResponse.parse(results));
+});
+
+router.patch("/postings/:id/restore", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId;
+  const params = DeletePostingParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [posting] = await db
+    .update(jobPostingsTable)
+    .set({ deletedAt: null })
+    .where(and(eq(jobPostingsTable.id, params.data.id), eq(jobPostingsTable.userId, userId), isNotNull(jobPostingsTable.deletedAt)))
+    .returning();
+
+  if (!posting) {
+    res.status(404).json({ error: "Posting not found" });
+    return;
+  }
+
+  res.json({ id: posting.id });
+});
+
 router.get("/postings/:id", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId;
   const params = GetPostingParams.safeParse(req.params);

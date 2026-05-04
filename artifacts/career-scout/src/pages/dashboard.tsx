@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import {
   Plus, Search, SlidersHorizontal, Mail, TrendingUp,
   BriefcaseBusiness, Star, ExternalLink, Trash2,
-  RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2, CheckCircle2, Undo2, MapPin, Ban,
+  RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2, CheckCircle2, Undo2, MapPin, Ban, RotateCcw,
 } from "lucide-react";
 import {
   useGetDashboardSummary,
@@ -17,7 +17,10 @@ import {
   useDisconnectGmail,
   useGetCompanyFilterSettings,
   useUpdateCompanyFilterSettings,
+  useListDeletedPostings,
+  useRestorePosting,
   getListPostingsQueryKey,
+  getListDeletedPostingsQueryKey,
   getGetDashboardSummaryQueryKey,
   getGetGmailStatusQueryKey,
   getGetCompanyFilterSettingsQueryKey,
@@ -176,7 +179,7 @@ export default function DashboardPage() {
   }, []);
   const [reanalyzing, setReanalyzing] = useState(false);
   const [backfillingLinks, setBackfillingLinks] = useState(false);
-  const [activeTab, setActiveTab] = useState<"active" | "applied">("active");
+  const [activeTab, setActiveTab] = useState<"active" | "applied" | "deleted">("active");
 
   const companyFilterQ = useGetCompanyFilterSettings();
   const updateCompanyFilterMutation = useUpdateCompanyFilterSettings();
@@ -212,14 +215,16 @@ export default function DashboardPage() {
   const postingsQ = useListPostings({
     search: search || undefined,
     minFitScore,
-    applied: activeTab === "applied" ? true : false,
+    applied: activeTab === "applied" ? true : activeTab === "active" ? false : undefined,
   });
   const activeCountQ = useListPostings({ applied: false });
   const appliedCountQ = useListPostings({ applied: true });
+  const deletedQ = useListDeletedPostings();
   const gmailStatusQ = useGetGmailStatus();
   const createMutation = useCreatePosting();
   const deleteMutation = useDeletePosting();
   const markAppliedMutation = useMarkApplied();
+  const restoreMutation = useRestorePosting();
   const syncMutation = useSyncGmail();
   const disconnectMutation = useDisconnectGmail();
 
@@ -378,10 +383,26 @@ export default function DashboardPage() {
       {
         onSuccess: () => {
           qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
+          qc.invalidateQueries({ queryKey: getListDeletedPostingsQueryKey() });
           qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
-          toast({ title: "Deleted", description: "Job posting removed." });
+          toast({ title: "Deleted", description: "Job posting moved to Deleted." });
         },
         onError: () => toast({ title: "Error", description: "Failed to delete.", variant: "destructive" }),
+      }
+    );
+  }
+
+  async function onRestore(id: number) {
+    await restoreMutation.mutateAsync(
+      { id },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
+          qc.invalidateQueries({ queryKey: getListDeletedPostingsQueryKey() });
+          qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+          toast({ title: "Restored", description: "Job posting moved back to Active." });
+        },
+        onError: () => toast({ title: "Error", description: "Failed to restore posting.", variant: "destructive" }),
       }
     );
   }
@@ -582,85 +603,176 @@ export default function DashboardPage() {
               </span>
             )}
           </button>
-        </div>
-
-        {/* Search + filters */}
-        <div className="flex justify-end mb-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowFilters((v) => !v)}
-            className={`gap-2 ${showFilters ? "border-indigo-500 text-indigo-400" : ""}`}
-            data-testid="filter-button"
+          <button
+            onClick={() => setActiveTab("deleted")}
+            data-testid="tab-deleted"
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px flex items-center gap-2 ${
+              activeTab === "deleted"
+                ? "border-red-500 text-red-400"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
           >
-            <SlidersHorizontal className="w-4 h-4" />
-            Filters
-          </Button>
+            <Trash2 className="w-3.5 h-3.5" />
+            Deleted
+            {deletedQ.data != null && deletedQ.data.length > 0 && (
+              <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${
+                activeTab === "deleted" ? "bg-red-500/20 text-red-300" : "bg-muted text-muted-foreground"
+              }`}>
+                {deletedQ.data.length}
+              </span>
+            )}
+          </button>
         </div>
 
-        {showFilters && (
-          <div className="flex flex-wrap items-end gap-3 mb-4 p-4 bg-card border border-border rounded-lg">
-            <div className="flex-1 min-w-48 space-y-1">
-              <Label className="text-xs text-muted-foreground">Search</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search jobs..."
-                  className="pl-9 h-9"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  data-testid="search-input"
-                />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Sort</Label>
-              <div className="relative">
-                <ArrowUpDown className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                <select
-                  value={sortKey}
-                  onChange={(e) => setSortKey(e.target.value)}
-                  data-testid="sort-select"
-                  className="h-9 pl-8 pr-3 text-sm rounded-md border border-input bg-background text-foreground appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
-                >
-                  <option value="date-desc">Date: Newest first</option>
-                  <option value="date-asc">Date: Oldest first</option>
-                  <option value="score-desc">Score: Highest first</option>
-                  <option value="score-asc">Score: Lowest first</option>
-                  <option value="title-asc">Title: A → Z</option>
-                  <option value="title-desc">Title: Z → A</option>
-                  <option value="company-asc">Company: A → Z</option>
-                  <option value="company-desc">Company: Z → A</option>
-                </select>
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Min fit score</Label>
-              <Input
-                type="number"
-                min={0}
-                max={100}
-                placeholder="e.g. 70"
-                className="w-28 h-9 text-sm"
-                value={minFitScore ?? ""}
-                onChange={(e) => setMinFitScore(e.target.value ? Number(e.target.value) : undefined)}
-                data-testid="min-score-input"
-              />
-            </div>
-            {(search || minFitScore != null || sortKey !== "date-desc") && (
+        {/* Search + filters — hidden on Deleted tab */}
+        {activeTab !== "deleted" && (
+          <>
+            <div className="flex justify-end mb-4">
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                onClick={() => { setSearch(""); setMinFitScore(undefined); setSortKey("date-desc"); }}
+                onClick={() => setShowFilters((v) => !v)}
+                className={`gap-2 ${showFilters ? "border-indigo-500 text-indigo-400" : ""}`}
+                data-testid="filter-button"
               >
-                Reset
+                <SlidersHorizontal className="w-4 h-4" />
+                Filters
               </Button>
+            </div>
+
+            {showFilters && (
+              <div className="flex flex-wrap items-end gap-3 mb-4 p-4 bg-card border border-border rounded-lg">
+                <div className="flex-1 min-w-48 space-y-1">
+                  <Label className="text-xs text-muted-foreground">Search</Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search jobs..."
+                      className="pl-9 h-9"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      data-testid="search-input"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Sort</Label>
+                  <div className="relative">
+                    <ArrowUpDown className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                    <select
+                      value={sortKey}
+                      onChange={(e) => setSortKey(e.target.value)}
+                      data-testid="sort-select"
+                      className="h-9 pl-8 pr-3 text-sm rounded-md border border-input bg-background text-foreground appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+                    >
+                      <option value="date-desc">Date: Newest first</option>
+                      <option value="date-asc">Date: Oldest first</option>
+                      <option value="score-desc">Score: Highest first</option>
+                      <option value="score-asc">Score: Lowest first</option>
+                      <option value="title-asc">Title: A → Z</option>
+                      <option value="title-desc">Title: Z → A</option>
+                      <option value="company-asc">Company: A → Z</option>
+                      <option value="company-desc">Company: Z → A</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Min fit score</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    placeholder="e.g. 70"
+                    className="w-28 h-9 text-sm"
+                    value={minFitScore ?? ""}
+                    onChange={(e) => setMinFitScore(e.target.value ? Number(e.target.value) : undefined)}
+                    data-testid="min-score-input"
+                  />
+                </div>
+                {(search || minFitScore != null || sortKey !== "date-desc") && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { setSearch(""); setMinFitScore(undefined); setSortKey("date-desc"); }}
+                  >
+                    Reset
+                  </Button>
+                )}
+              </div>
             )}
-          </div>
+          </>
+        )}
+
+        {/* Deleted tab info bar */}
+        {activeTab === "deleted" && (
+          <p className="text-xs text-muted-foreground mb-4">
+            Jobs you've deleted are listed below. Restore any of them to move them back to Active.
+          </p>
         )}
 
         {/* Postings list */}
-        {postingsQ.isLoading ? (
+        {activeTab === "deleted" ? (
+          deletedQ.isLoading ? (
+            <div className="flex flex-col gap-3">
+              {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
+            </div>
+          ) : !deletedQ.data || deletedQ.data.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <Trash2 className="w-10 h-10 text-muted-foreground mb-4" />
+              <p className="text-foreground font-medium">No deleted jobs</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Jobs you delete will appear here so you can restore them.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {deletedQ.data.map((item) => {
+                const { posting, report } = item;
+                const score = report?.fitScore ?? null;
+                return (
+                  <div
+                    key={posting.id}
+                    className="flex items-center gap-4 bg-card border border-border rounded-xl px-5 py-4 opacity-60"
+                    data-testid={`deleted-posting-card-${posting.id}`}
+                  >
+                    <ScoreRing score={score} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-foreground line-through">{posting.title}</span>
+                        <Badge variant="secondary" className="text-xs">{posting.source}</Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2">
+                        <span>{posting.company}</span>
+                        {posting.location && (
+                          <span className="flex items-center gap-0.5 text-xs text-muted-foreground/80">
+                            <MapPin className="w-3 h-3" />
+                            {posting.location}
+                          </span>
+                        )}
+                        <span className="text-xs text-muted-foreground/60">
+                          Added {formatAdded(posting.createdAt)}
+                        </span>
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 text-emerald-400 border-emerald-800/50 hover:bg-emerald-950/30 hover:text-emerald-300"
+                        onClick={() => onRestore(posting.id)}
+                        disabled={restoreMutation.isPending}
+                        data-testid={`posting-restore-${posting.id}`}
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        Restore
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )
+        ) : postingsQ.isLoading ? (
           <div className="flex flex-col gap-3">
             {[1, 2, 3].map((i) => (
               <Skeleton key={i} className="h-28 rounded-xl" />

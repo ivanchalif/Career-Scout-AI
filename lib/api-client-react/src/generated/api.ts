@@ -1870,6 +1870,69 @@ export const useGetFilterSettings = <
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> => useQuery(getGetFilterSettingsQueryOptions(options));
 
+// ── Deleted postings ──────────────────────────────────────────────
+
+export const getListDeletedPostingsUrl = () => `/api/postings/deleted`;
+
+export const listDeletedPostings = async (options?: RequestInit): Promise<PostingWithReport[]> =>
+  customFetch<PostingWithReport[]>(getListDeletedPostingsUrl(), { ...options, method: "GET" });
+
+export const getListDeletedPostingsQueryKey = () => [`/api/postings/deleted`] as const;
+
+export const getListDeletedPostingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listDeletedPostings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof listDeletedPostings>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getListDeletedPostingsQueryKey();
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listDeletedPostings>>> = () =>
+    listDeletedPostings(requestOptions);
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listDeletedPostings>>, TError, TData
+  >;
+};
+
+export const useListDeletedPostings = <
+  TData = Awaited<ReturnType<typeof listDeletedPostings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof listDeletedPostings>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> => useQuery(getListDeletedPostingsQueryOptions(options));
+
+export const restorePosting = async (id: number, options?: RequestInit): Promise<{ id: number }> =>
+  customFetch<{ id: number }>(`/api/postings/${id}/restore`, { ...options, method: "PATCH" });
+
+export const getRestorePostingMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof restorePosting>>, TError, { id: number }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const mutationKey = ["restorePosting"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof restorePosting>>, { id: number }> = ({ id }) =>
+    restorePosting(id, requestOptions);
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useRestorePosting = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof restorePosting>>, TError, { id: number }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<Awaited<ReturnType<typeof restorePosting>>, TError, { id: number }, TContext> =>
+  useMutation(getRestorePostingMutationOptions(options));
+
 export const updateFilterSettings = async (
   settings: EmailFilterSettings,
   options?: RequestInit,
