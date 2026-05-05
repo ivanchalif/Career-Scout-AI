@@ -14,13 +14,42 @@ export function normalizeFuzzy(text: string): string {
     .trim();
 }
 
+// Suffix list kept in sync with normalizeFuzzy() above so DB-side normalization
+// produces the same output as the JS function.
+const SUFFIX_REGEX =
+  "\\m(inc|llc|ltd|corp|co|gmbh|ag|plc|sa|technologies|technology|tech|solutions|group|holdings|services)\\M";
+
+/**
+ * Applies the same normalization as normalizeFuzzy() but inside PostgreSQL.
+ *
+ * Steps (matching normalizeFuzzy order):
+ *   1. lowercase
+ *   2. strip common company suffixes using ARE word-boundary tokens (\m / \M)
+ *   3. replace remaining non-alphanumeric chars (incl. paren content) with spaces
+ *   4. collapse runs of spaces to a single space
+ *   5. trim
+ *
+ * Note: '\(' in PostgreSQL ARE is a capturing-group opener, not a literal paren.
+ * That's why we strip suffixes BEFORE the non-alphanumeric sweep rather than
+ * using a paren-aware regex.
+ */
+function dbNormalize(col: string): string {
+  return `btrim(regexp_replace(
+      regexp_replace(
+        regexp_replace(lower(${col}), '${SUFFIX_REGEX}', ' ', 'g'),
+        '[^a-z0-9 ]', ' ', 'g'
+      ),
+      ' +', ' ', 'g'
+    ))`;
+}
+
 /**
  * Returns true when a posting with a very similar (title, company) pair already
  * exists for this user — regardless of source (Gmail, IMAP, manual, etc.).
  *
  * Thresholds:
  *   title   > 0.70  (slightly looser to catch minor wording diffs)
- *   company > 0.60  (catches suffix/abbrev variants)
+ *   company > 0.60  (catches suffix/abbrev variants e.g. "Google LLC" vs "Google")
  *
  * Both must match simultaneously to flag a duplicate.
  *
@@ -45,31 +74,19 @@ export async function isFuzzyDuplicate(
 
   if (!normTitle || !normCompany) return { isDuplicate: false };
 
-  // DB-side normalization must match normalizeFuzzy() in JS:
-  //   1. lowercase
-  //   2. replace non-alphanumeric chars (incl. punctuation, parens) with spaces
-  //   3. collapse runs of spaces to a single space
-  //   4. trim
-  // Note: '\s*\([^)]*\)' was previously used for paren-stripping but
-  // PostgreSQL ARE treats \( as a group start (not a literal paren), which
-  // caused the regex to match the entire company string and zero it out.
-  // Simply removing non-alphanumeric chars achieves the same effect safely.
+  const titleNorm = dbNormalize("title");
+  const companyNorm = dbNormalize("company");
+
   const rows = await db.execute(sql`
     SELECT id, title, company, deleted_at, applied_at
     FROM job_postings
     WHERE user_id = ${userId}
       AND similarity(
-        btrim(regexp_replace(
-          regexp_replace(lower(title), '[^a-z0-9 ]', ' ', 'g'),
-          ' +', ' ', 'g'
-        )),
+        ${sql.raw(titleNorm)},
         ${normTitle}
       ) > 0.70
       AND similarity(
-        btrim(regexp_replace(
-          regexp_replace(lower(company), '[^a-z0-9 ]', ' ', 'g'),
-          ' +', ' ', 'g'
-        )),
+        ${sql.raw(companyNorm)},
         ${normCompany}
       ) > 0.60
     ORDER BY
