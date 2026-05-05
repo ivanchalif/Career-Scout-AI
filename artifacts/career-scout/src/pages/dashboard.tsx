@@ -336,7 +336,7 @@ export default function DashboardPage() {
       qc.invalidateQueries({ queryKey: getListDeletedPostingsQueryKey() });
       qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
       toast({
-        title: removed > 0 ? `Removed ${removed} duplicate${removed === 1 ? "" : "s"}` : "No duplicates found",
+        title: removed > 0 ? `Removed ${removed} duplicate job${removed === 1 ? "" : "s"}` : "No duplicates found",
         description: removed > 0
           ? `${removed} active job${removed === 1 ? "" : "s"} matched something you already deleted or applied to.`
           : "All active jobs look unique compared to your deleted and applied lists.",
