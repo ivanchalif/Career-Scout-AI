@@ -6,7 +6,8 @@ import { scorePostingBackground, sweepUnscoredPostings } from "./scoringService"
 import { isFuzzyDuplicate } from "./dedup";
 import { logger } from "./logger";
 
-const CHECK_INTERVAL_MS = 30 * 60 * 1000; // check every 30 minutes
+const CHECK_INTERVAL_MS = 5 * 60 * 1000; // check every 5 minutes
+const DEFAULT_SYNC_HOURS = 1; // used when user has Gmail connected but no schedule set
 
 
 function extractSender(from: string): string {
@@ -160,10 +161,9 @@ async function checkAndSyncUsers(): Promise<void> {
         .from(userProfilesTable)
         .where(eq(userProfilesTable.userId, conn.userId));
 
-      const scheduleHours = profile?.syncScheduleHours ?? null;
-      if (scheduleHours === null) {
-        continue;
-      }
+      // If the user has never set a schedule, fall back to DEFAULT_SYNC_HOURS
+      // rather than silently skipping them forever.
+      const scheduleHours = profile?.syncScheduleHours ?? DEFAULT_SYNC_HOURS;
 
       const lastSync = conn.lastSyncedAt ? new Date(conn.lastSyncedAt).getTime() : 0;
       const msSinceSync = now - lastSync;
@@ -195,10 +195,18 @@ async function checkAndSyncUsers(): Promise<void> {
 }
 
 export function startGmailScheduler(): void {
+  const checkIntervalMinutes = CHECK_INTERVAL_MS / 60_000;
   logger.info(
-    { checkIntervalMinutes: 30 },
-    "Gmail scheduler: starting (checks every 30 min, respects per-user schedule)",
+    { checkIntervalMinutes, defaultSyncHours: DEFAULT_SYNC_HOURS },
+    "Gmail scheduler: starting (checks every 5 min, respects per-user schedule)",
   );
+
+  // Run immediately on startup so the first sync is not delayed by the full
+  // interval — important because every server restart would otherwise reset the
+  // 5-minute (or longer) countdown.
+  checkAndSyncUsers().catch((err) => {
+    logger.error({ err }, "Gmail scheduler: unhandled error in startup check");
+  });
 
   setInterval(() => {
     checkAndSyncUsers().catch((err) => {
