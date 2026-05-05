@@ -40,7 +40,7 @@ function ScoreRingLarge({ score }: { score: number | null }) {
 
   return (
     <div className="flex flex-col items-center gap-2">
-      <div className="relative flex items-center justify-center w-28 h-28">
+      <div className="relative flex items-center justify-center w-28 h-28" data-testid="score-ring">
         <svg width="112" height="112" viewBox="0 0 112 112" className="-rotate-90">
           <circle cx="56" cy="56" r={radius} fill="none" stroke="hsl(var(--muted))" strokeWidth="6" />
           <circle

@@ -120,7 +120,7 @@ const fitScoreResultSchema = z.object({
 
 type FitScoreResult = z.infer<typeof fitScoreResultSchema>;
 
-async function parseJobDescription(
+export async function parseJobDescription(
   rawDescription: string,
   title: string,
   company: string,
@@ -185,7 +185,7 @@ Rules:
   }
 }
 
-async function scoreFit(
+export async function scoreFit(
   parsedJob: ParsedJob,
   userProfile: {
     skills: string[];
