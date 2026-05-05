@@ -62,6 +62,12 @@ export async function isFuzzyDuplicate(
   userId: string,
   title: string,
   company: string,
+  options?: {
+    /** Exclude this posting ID from the match (used by dedup sweep to avoid self-match). */
+    excludeId?: number;
+    /** When true, only match against deleted or applied rows (ignores active duplicates). */
+    deletedOrAppliedOnly?: boolean;
+  },
 ): Promise<{
   isDuplicate: boolean;
   matchedTitle?: string;
@@ -77,6 +83,13 @@ export async function isFuzzyDuplicate(
   const titleNorm = dbNormalize("title");
   const companyNorm = dbNormalize("company");
 
+  const excludeClause = options?.excludeId != null
+    ? sql`AND id != ${options.excludeId}`
+    : sql``;
+  const stateClause = options?.deletedOrAppliedOnly
+    ? sql`AND (deleted_at IS NOT NULL OR applied_at IS NOT NULL)`
+    : sql``;
+
   const rows = await db.execute(sql`
     SELECT id, title, company, deleted_at, applied_at
     FROM job_postings
@@ -89,6 +102,8 @@ export async function isFuzzyDuplicate(
         ${sql.raw(companyNorm)},
         ${normCompany}
       ) > 0.60
+      ${excludeClause}
+      ${stateClause}
     ORDER BY
       deleted_at IS NOT NULL,   -- active rows first
       applied_at IS NOT NULL    -- unapplied before applied

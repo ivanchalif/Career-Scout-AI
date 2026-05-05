@@ -268,7 +268,10 @@ router.post("/postings/dedup-sweep", requireAuth, async (req, res): Promise<void
   const toDelete: number[] = [];
 
   for (const posting of activePostings) {
-    const { isDuplicate, wasDeleted, wasApplied } = await isFuzzyDuplicate(userId, posting.title, posting.company);
+    const { isDuplicate, wasDeleted, wasApplied } = await isFuzzyDuplicate(
+      userId, posting.title, posting.company,
+      { excludeId: posting.id, deletedOrAppliedOnly: true },
+    );
     if (isDuplicate && (wasDeleted || wasApplied)) {
       toDelete.push(posting.id);
       logger.info(
