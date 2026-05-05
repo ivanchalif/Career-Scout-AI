@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, ilike, or, gte, isNotNull, isNull } from "drizzle-orm";
+import { eq, and, ilike, or, gte, isNotNull, isNull, inArray } from "drizzle-orm";
 import { db, jobPostingsTable, matchReportsTable, userProfilesTable, gmailConnectionsTable } from "@workspace/db";
 import {
   CreatePostingBody,
@@ -15,6 +15,7 @@ import {
 import { requireAuth } from "../middlewares/requireAuth";
 import { scorePosting, scorePostingBackground, extractJobListings } from "../lib/scoringService";
 import { fetchSingleEmail } from "../lib/gmailClient";
+import { isFuzzyDuplicate } from "../lib/dedup";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -250,6 +251,41 @@ router.post("/postings/rescore-all", requireAuth, async (req, res): Promise<void
   const { rescoreAllPostings } = await import("../lib/scoringService");
   rescoreAllPostings(userId, { forceParse: true }).catch(() => {});
   res.json({ queued: true });
+});
+
+router.post("/postings/dedup-sweep", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId;
+
+  const activePostings = await db
+    .select({ id: jobPostingsTable.id, title: jobPostingsTable.title, company: jobPostingsTable.company })
+    .from(jobPostingsTable)
+    .where(and(
+      eq(jobPostingsTable.userId, userId),
+      isNull(jobPostingsTable.deletedAt),
+      isNull(jobPostingsTable.appliedAt),
+    ));
+
+  const toDelete: number[] = [];
+
+  for (const posting of activePostings) {
+    const { isDuplicate, wasDeleted, wasApplied } = await isFuzzyDuplicate(userId, posting.title, posting.company);
+    if (isDuplicate && (wasDeleted || wasApplied)) {
+      toDelete.push(posting.id);
+      logger.info(
+        { userId, postingId: posting.id, title: posting.title, company: posting.company, wasDeleted, wasApplied },
+        "dedup-sweep: soft-deleting active posting that matches a deleted/applied job",
+      );
+    }
+  }
+
+  if (toDelete.length > 0) {
+    await db
+      .update(jobPostingsTable)
+      .set({ deletedAt: new Date() })
+      .where(and(eq(jobPostingsTable.userId, userId), inArray(jobPostingsTable.id, toDelete)));
+  }
+
+  res.json({ removed: toDelete.length });
 });
 
 router.post("/postings/backfill-links", requireAuth, async (req, res): Promise<void> => {

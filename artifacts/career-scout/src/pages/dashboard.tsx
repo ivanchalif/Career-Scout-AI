@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import {
   Plus, Search, SlidersHorizontal, Mail, TrendingUp,
   BriefcaseBusiness, Star, ExternalLink, Trash2,
-  RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2, CheckCircle2, Undo2, MapPin, Ban, RotateCcw,
+  RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2, CheckCircle2, Undo2, MapPin, Ban, RotateCcw, Layers,
 } from "lucide-react";
 import {
   useGetDashboardSummary,
@@ -179,6 +179,7 @@ export default function DashboardPage() {
   }, []);
   const [reanalyzing, setReanalyzing] = useState(false);
   const [backfillingLinks, setBackfillingLinks] = useState(false);
+  const [sweepingDuplicates, setSweepingDuplicates] = useState(false);
   const [activeTab, setActiveTab] = useState<"active" | "applied" | "deleted">("active");
 
   const companyFilterQ = useGetCompanyFilterSettings();
@@ -321,6 +322,32 @@ export default function DashboardPage() {
     }
   }
 
+  async function onSweepDuplicates() {
+    setSweepingDuplicates(true);
+    try {
+      const token = await getToken();
+      const res = await fetch("/api/postings/dedup-sweep", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error("Sweep failed");
+      const { removed } = await res.json() as { removed: number };
+      qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
+      qc.invalidateQueries({ queryKey: getListDeletedPostingsQueryKey() });
+      qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+      toast({
+        title: removed > 0 ? `Removed ${removed} duplicate${removed === 1 ? "" : "s"}` : "No duplicates found",
+        description: removed > 0
+          ? `${removed} active job${removed === 1 ? "" : "s"} matched something you already deleted or applied to.`
+          : "All active jobs look unique compared to your deleted and applied lists.",
+      });
+    } catch {
+      toast({ title: "Error", description: "Could not run duplicate cleanup.", variant: "destructive" });
+    } finally {
+      setSweepingDuplicates(false);
+    }
+  }
+
   async function onBackfillLinks() {
     setBackfillingLinks(true);
     try {
@@ -441,6 +468,22 @@ export default function DashboardPage() {
             <p className="text-sm text-muted-foreground mt-0.5">Your job opportunities, ranked by fit</p>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onSweepDuplicates}
+              disabled={sweepingDuplicates}
+              className="gap-2 text-muted-foreground"
+              data-testid="dedup-sweep-button"
+              title="Find and remove active jobs that match ones you already deleted or applied to"
+            >
+              {sweepingDuplicates ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Layers className="w-3.5 h-3.5" />
+              )}
+              {sweepingDuplicates ? "Scanning..." : "Clean up duplicates"}
+            </Button>
             <Button
               variant="outline"
               size="sm"
