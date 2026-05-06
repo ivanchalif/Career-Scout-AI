@@ -1,4 +1,4 @@
-import { eq, and, isNotNull } from "drizzle-orm";
+import { eq, and, isNotNull, isNull } from "drizzle-orm";
 import {
   db,
   jobPostingsTable,
@@ -502,7 +502,7 @@ export async function rescoreAllPostings(userId: string, { forceParse = false }:
   const allPostings = await db
     .select({ id: jobPostingsTable.id })
     .from(jobPostingsTable)
-    .where(eq(jobPostingsTable.userId, userId));
+    .where(and(eq(jobPostingsTable.userId, userId), isNull(jobPostingsTable.deletedAt)));
 
   if (allPostings.length > 0) {
     logger.info({ userId, count: allPostings.length, forceParse }, "scoringService: queuing all postings for re-score");
@@ -529,7 +529,7 @@ export async function sweepUnscoredPostings(userId: string): Promise<void> {
     db
       .select({ id: jobPostingsTable.id })
       .from(jobPostingsTable)
-      .where(eq(jobPostingsTable.userId, userId)),
+      .where(and(eq(jobPostingsTable.userId, userId), isNull(jobPostingsTable.deletedAt))),
   ]);
 
   const scoredIds = new Set(scored.map((r) => r.id));

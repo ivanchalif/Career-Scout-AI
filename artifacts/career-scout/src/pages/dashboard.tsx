@@ -213,11 +213,23 @@ export default function DashboardPage() {
   }
 
   const dashboardQ = useGetDashboardSummary();
-  const postingsQ = useListPostings({
-    search: search || undefined,
-    minFitScore,
-    applied: activeTab === "applied" ? true : activeTab === "active" ? false : undefined,
-  });
+  const postingsQ = useListPostings(
+    {
+      search: search || undefined,
+      minFitScore,
+      applied: activeTab === "applied" ? true : activeTab === "active" ? false : undefined,
+    },
+    {
+      query: {
+        refetchInterval: (query) => {
+          const data = query.state.data;
+          if (!data) return false;
+          const hasUnscored = data.some((p) => p.report?.fitScore == null);
+          return hasUnscored ? 4000 : false;
+        },
+      },
+    },
+  );
   const activeCountQ = useListPostings({ applied: false });
   const appliedCountQ = useListPostings({ applied: true });
   const deletedQ = useListDeletedPostings();
