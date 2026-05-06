@@ -123,9 +123,23 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
 
     const listings = await extractJobListings(email.body, email.subject, email.sender);
 
+    const blockedKeywords = filterCriteria.blockedBodyKeywords ?? [];
+
     for (let i = 0; i < listings.length; i++) {
       const listing = listings[i];
       if (!listing.description.trim()) continue;
+
+      if (blockedKeywords.length > 0) {
+        const descLower = listing.description.toLowerCase();
+        const hit = blockedKeywords.find((kw) => descLower.includes(kw.toLowerCase()));
+        if (hit) {
+          logger.info(
+            { messageId: email.messageId, title: listing.title, blockedKeyword: hit },
+            "gmailScheduler: skipping individual listing — description contains blocked keyword",
+          );
+          continue;
+        }
+      }
 
       const gmailKey = `${email.messageId}:${i}`;
       const title = listing.title || email.subject.slice(0, 200) || "Job Opportunity";

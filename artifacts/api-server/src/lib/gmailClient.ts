@@ -221,14 +221,6 @@ export async function fetchJobEmails(
     }
   }
 
-  if (effectiveCriteria.blockedBodyKeywords?.length) {
-    const blocked = effectiveCriteria.blockedBodyKeywords;
-    return results.filter((email) => {
-      const bodyLower = email.body.toLowerCase();
-      return !blocked.some((kw) => bodyLower.includes(kw.toLowerCase()));
-    });
-  }
-
   return results;
 }
 

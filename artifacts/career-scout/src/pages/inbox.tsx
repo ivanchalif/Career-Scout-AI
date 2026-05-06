@@ -791,7 +791,7 @@ function FilterSettingsTab() {
       <div className="space-y-3">
         <div>
           <Label className="text-sm font-medium">Blocked body keywords</Label>
-          <p className="text-xs text-muted-foreground mt-0.5">Emails containing any of these in the body are <strong className="text-foreground">rejected</strong> even if they match other criteria.</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Job listings whose description contains any of these are <strong className="text-foreground">skipped</strong>. Other jobs in the same email are still imported.</p>
         </div>
         {localSettings.blockedBodyKeywords.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
@@ -806,7 +806,7 @@ function FilterSettingsTab() {
           </div>
         )}
         {localSettings.blockedBodyKeywords.length === 0 && (
-          <p className="text-xs text-muted-foreground/60 italic">No blocked keywords — add keywords to reject emails containing them</p>
+          <p className="text-xs text-muted-foreground/60 italic">No blocked keywords — individual job listings matching these are skipped</p>
         )}
         <div className="flex gap-2">
           <Input
