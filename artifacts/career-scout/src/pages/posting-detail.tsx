@@ -360,15 +360,17 @@ export default function PostingDetailPage({ id }: { id: number }) {
         )}
 
         {/* Full description */}
-        <div className="bg-card border border-border rounded-xl p-6">
-          <h2 className="font-semibold text-foreground mb-4">Job description</h2>
-          <div
-            className="text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed"
-            data-testid="job-description"
-          >
-            {posting.fullDescription}
+        {posting.fullDescription ? (
+          <div className="bg-card border border-border rounded-xl p-6">
+            <h2 className="font-semibold text-foreground mb-4">Job description</h2>
+            <div
+              className="text-sm text-foreground/80 whitespace-pre-wrap leading-relaxed"
+              data-testid="job-description"
+            >
+              {posting.fullDescription}
+            </div>
           </div>
-        </div>
+        ) : null}
       </div>
     </Layout>
   );

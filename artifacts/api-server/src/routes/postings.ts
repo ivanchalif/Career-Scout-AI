@@ -205,7 +205,7 @@ router.delete("/postings/:id", requireAuth, async (req, res): Promise<void> => {
 
   const [posting] = await db
     .update(jobPostingsTable)
-    .set({ deletedAt: new Date() })
+    .set({ deletedAt: new Date(), fullDescription: "" })
     .where(and(eq(jobPostingsTable.id, params.data.id), eq(jobPostingsTable.userId, userId), isNull(jobPostingsTable.deletedAt)))
     .returning();
 
@@ -284,7 +284,7 @@ router.post("/postings/dedup-sweep", requireAuth, async (req, res): Promise<void
   if (toDelete.length > 0) {
     await db
       .update(jobPostingsTable)
-      .set({ deletedAt: new Date() })
+      .set({ deletedAt: new Date(), fullDescription: "" })
       .where(and(eq(jobPostingsTable.userId, userId), inArray(jobPostingsTable.id, toDelete)));
   }
 
