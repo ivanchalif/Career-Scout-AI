@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, isNull, isNotNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db, jobPostingsTable, matchReportsTable, userProfilesTable, gmailConnectionsTable } from "@workspace/db";
 import { GetDashboardSummaryResponse } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -19,24 +19,27 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     .from(gmailConnectionsTable)
     .where(eq(gmailConnectionsTable.userId, userId));
 
-  // Only count non-deleted, non-applied (active) postings
-  const activePostings = await db
-    .select({ id: jobPostingsTable.id })
-    .from(jobPostingsTable)
-    .where(
-      eq(jobPostingsTable.userId, userId),
-    )
-    .then((rows) => rows); // fetch all, filter in JS to reuse for scoring below
+  const companyFilter = (profile?.companyFilterSettings as { mode: string; companies: string[] } | null) ?? { mode: "off", companies: [] };
 
-  const allNonDeleted = await db
+  const allPostings = await db
     .select()
     .from(jobPostingsTable)
-    .where(eq(jobPostingsTable.userId, userId))
-    .then((rows) => rows.filter((p) => !p.deletedAt));
+    .where(eq(jobPostingsTable.userId, userId));
 
-  const activeOnly = allNonDeleted.filter((p) => !p.appliedAt);
+  // Mirror the same filter chain the list endpoint uses
+  const activeOnly = allPostings.filter((p) => {
+    if (p.deletedAt) return false;
+    if (p.appliedAt) return false;
+    if (companyFilter.mode !== "off" && companyFilter.companies.length > 0) {
+      const company = p.company.toLowerCase();
+      const matches = companyFilter.companies.some((c: string) => company.includes(c.toLowerCase()));
+      if (companyFilter.mode === "include" && !matches) return false;
+      if (companyFilter.mode === "exclude" && matches) return false;
+    }
+    return true;
+  });
+
   const totalPostings = activeOnly.length;
-
   const activeIds = new Set(activeOnly.map((p) => p.id));
 
   const reports = await db
@@ -44,7 +47,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     .from(matchReportsTable)
     .where(eq(matchReportsTable.userId, userId));
 
-  // Avg fit score across active (non-deleted, non-applied) scored postings
+  // Avg fit score across active scored postings
   const activeReports = reports.filter((r) => activeIds.has(r.jobPostingId) && r.fitScore != null);
   const avgFitScore =
     activeReports.length > 0
