@@ -52,6 +52,12 @@ export async function fetchJobPageContent(url: string): Promise<string | null> {
       return null;
     }
 
+    const errorReason = detectErrorPage(text);
+    if (errorReason) {
+      logger.info({ url, reason: errorReason }, "pageScraper: error/redirect page detected, skipping");
+      return null;
+    }
+
     logger.info({ url, chars: text.length }, "pageScraper: page fetched successfully");
     return text.slice(0, MAX_PAGE_CONTENT_CHARS);
   } catch (err) {
@@ -64,6 +70,49 @@ export async function fetchJobPageContent(url: string): Promise<string | null> {
     );
     return null;
   }
+}
+
+/**
+ * Phrases that appear in error/redirect/gate pages rather than real job postings.
+ * Checked against a small prefix of the extracted text so we don't scan 10 KB
+ * for every page — these messages always appear near the top.
+ */
+const ERROR_PAGE_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
+  // Email link-checker / wrong-link pages
+  { pattern: /wrong link/i, label: "wrong-link page" },
+  { pattern: /invalid link/i, label: "invalid-link page" },
+  { pattern: /you have clicked on an invalid/i, label: "invalid-link page" },
+  { pattern: /copying this link from a mail reader/i, label: "mail-reader link error" },
+  // Link expiry / single-use links
+  { pattern: /this link has expired/i, label: "expired link" },
+  { pattern: /link (is|has been) (no longer valid|expired)/i, label: "expired link" },
+  // Generic 404 / not found
+  { pattern: /page (was )?not found/i, label: "404 page" },
+  { pattern: /404\s*(—|-|:)?\s*not found/i, label: "404 page" },
+  // Access denied / login walls
+  { pattern: /access denied/i, label: "access denied" },
+  { pattern: /403\s*(—|-|:)?\s*forbidden/i, label: "403 forbidden" },
+  { pattern: /please (log in|sign in) to (continue|view|access)/i, label: "login wall" },
+  // Bot/browser checks
+  { pattern: /just a moment/i, label: "cloudflare challenge" },
+  { pattern: /checking your browser/i, label: "bot check" },
+  { pattern: /enable javascript (and )?cookies/i, label: "JS required" },
+  // SafeLinks and similar email link-scanners
+  { pattern: /microsoft safelinks/i, label: "safelinks page" },
+  { pattern: /this link has been (disabled|blocked)/i, label: "blocked link" },
+];
+
+/**
+ * Returns a human-readable reason string if the page looks like an error or
+ * gate page rather than real content, otherwise returns null.
+ * Only inspects the first 1 KB to keep it fast.
+ */
+function detectErrorPage(text: string): string | null {
+  const sample = text.slice(0, 1_000);
+  for (const { pattern, label } of ERROR_PAGE_PATTERNS) {
+    if (pattern.test(sample)) return label;
+  }
+  return null;
 }
 
 /**
