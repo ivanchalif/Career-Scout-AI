@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useUser, useClerk } from "@clerk/react";
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, User, LogOut, Radar, Mail, ChevronLeft, ChevronRight } from "lucide-react";
+import { LayoutDashboard, User, LogOut, Radar, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -50,26 +50,30 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <aside
           className={`relative flex flex-col border-r border-border bg-sidebar shrink-0 transition-[width] duration-200 ease-in-out ${collapsed ? "w-16" : "w-60"}`}
         >
-          {/* Logo + collapse toggle */}
+          {/* Logo — click to expand/collapse */}
           <div className="flex items-center border-b border-sidebar-border h-[60px] shrink-0">
-            {!collapsed && (
-              <div className="flex items-center gap-3 pl-4 flex-1 min-w-0">
-                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-600/20 shrink-0">
-                  <Radar className="w-5 h-5 text-indigo-400" />
-                </div>
-                <span className="font-semibold text-foreground tracking-tight whitespace-nowrap overflow-hidden">
-                  Career Scout
-                </span>
-              </div>
-            )}
-            <button
-              onClick={toggleCollapsed}
-              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              data-testid="sidebar-toggle"
-              className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50 transition-colors ${collapsed ? "mx-auto" : "mr-3 ml-auto"}`}
-            >
-              {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-            </button>
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={toggleCollapsed}
+                  aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                  data-testid="sidebar-toggle"
+                  className={`flex items-center gap-3 h-full transition-colors hover:opacity-80 ${collapsed ? "justify-center w-full" : "pl-4 flex-1 min-w-0"}`}
+                >
+                  <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-600/20 shrink-0">
+                    <Radar className="w-5 h-5 text-indigo-400" />
+                  </div>
+                  {!collapsed && (
+                    <span className="font-semibold text-foreground tracking-tight whitespace-nowrap overflow-hidden">
+                      Career Scout
+                    </span>
+                  )}
+                </button>
+              </TooltipTrigger>
+              {collapsed && (
+                <TooltipContent side="right">Expand sidebar</TooltipContent>
+              )}
+            </Tooltip>
           </div>
 
           {/* Account info */}
