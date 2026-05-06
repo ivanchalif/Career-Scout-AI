@@ -7,7 +7,7 @@ const GMAIL_SCOPES = [
 ];
 
 export const DEFAULT_SUBJECT_KEYWORDS = [
-  "job", "jobs", "opportunity", "role", "position", "hiring", "offer",
+  "job", "jobs", "opportunity", "role", "position", "hiring",
   "recruiter", "job alert", "job opportunity", "open position",
   "just posted", "great match", "job matches", "job recommendations",
   "recommended jobs", "jobs you might like", "new jobs", "you may be a fit",

@@ -9,6 +9,39 @@ import { logger } from "./logger";
 const CHECK_INTERVAL_MS = 5 * 60 * 1000; // check every 5 minutes
 const DEFAULT_SYNC_HOURS = 1; // used when user has Gmail connected but no schedule set
 
+// Sender domains that never send job postings — used to short-circuit processing
+// before spending any LLM tokens. Add more as they appear.
+const BLOCKED_SENDER_DOMAINS = new Set([
+  "ebay.com", "ebay.co.uk", "ebay.de", "ebay.fr", "ebay.it", "ebay.es",
+  "amazon.com", "amazon.co.uk", "amazon.de", "amazon.fr",
+  "paypal.com",
+  "etsy.com",
+  "craigslist.org",
+  "facebook.com", "meta.com",
+  "instagram.com",
+  "twitter.com", "x.com",
+  "tiktok.com",
+  "netflix.com",
+  "spotify.com",
+  "apple.com",
+  "google.com", "googleadservices.com",
+  "noreply.github.com",
+  "notifications.google.com",
+  "donotreply.com",
+]);
+
+function isBlockedSender(senderEmail: string): boolean {
+  const domainMatch = senderEmail.match(/@([\w.-]+)/);
+  if (!domainMatch) return false;
+  const domain = domainMatch[1].toLowerCase();
+  // Check exact domain and parent domain (e.g. "marketing.ebay.com" → "ebay.com")
+  const parts = domain.split(".");
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (BLOCKED_SENDER_DOMAINS.has(parts.slice(i).join("."))) return true;
+  }
+  return false;
+}
+
 
 function extractSender(from: string): string {
   const match = from.match(/^(?:"?([^"<]+)"?\s*)?<?.+>?$/);
@@ -75,6 +108,13 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
 
   for (const email of newEmails) {
     if (!email.body.trim()) continue;
+
+    if (isBlockedSender(email.sender)) {
+      logger.info({ messageId: email.messageId, sender: email.sender }, "gmailScheduler: skipping email from blocked sender domain");
+      // Mark seen so we don't re-process it on every cycle
+      await db.insert(gmailSeenKeysTable).values({ userId: conn.userId, gmailKey: `${email.messageId}:blocked` }).onConflictDoNothing();
+      continue;
+    }
 
     if (isApplicationResponseEmail(email.subject, email.body)) {
       logger.info({ messageId: email.messageId, subject: email.subject }, "gmailScheduler: skipping application response email");

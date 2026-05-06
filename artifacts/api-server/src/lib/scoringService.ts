@@ -104,10 +104,10 @@ Rules:
       logger.warn({ issues: result.error.issues }, "scoringService: extractJobListings schema validation failed");
     }
   } catch (err) {
-    logger.warn({ err }, "scoringService: extractJobListings failed, falling back to single listing");
+    logger.warn({ err }, "scoringService: extractJobListings failed, returning empty — will not create a posting from unparseable email");
   }
 
-  return [{ title: subject.slice(0, 200), company: sender, description: emailBody }];
+  return [];
 }
 
 const fitScoreResultSchema = z.object({
