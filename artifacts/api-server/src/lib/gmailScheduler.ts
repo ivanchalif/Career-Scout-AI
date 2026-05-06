@@ -4,6 +4,7 @@ import { fetchJobEmails, markEmailAsRead, DEFAULT_EMAIL_FILTER_CRITERIA } from "
 import { extractJobListings } from "./scoringService";
 import { scorePostingBackground, sweepUnscoredPostings } from "./scoringService";
 import { isFuzzyDuplicate } from "./dedup";
+import { fetchJobPageContent } from "./pageScraper";
 import { logger } from "./logger";
 
 const CHECK_INTERVAL_MS = 5 * 60 * 1000; // check every 5 minutes
@@ -129,12 +130,35 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
       const listing = listings[i];
       if (!listing.description.trim()) continue;
 
+      // Enrich description by fetching the actual job posting page when a URL
+      // is available. Fall back to the email excerpt if the fetch fails.
+      let description = listing.description;
+      let descriptionSource: "page" | "email" = "email";
+
+      if (listing.url) {
+        const pageContent = await fetchJobPageContent(listing.url);
+        if (pageContent) {
+          description = pageContent;
+          descriptionSource = "page";
+          logger.info(
+            { url: listing.url, chars: pageContent.length },
+            "gmailScheduler: enriched description from job page",
+          );
+        } else {
+          logger.info(
+            { url: listing.url },
+            "gmailScheduler: page fetch failed, using email excerpt",
+          );
+        }
+      }
+
+      // Apply blocked keyword filter against whichever description we ended up with
       if (blockedKeywords.length > 0) {
-        const descLower = listing.description.toLowerCase();
+        const descLower = description.toLowerCase();
         const hit = blockedKeywords.find((kw) => descLower.includes(kw.toLowerCase()));
         if (hit) {
           logger.info(
-            { messageId: email.messageId, title: listing.title, blockedKeyword: hit },
+            { messageId: email.messageId, title: listing.title, blockedKeyword: hit, descriptionSource },
             "gmailScheduler: skipping individual listing — description contains blocked keyword",
           );
           continue;
@@ -169,7 +193,7 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
           userId: conn.userId,
           title,
           company,
-          fullDescription: listing.description.slice(0, 10_000),
+          fullDescription: description.slice(0, 10_000),
           link: listing.url ?? null,
           source: "gmail",
           gmailMessageId: gmailKey,
