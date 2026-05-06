@@ -7,6 +7,13 @@ import { extractJobListings, scorePostingBackground, sweepUnscoredPostings } fro
 import { isFuzzyDuplicate } from "../lib/dedup";
 import { logger } from "../lib/logger";
 
+/** Extracts the display name from a raw "From" header value. */
+function parseSenderName(sender: string): string {
+  const match = sender.match(/^"?([^"<]+?)"?\s*<[^>]+>$/);
+  if (match) return match[1].trim();
+  return sender.trim();
+}
+
 const router: IRouter = Router();
 
 router.get("/imap/status", requireAuth, async (req, res): Promise<void> => {
@@ -145,6 +152,7 @@ router.post("/imap/sync", requireAuth, async (req, res): Promise<void> => {
             fullDescription: listing.description.slice(0, 10_000),
             link: listing.url ?? null,
             source: "imap",
+            senderName: parseSenderName(email.sender),
             gmailMessageId: seenKey,
             extractedSkills: [],
           })

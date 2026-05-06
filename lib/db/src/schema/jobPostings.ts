@@ -18,6 +18,7 @@ export const jobPostingsTable = pgTable("job_postings", {
   salaryMin: integer("salary_min"),
   salaryMax: integer("salary_max"),
   source: text("source").notNull().default("manual"),
+  senderName: text("sender_name"),
   gmailMessageId: text("gmail_message_id"),
   appliedAt: timestamp("applied_at", { withTimezone: true }),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),

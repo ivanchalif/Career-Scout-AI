@@ -7,6 +7,13 @@ import { isFuzzyDuplicate } from "./dedup";
 import { fetchJobPageContent } from "./pageScraper";
 import { logger } from "./logger";
 
+/** Extracts the display name from a raw "From" header value. */
+function parseSenderName(sender: string): string {
+  const match = sender.match(/^"?([^"<]+?)"?\s*<[^>]+>$/);
+  if (match) return match[1].trim();
+  return sender.trim();
+}
+
 const CHECK_INTERVAL_MS = 5 * 60 * 1000; // check every 5 minutes
 const DEFAULT_SYNC_HOURS = 1; // used when user has Gmail connected but no schedule set
 
@@ -196,6 +203,7 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
           fullDescription: description.slice(0, 10_000),
           link: listing.url ?? null,
           source: "gmail",
+          senderName: parseSenderName(email.sender),
           gmailMessageId: gmailKey,
           extractedSkills: [],
         })

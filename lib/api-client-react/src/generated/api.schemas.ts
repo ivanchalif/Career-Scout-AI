@@ -68,6 +68,8 @@ export interface JobPosting {
   remoteType?: string | null;
   source: string;
   /** @nullable */
+  senderName?: string | null;
+  /** @nullable */
   gmailMessageId?: string | null;
   /** @nullable */
   appliedAt?: string | null;

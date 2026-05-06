@@ -782,7 +782,7 @@ export default function DashboardPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-foreground line-through">{posting.title}</span>
-                        <Badge variant="secondary" className="text-xs">{posting.source}</Badge>
+                        <Badge variant="secondary" className="text-xs">{posting.senderName ?? posting.source}</Badge>
                       </div>
                       <p className="text-sm text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2">
                         <span>{posting.company}</span>
@@ -878,7 +878,7 @@ export default function DashboardPage() {
                         {posting.title}
                       </span>
                       <Badge variant="secondary" className="text-xs">
-                        {posting.source}
+                        {posting.senderName ?? posting.source}
                       </Badge>
                       {posting.appliedAt && (
                         <span className="flex items-center gap-1 text-xs text-emerald-400">
@@ -1088,7 +1088,7 @@ export default function DashboardPage() {
                               : `up to $${(posting.salaryMax! / 1000).toFixed(0)}k`}
                           </span>
                         )}
-                        <Badge variant="secondary" className="text-xs">{posting.source}</Badge>
+                        <Badge variant="secondary" className="text-xs">{posting.senderName ?? posting.source}</Badge>
                         <span className="text-xs text-muted-foreground/60">
                           Added {formatAdded(posting.createdAt)}
                         </span>

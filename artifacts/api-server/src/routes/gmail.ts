@@ -16,6 +16,13 @@ import { scorePostingBackground, sweepUnscoredPostings, extractJobListings } fro
 import { isFuzzyDuplicate } from "../lib/dedup";
 import { logger } from "../lib/logger";
 
+/** Extracts the display name from a raw "From" header value. */
+function parseSenderName(sender: string): string {
+  const match = sender.match(/^"?([^"<]+?)"?\s*<[^>]+>$/);
+  if (match) return match[1].trim();
+  return sender.trim();
+}
+
 /**
  * Fetches a job posting URL and returns the extracted plain-text content.
  * Returns empty string on any failure (network error, non-200, timeout, etc.).
@@ -257,6 +264,7 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
           fullDescription: fullDescription.slice(0, 10_000),
           link: jobUrl ?? null,
           source: "gmail",
+          senderName: parseSenderName(email.sender),
           gmailMessageId: gmailKey,
           extractedSkills: [],
         })
