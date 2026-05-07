@@ -140,34 +140,14 @@ router.post("/postings", requireAuth, async (req, res): Promise<void> => {
 router.get("/postings/deleted", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId;
 
-  const [userProfile] = await db
-    .select({ companyFilterSettings: userProfilesTable.companyFilterSettings })
-    .from(userProfilesTable)
-    .where(eq(userProfilesTable.userId, userId));
-
-  const companyFilter = userProfile?.companyFilterSettings ?? { mode: "off" as const, companies: [] };
-
   const postings = await db
     .select()
     .from(jobPostingsTable)
     .where(and(eq(jobPostingsTable.userId, userId), isNotNull(jobPostingsTable.deletedAt)))
     .orderBy(jobPostingsTable.deletedAt);
 
-  const filtered = postings.filter((p) => {
-    if (companyFilter.mode !== "off" && companyFilter.companies.length > 0) {
-      const company = p.company.toLowerCase();
-      const matches = companyFilter.companies.some((c: string) => {
-        const entry = c.toLowerCase();
-        return company.includes(entry) || entry.includes(company);
-      });
-      if (companyFilter.mode === "include" && !matches) return false;
-      if (companyFilter.mode === "exclude" && matches) return false;
-    }
-    return true;
-  });
-
   const results = await Promise.all(
-    filtered.map(async (posting) => {
+    postings.map(async (posting) => {
       const [report] = await db
         .select()
         .from(matchReportsTable)

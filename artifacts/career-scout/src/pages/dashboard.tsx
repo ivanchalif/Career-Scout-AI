@@ -281,6 +281,30 @@ export default function DashboardPage() {
     }
   }, [rawPostings, sortKey]);
 
+  const deletedPostings = useMemo(() => {
+    let items = [...(deletedQ.data ?? [])];
+    if (search) {
+      const q = search.toLowerCase();
+      items = items.filter((p) =>
+        p.posting.title.toLowerCase().includes(q) || p.posting.company.toLowerCase().includes(q)
+      );
+    }
+    if (minFitScore != null) {
+      items = items.filter((p) => (p.report?.fitScore ?? 0) >= minFitScore);
+    }
+    switch (sortKey) {
+      case "date-desc": return items.sort((a, b) => new Date(b.posting.createdAt).getTime() - new Date(a.posting.createdAt).getTime());
+      case "date-asc":  return items.sort((a, b) => new Date(a.posting.createdAt).getTime() - new Date(b.posting.createdAt).getTime());
+      case "score-desc": return items.sort((a, b) => (b.report?.fitScore ?? -1) - (a.report?.fitScore ?? -1));
+      case "score-asc":  return items.sort((a, b) => (a.report?.fitScore ?? 101) - (b.report?.fitScore ?? 101));
+      case "title-asc":   return items.sort((a, b) => a.posting.title.localeCompare(b.posting.title));
+      case "title-desc":  return items.sort((a, b) => b.posting.title.localeCompare(a.posting.title));
+      case "company-asc": return items.sort((a, b) => a.posting.company.localeCompare(b.posting.company));
+      case "company-desc":return items.sort((a, b) => b.posting.company.localeCompare(a.posting.company));
+      default: return items;
+    }
+  }, [deletedQ.data, search, minFitScore, sortKey]);
+
   async function handleConnectGmail() {
     try {
       const token = await getToken();
@@ -679,10 +703,9 @@ export default function DashboardPage() {
           </button>
         </div>
 
-        {/* Search + filters — hidden on Deleted tab */}
-        {activeTab !== "deleted" && (
-          <>
-            <div className="flex justify-end mb-4">
+        {/* Search + filters */}
+        <>
+          <div className="flex justify-end mb-4">
               <Button
                 variant="outline"
                 size="sm"
@@ -755,8 +778,7 @@ export default function DashboardPage() {
                 )}
               </div>
             )}
-          </>
-        )}
+        </>
 
         {/* Deleted tab info bar */}
         {activeTab === "deleted" && (
@@ -771,17 +793,21 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-3">
               {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
             </div>
-          ) : !deletedQ.data || deletedQ.data.length === 0 ? (
+          ) : deletedPostings.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <Trash2 className="w-10 h-10 text-muted-foreground mb-4" />
-              <p className="text-foreground font-medium">No deleted jobs</p>
+              <p className="text-foreground font-medium">
+                {deletedQ.data && deletedQ.data.length > 0 ? "No matching deleted jobs" : "No deleted jobs"}
+              </p>
               <p className="text-sm text-muted-foreground mt-1">
-                Jobs you delete will appear here so you can restore them.
+                {deletedQ.data && deletedQ.data.length > 0
+                  ? "Try adjusting your search or filters."
+                  : "Jobs you delete will appear here so you can restore them."}
               </p>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
-              {deletedQ.data.map((item) => {
+              {deletedPostings.map((item) => {
                 const { posting, report } = item;
                 const score = report?.fitScore ?? null;
                 return (
