@@ -94,6 +94,14 @@ All routes are protected by Clerk auth (`requireAuth` middleware reads session c
 - **Output**: fitScore (0–100, conservative), reasoning (2–3 sentences), matchedSkills[], missingSkills[], compensationGap
 - **Service**: `artifacts/api-server/src/lib/scoringService.ts`
 
+## User Preferences
+
+- always design UI/UX with a responsive display
+- code should be as modular as possible so that it can be deployed in a variety of environments (cpanel, VPS, etc)
+- if you are unsure about something, ask me before doing it
+- always have option for day/night mode
+- always have a configuration setting so that specific elements (model provider, model, etc) can be modified
+
 ## Notes
 
 - `CLERK_PUBLISHABLE_KEY` is injected into the Vite build via `vite.config.ts` `define` block (not .env)
