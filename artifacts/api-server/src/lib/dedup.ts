@@ -1,4 +1,4 @@
-import { sql, and, eq, isNull, inArray } from "drizzle-orm";
+import { sql, and, eq, inArray } from "drizzle-orm";
 import { db, jobPostingsTable } from "@workspace/db";
 
 export function normalizeFuzzy(text: string): string {
