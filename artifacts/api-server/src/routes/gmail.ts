@@ -14,6 +14,7 @@ import {
 } from "../lib/gmailClient";
 import { scorePostingBackground, sweepUnscoredPostings, extractJobListings } from "../lib/scoringService";
 import { isFuzzyDuplicate } from "../lib/dedup";
+import { fetchJobPageContent } from "../lib/pageScraper";
 import { logger } from "../lib/logger";
 
 /** Extracts the display name from a raw "From" header value. */
@@ -22,49 +23,6 @@ function parseSenderName(sender: string): string {
   if (match) return match[1].trim();
   return sender.trim();
 }
-
-/**
- * Fetches a job posting URL and returns the extracted plain-text content.
- * Returns empty string on any failure (network error, non-200, timeout, etc.).
- */
-async function fetchJobPage(url: string): Promise<string> {
-  try {
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(8_000),
-      headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; CareerScout/1.0; +https://career-scout.app)",
-        "Accept": "text/html,application/xhtml+xml,*/*",
-        "Accept-Language": "en-US,en;q=0.9",
-      },
-    });
-    if (!response.ok) return "";
-
-    const contentType = response.headers.get("content-type") ?? "";
-    if (!contentType.includes("text/html") && !contentType.includes("text/plain")) return "";
-
-    const html = await response.text();
-    const text = html
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
-      .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, "")
-      .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, "")
-      .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, "")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/&nbsp;/gi, " ")
-      .replace(/&amp;/gi, "&")
-      .replace(/&lt;/gi, "<")
-      .replace(/&gt;/gi, ">")
-      .replace(/&quot;/gi, '"')
-      .replace(/&#39;/gi, "'")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    return text.slice(0, 12_000);
-  } catch {
-    return "";
-  }
-}
-
 
 const router: IRouter = Router();
 
@@ -242,16 +200,20 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
         continue;
       }
 
-      // If the email only has a short snippet, try to fetch the full job page
+      // If the email only has a short snippet, try to fetch the full job page.
+      // Also capture the final URL after redirects to resolve tracking links
+      // (e.g. Jobgether click-through URLs) into the real job page URL.
       let fullDescription = listing.description;
       const jobUrl = listing.url;
+      let resolvedUrl = jobUrl;
 
       if (jobUrl && fullDescription.trim().length < 800) {
         logger.info({ title, company, jobUrl }, "gmail sync: description short, fetching job page");
-        const pageContent = await fetchJobPage(jobUrl);
-        if (pageContent.length > fullDescription.length) {
-          logger.info({ title, company, chars: pageContent.length }, "gmail sync: using fetched page content");
-          fullDescription = pageContent;
+        const pageResult = await fetchJobPageContent(jobUrl);
+        if (pageResult && pageResult.content.length > fullDescription.length) {
+          logger.info({ title, company, finalUrl: pageResult.finalUrl, chars: pageResult.content.length }, "gmail sync: using fetched page content");
+          fullDescription = pageResult.content;
+          resolvedUrl = pageResult.finalUrl;
         }
       }
 
@@ -262,7 +224,7 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
           title,
           company,
           fullDescription: fullDescription.slice(0, 10_000),
-          link: jobUrl ?? null,
+          link: resolvedUrl ?? null,
           source: "gmail",
           senderName: parseSenderName(email.sender),
           gmailMessageId: gmailKey,

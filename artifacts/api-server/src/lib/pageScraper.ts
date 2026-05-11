@@ -4,12 +4,21 @@ const PAGE_FETCH_TIMEOUT_MS = 10_000;
 const MAX_PAGE_CONTENT_CHARS = 10_000;
 const MIN_USEFUL_CHARS = 150;
 
+export interface PageResult {
+  content: string;
+  finalUrl: string;
+}
+
 /**
  * Fetches a job posting URL and extracts plain text from the page.
  * Returns null if the fetch fails, times out, or the page produces too little
  * readable content (e.g. JavaScript-only SPA with no SSR).
+ *
+ * `finalUrl` is the URL after following all redirects — useful when the input
+ * is a click-tracking URL (e.g. Jobgether, LinkedIn) so callers can store the
+ * clean destination URL instead of the opaque tracking link.
  */
-export async function fetchJobPageContent(url: string): Promise<string | null> {
+export async function fetchJobPageContent(url: string): Promise<PageResult | null> {
   let controller: AbortController | undefined;
   let tid: ReturnType<typeof setTimeout> | undefined;
 
@@ -58,8 +67,9 @@ export async function fetchJobPageContent(url: string): Promise<string | null> {
       return null;
     }
 
-    logger.info({ url, chars: text.length }, "pageScraper: page fetched successfully");
-    return text.slice(0, MAX_PAGE_CONTENT_CHARS);
+    const finalUrl = res.url && res.url !== url ? res.url : url;
+    logger.info({ url, finalUrl, chars: text.length }, "pageScraper: page fetched successfully");
+    return { content: text.slice(0, MAX_PAGE_CONTENT_CHARS), finalUrl };
   } catch (err) {
     clearTimeout(tid);
     const msg = (err as Error)?.message ?? String(err);

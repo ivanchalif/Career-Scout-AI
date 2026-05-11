@@ -139,16 +139,20 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
 
       // Enrich description by fetching the actual job posting page when a URL
       // is available. Fall back to the email excerpt if the fetch fails.
+      // Also capture the final URL after redirects (resolves tracking links
+      // like Jobgether's click-through URLs to the actual job page).
       let description = listing.description;
       let descriptionSource: "page" | "email" = "email";
+      let resolvedUrl = listing.url;
 
       if (listing.url) {
-        const pageContent = await fetchJobPageContent(listing.url);
-        if (pageContent) {
-          description = pageContent;
+        const pageResult = await fetchJobPageContent(listing.url);
+        if (pageResult) {
+          description = pageResult.content;
+          resolvedUrl = pageResult.finalUrl;
           descriptionSource = "page";
           logger.info(
-            { url: listing.url, chars: pageContent.length },
+            { url: listing.url, finalUrl: pageResult.finalUrl, chars: pageResult.content.length },
             "gmailScheduler: enriched description from job page",
           );
         } else {
@@ -201,7 +205,7 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
           title,
           company,
           fullDescription: description.slice(0, 10_000),
-          link: listing.url ?? null,
+          link: resolvedUrl ?? null,
           source: "gmail",
           senderName: parseSenderName(email.sender),
           gmailMessageId: gmailKey,
