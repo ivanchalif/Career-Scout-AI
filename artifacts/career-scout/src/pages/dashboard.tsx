@@ -362,6 +362,20 @@ export default function DashboardPage() {
               ? `Imported ${data.synced} new job${data.synced === 1 ? "" : "s"} from Gmail.`
               : "No new job emails found.",
           });
+          getToken().then((token) => {
+            fetch("/api/postings/dedup-sweep", {
+              method: "POST",
+              headers: token ? { Authorization: `Bearer ${token}` } : {},
+            })
+              .then((res) => {
+                if (res.ok) {
+                  qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
+                  qc.invalidateQueries({ queryKey: getListDeletedPostingsQueryKey() });
+                  qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+                }
+              })
+              .catch(() => {});
+          }).catch(() => {});
         },
         onError: () => toast({ title: "Sync failed", description: "Could not sync Gmail.", variant: "destructive" }),
       }
