@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useAuth } from "@clerk/react";
 import { Link } from "wouter";
 import {
@@ -148,6 +148,8 @@ function formatAdded(date: Date | string): string {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
 }
 
+let _dedupSweepInFlight = false;
+
 export default function DashboardPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -181,6 +183,33 @@ export default function DashboardPage() {
   const [backfillingLinks, setBackfillingLinks] = useState(false);
   const [sweepingDuplicates, setSweepingDuplicates] = useState(false);
   const [activeTab, setActiveTab] = useState<"active" | "applied" | "deleted">("active");
+
+  useEffect(() => {
+    const SESSION_KEY = "dedup-sweep-done";
+    if (sessionStorage.getItem(SESSION_KEY)) return;
+    if (_dedupSweepInFlight) return;
+    _dedupSweepInFlight = true;
+    getToken().then((token) => {
+      return fetch("/api/postings/dedup-sweep", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+    }).then((res) => {
+      if (res.ok) {
+        sessionStorage.setItem(SESSION_KEY, "1");
+        qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
+        qc.invalidateQueries({ queryKey: getListDeletedPostingsQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+      } else {
+        _dedupSweepInFlight = false;
+        console.warn("[dedup-sweep] sweep request failed with status", res.status);
+      }
+    }).catch((err) => {
+      _dedupSweepInFlight = false;
+      console.warn("[dedup-sweep] sweep request error", err);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const companyFilterQ = useGetCompanyFilterSettings();
   const updateCompanyFilterMutation = useUpdateCompanyFilterSettings();
