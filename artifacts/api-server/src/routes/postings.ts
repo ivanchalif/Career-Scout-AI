@@ -15,7 +15,7 @@ import {
 import { requireAuth } from "../middlewares/requireAuth";
 import { scorePosting, scorePostingBackground, extractJobListings } from "../lib/scoringService";
 import { fetchSingleEmail } from "../lib/gmailClient";
-import { isFuzzyDuplicate } from "../lib/dedup";
+import { isFuzzyDuplicate, sweepDuplicatesOf } from "../lib/dedup";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -218,6 +218,12 @@ router.delete("/postings/:id", requireAuth, async (req, res): Promise<void> => {
   }
 
   res.sendStatus(204);
+
+  sweepDuplicatesOf(userId, posting.title, posting.company, posting.id).then((removed) => {
+    if (removed > 0) logger.info({ userId, postingId: posting.id, removed }, "auto-dedup: removed duplicates after delete");
+  }).catch((err) => {
+    logger.warn({ userId, postingId: posting.id, err }, "auto-dedup: sweep failed after delete");
+  });
 });
 
 router.patch("/postings/:id/applied", requireAuth, async (req, res): Promise<void> => {
@@ -247,6 +253,14 @@ router.patch("/postings/:id/applied", requireAuth, async (req, res): Promise<voi
     .returning();
 
   res.json({ id: updated.id, appliedAt: updated.appliedAt });
+
+  if (newAppliedAt !== null) {
+    sweepDuplicatesOf(userId, updated.title, updated.company, updated.id).then((removed) => {
+      if (removed > 0) logger.info({ userId, postingId: updated.id, removed }, "auto-dedup: removed duplicates after apply");
+    }).catch((err) => {
+      logger.warn({ userId, postingId: updated.id, err }, "auto-dedup: sweep failed after apply");
+    });
+  }
 });
 
 router.post("/postings/rescore-all", requireAuth, async (req, res): Promise<void> => {

@@ -1,5 +1,5 @@
-import { sql } from "drizzle-orm";
-import { db } from "@workspace/db";
+import { sql, and, eq, isNull, inArray } from "drizzle-orm";
+import { db, jobPostingsTable } from "@workspace/db";
 
 export function normalizeFuzzy(text: string): string {
   return text
@@ -126,4 +126,57 @@ export async function isFuzzyDuplicate(
     };
   }
   return { isDuplicate: false };
+}
+
+/**
+ * Finds all active (non-deleted, non-applied) postings for `userId` that
+ * fuzzy-match `title` + `company`, excludes the posting that was just actioned
+ * (`excludeId`), and soft-deletes them in bulk.
+ *
+ * Intended to be called in the background after a posting is deleted or marked
+ * applied so that near-duplicate active cards disappear automatically.
+ *
+ * Returns the count of postings removed.
+ */
+export async function sweepDuplicatesOf(
+  userId: string,
+  title: string,
+  company: string,
+  excludeId: number,
+): Promise<number> {
+  const normTitle = normalizeFuzzy(title);
+  const normCompany = normalizeFuzzy(company);
+
+  if (!normTitle || !normCompany) return 0;
+
+  const titleNorm = dbNormalize("title");
+  const companyNorm = dbNormalize("company");
+
+  const rows = await db.execute(sql`
+    SELECT id
+    FROM job_postings
+    WHERE user_id = ${userId}
+      AND id != ${excludeId}
+      AND deleted_at IS NULL
+      AND applied_at IS NULL
+      AND similarity(
+        ${sql.raw(titleNorm)},
+        ${normTitle}
+      ) > 0.70
+      AND similarity(
+        ${sql.raw(companyNorm)},
+        ${normCompany}
+      ) > 0.60
+  `);
+
+  if (rows.rows.length === 0) return 0;
+
+  const ids = (rows.rows as { id: number }[]).map((r) => r.id);
+
+  await db
+    .update(jobPostingsTable)
+    .set({ deletedAt: new Date(), fullDescription: "" })
+    .where(and(eq(jobPostingsTable.userId, userId), inArray(jobPostingsTable.id, ids)));
+
+  return ids.length;
 }
