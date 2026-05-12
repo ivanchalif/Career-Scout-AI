@@ -3,7 +3,7 @@ import { db, gmailConnectionsTable, jobPostingsTable, userProfilesTable, gmailSe
 import { fetchJobEmails, markEmailAsRead, DEFAULT_EMAIL_FILTER_CRITERIA } from "./gmailClient";
 import { extractJobListings } from "./scoringService";
 import { scorePostingBackground, sweepUnscoredPostings } from "./scoringService";
-import { isFuzzyDuplicate } from "./dedup";
+import { isFuzzyDuplicate, runDedupSweep } from "./dedup";
 import { fetchJobPageContent } from "./pageScraper";
 import { logger } from "./logger";
 
@@ -233,6 +233,14 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
 
   sweepUnscoredPostings(conn.userId).catch((err) => {
     logger.warn({ userId: conn.userId, err }, "Gmail scheduler: sweep unscored postings failed");
+  });
+
+  runDedupSweep(conn.userId).then((removed) => {
+    if (removed > 0) {
+      logger.info({ userId: conn.userId, removed }, "Gmail scheduler: dedup sweep removed duplicate postings");
+    }
+  }).catch((err) => {
+    logger.warn({ userId: conn.userId, err }, "Gmail scheduler: dedup sweep failed");
   });
 
   return synced;

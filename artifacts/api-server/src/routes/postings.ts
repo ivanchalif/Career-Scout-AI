@@ -15,7 +15,7 @@ import {
 import { requireAuth } from "../middlewares/requireAuth";
 import { scorePosting, scorePostingBackground, extractJobListings } from "../lib/scoringService";
 import { fetchSingleEmail } from "../lib/gmailClient";
-import { isFuzzyDuplicate, sweepDuplicatesOf } from "../lib/dedup";
+import { isFuzzyDuplicate, sweepDuplicatesOf, runDedupSweep } from "../lib/dedup";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -272,40 +272,11 @@ router.post("/postings/rescore-all", requireAuth, async (req, res): Promise<void
 
 router.post("/postings/dedup-sweep", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId;
-
-  const activePostings = await db
-    .select({ id: jobPostingsTable.id, title: jobPostingsTable.title, company: jobPostingsTable.company })
-    .from(jobPostingsTable)
-    .where(and(
-      eq(jobPostingsTable.userId, userId),
-      isNull(jobPostingsTable.deletedAt),
-      isNull(jobPostingsTable.appliedAt),
-    ));
-
-  const toDelete: number[] = [];
-
-  for (const posting of activePostings) {
-    const { isDuplicate, wasDeleted, wasApplied } = await isFuzzyDuplicate(
-      userId, posting.title, posting.company,
-      { excludeId: posting.id, deletedOrAppliedOnly: true },
-    );
-    if (isDuplicate && (wasDeleted || wasApplied)) {
-      toDelete.push(posting.id);
-      logger.info(
-        { userId, postingId: posting.id, title: posting.title, company: posting.company, wasDeleted, wasApplied },
-        "dedup-sweep: soft-deleting active posting that matches a deleted/applied job",
-      );
-    }
+  const removed = await runDedupSweep(userId);
+  if (removed > 0) {
+    logger.info({ userId, removed }, "dedup-sweep: removed duplicate postings");
   }
-
-  if (toDelete.length > 0) {
-    await db
-      .update(jobPostingsTable)
-      .set({ deletedAt: new Date(), fullDescription: "" })
-      .where(and(eq(jobPostingsTable.userId, userId), inArray(jobPostingsTable.id, toDelete)));
-  }
-
-  res.json({ removed: toDelete.length });
+  res.json({ removed });
 });
 
 router.post("/postings/backfill-links", requireAuth, async (req, res): Promise<void> => {

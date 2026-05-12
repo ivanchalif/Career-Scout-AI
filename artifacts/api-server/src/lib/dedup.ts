@@ -1,4 +1,4 @@
-import { sql, and, eq, inArray } from "drizzle-orm";
+import { sql, and, eq, inArray, isNull } from "drizzle-orm";
 import { db, jobPostingsTable } from "@workspace/db";
 
 export function normalizeFuzzy(text: string): string {
@@ -126,6 +126,48 @@ export async function isFuzzyDuplicate(
     };
   }
   return { isDuplicate: false };
+}
+
+/**
+ * Sweeps all active postings for `userId` and soft-deletes any that fuzzy-match
+ * a posting the user has already deleted or applied to.
+ *
+ * This is the shared implementation used by both the manual "dedup-sweep" HTTP
+ * endpoint and the background Gmail scheduler so that duplicates introduced by
+ * scheduled syncs are also cleaned up automatically.
+ *
+ * Returns the count of postings removed.
+ */
+export async function runDedupSweep(userId: string): Promise<number> {
+  const activePostings = await db
+    .select({ id: jobPostingsTable.id, title: jobPostingsTable.title, company: jobPostingsTable.company })
+    .from(jobPostingsTable)
+    .where(and(
+      eq(jobPostingsTable.userId, userId),
+      isNull(jobPostingsTable.deletedAt),
+      isNull(jobPostingsTable.appliedAt),
+    ));
+
+  const toDelete: number[] = [];
+
+  for (const posting of activePostings) {
+    const { isDuplicate, wasDeleted, wasApplied } = await isFuzzyDuplicate(
+      userId, posting.title, posting.company,
+      { excludeId: posting.id, deletedOrAppliedOnly: true },
+    );
+    if (isDuplicate && (wasDeleted || wasApplied)) {
+      toDelete.push(posting.id);
+    }
+  }
+
+  if (toDelete.length > 0) {
+    await db
+      .update(jobPostingsTable)
+      .set({ deletedAt: new Date(), fullDescription: "" })
+      .where(and(eq(jobPostingsTable.userId, userId), inArray(jobPostingsTable.id, toDelete)));
+  }
+
+  return toDelete.length;
 }
 
 /**
