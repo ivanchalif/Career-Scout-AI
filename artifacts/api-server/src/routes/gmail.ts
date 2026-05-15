@@ -200,20 +200,26 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
         continue;
       }
 
-      // If the email only has a short snippet, try to fetch the full job page.
-      // Also capture the final URL after redirects to resolve tracking links
-      // (e.g. Jobgether click-through URLs) into the real job page URL.
+      // Always fetch the job page when a URL is available:
+      //  - Resolves tracking redirects (Lensa, Jobgether, etc.) → real job URL
+      //  - Enriches description when the email excerpt is short
       let fullDescription = listing.description;
       const jobUrl = listing.url;
       let resolvedUrl = jobUrl;
 
-      if (jobUrl && fullDescription.trim().length < 800) {
-        logger.info({ title, company, jobUrl }, "gmail sync: description short, fetching job page");
+      if (jobUrl) {
         const pageResult = await fetchJobPageContent(jobUrl);
-        if (pageResult && pageResult.content.length > fullDescription.length) {
-          logger.info({ title, company, finalUrl: pageResult.finalUrl, chars: pageResult.content.length }, "gmail sync: using fetched page content");
-          fullDescription = pageResult.content;
+        if (pageResult) {
+          // Always capture finalUrl — real job URL after following tracking redirects.
           resolvedUrl = pageResult.finalUrl;
+          if (pageResult.contentUsable && pageResult.content.length > fullDescription.length) {
+            logger.info({ title, company, finalUrl: pageResult.finalUrl, chars: pageResult.content.length }, "gmail sync: using fetched page content");
+            fullDescription = pageResult.content;
+          } else if (pageResult.contentUsable) {
+            logger.info({ title, company, finalUrl: pageResult.finalUrl }, "gmail sync: resolved URL, keeping email description");
+          } else {
+            logger.info({ title, company, jobUrl, finalUrl: pageResult.finalUrl }, "gmail sync: page content unusable, stored finalUrl, using email excerpt");
+          }
         }
       }
 

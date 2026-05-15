@@ -148,17 +148,25 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
       if (listing.url) {
         const pageResult = await fetchJobPageContent(listing.url);
         if (pageResult) {
-          description = pageResult.content;
+          // Always use finalUrl — captures the real job URL after following tracking redirects.
           resolvedUrl = pageResult.finalUrl;
-          descriptionSource = "page";
-          logger.info(
-            { url: listing.url, finalUrl: pageResult.finalUrl, chars: pageResult.content.length },
-            "gmailScheduler: enriched description from job page",
-          );
+          if (pageResult.contentUsable) {
+            description = pageResult.content;
+            descriptionSource = "page";
+            logger.info(
+              { url: listing.url, finalUrl: pageResult.finalUrl, chars: pageResult.content.length },
+              "gmailScheduler: enriched description from job page",
+            );
+          } else {
+            logger.info(
+              { url: listing.url, finalUrl: pageResult.finalUrl },
+              "gmailScheduler: page content unusable, stored finalUrl, using email excerpt",
+            );
+          }
         } else {
           logger.info(
             { url: listing.url },
-            "gmailScheduler: page fetch failed, using email excerpt",
+            "gmailScheduler: page fetch failed (network/timeout), using email excerpt",
           );
         }
       }

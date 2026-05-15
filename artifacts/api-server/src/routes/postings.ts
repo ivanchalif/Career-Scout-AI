@@ -17,6 +17,7 @@ import { scorePosting, scorePostingBackground, extractJobListings } from "../lib
 import { fetchSingleEmail } from "../lib/gmailClient";
 import { isFuzzyDuplicate, sweepDuplicatesOf, runDedupSweep, dbNormalizeSql } from "../lib/dedup";
 import { logger } from "../lib/logger";
+import { fetchJobPageContent } from "../lib/pageScraper";
 
 const router: IRouter = Router();
 
@@ -325,60 +326,121 @@ router.post("/postings/backfill-links", requireAuth, async (req, res): Promise<v
     return;
   }
 
-  const postings = await db
-    .select({ id: jobPostingsTable.id, gmailMessageId: jobPostingsTable.gmailMessageId, title: jobPostingsTable.title, company: jobPostingsTable.company })
+  // Known tracking-URL patterns that should be resolved to their final destination.
+  const TRACKING_PATTERNS = [
+    "%lensa.com%",
+    "%sg3email%",
+    "%ls/click%",
+    "%jobgether%",
+  ];
+
+  // Phase 1: postings with no link at all — re-extract URL from the email body.
+  const nullLinkPostings = await db
+    .select({ id: jobPostingsTable.id, gmailMessageId: jobPostingsTable.gmailMessageId, title: jobPostingsTable.title, company: jobPostingsTable.company, link: jobPostingsTable.link })
     .from(jobPostingsTable)
     .where(and(eq(jobPostingsTable.userId, userId), eq(jobPostingsTable.source, "gmail"), isNull(jobPostingsTable.link)));
 
-  if (postings.length === 0) {
+  // Phase 2: postings whose stored link is a known tracking URL — resolve via HTTP.
+  const trackingLinkPostings = await db
+    .select({ id: jobPostingsTable.id, gmailMessageId: jobPostingsTable.gmailMessageId, title: jobPostingsTable.title, company: jobPostingsTable.company, link: jobPostingsTable.link })
+    .from(jobPostingsTable)
+    .where(and(
+      eq(jobPostingsTable.userId, userId),
+      eq(jobPostingsTable.source, "gmail"),
+      isNotNull(jobPostingsTable.link),
+      or(...TRACKING_PATTERNS.map((p) => ilike(jobPostingsTable.link!, p))),
+    ));
+
+  if (nullLinkPostings.length === 0 && trackingLinkPostings.length === 0) {
     res.json({ updated: 0, skipped: 0 });
     return;
-  }
-
-  // Group by base Gmail message ID to avoid re-fetching the same email multiple times
-  const byBaseId = new Map<string, typeof postings>();
-  for (const p of postings) {
-    if (!p.gmailMessageId) continue;
-    const baseId = p.gmailMessageId.split(":")[0];
-    if (!byBaseId.has(baseId)) byBaseId.set(baseId, []);
-    byBaseId.get(baseId)!.push(p);
   }
 
   let updated = 0;
   let skipped = 0;
 
-  for (const [baseId, group] of byBaseId.entries()) {
-    try {
-      const email = await fetchSingleEmail(conn.accessToken, conn.refreshToken, baseId);
-      if (!email || !email.body.trim()) {
-        skipped += group.length;
-        continue;
-      }
+  // Phase 1 — re-extract URL from email body for null-link postings
+  if (nullLinkPostings.length > 0) {
+    const byBaseId = new Map<string, typeof nullLinkPostings>();
+    for (const p of nullLinkPostings) {
+      if (!p.gmailMessageId) continue;
+      const baseId = p.gmailMessageId.split(":")[0];
+      if (!byBaseId.has(baseId)) byBaseId.set(baseId, []);
+      byBaseId.get(baseId)!.push(p);
+    }
 
-      const listings = await extractJobListings(email.body, email.subject, email.sender);
-
-      for (const posting of group) {
-        const idx = Number(posting.gmailMessageId!.split(":")[1] ?? "0");
-        const listing = listings[idx];
-        const jobUrl = listing?.url;
-
-        if (!jobUrl) {
-          skipped++;
-          logger.debug({ postingId: posting.id, idx }, "backfill-links: no URL found for listing");
+    for (const [baseId, group] of byBaseId.entries()) {
+      try {
+        const email = await fetchSingleEmail(conn.accessToken, conn.refreshToken, baseId);
+        if (!email || !email.body.trim()) {
+          skipped += group.length;
           continue;
         }
 
+        const listings = await extractJobListings(email.body, email.subject, email.sender);
+
+        for (const posting of group) {
+          const idx = Number(posting.gmailMessageId!.split(":")[1] ?? "0");
+          const listing = listings[idx];
+          const jobUrl = listing?.url;
+
+          if (!jobUrl) {
+            skipped++;
+            logger.debug({ postingId: posting.id, idx }, "backfill-links: no URL found for listing");
+            continue;
+          }
+
+          // Try to resolve tracking URL to its final destination.
+          const pageResult = await fetchJobPageContent(jobUrl);
+          const resolvedUrl = pageResult ? pageResult.finalUrl : jobUrl;
+
+          await db
+            .update(jobPostingsTable)
+            .set({ link: resolvedUrl })
+            .where(and(eq(jobPostingsTable.id, posting.id), eq(jobPostingsTable.userId, userId)));
+
+          logger.info({ postingId: posting.id, jobUrl, resolvedUrl }, "backfill-links: updated link from email");
+          updated++;
+        }
+      } catch (err) {
+        logger.warn({ baseId, err }, "backfill-links: failed to process email");
+        skipped += group.length;
+      }
+    }
+  }
+
+  // Phase 2 — resolve tracking URLs to their final destination via HTTP redirect-follow
+  for (const posting of trackingLinkPostings) {
+    try {
+      const trackingUrl = posting.link!;
+      const pageResult = await fetchJobPageContent(trackingUrl);
+      if (!pageResult) {
+        logger.info({ postingId: posting.id, trackingUrl }, "backfill-links: could not resolve tracking URL (network error), skipping");
+        skipped++;
+        continue;
+      }
+
+      const resolvedUrl = pageResult.finalUrl;
+      if (resolvedUrl === trackingUrl) {
+        // URL didn't change — likely blocked or returned the same tracking URL.
+        // Clear the link so it's not shown as a broken tracking URL.
+        logger.info({ postingId: posting.id, trackingUrl }, "backfill-links: tracking URL unresolvable, clearing link");
         await db
           .update(jobPostingsTable)
-          .set({ link: jobUrl })
+          .set({ link: null })
           .where(and(eq(jobPostingsTable.id, posting.id), eq(jobPostingsTable.userId, userId)));
-
-        logger.info({ postingId: posting.id, jobUrl }, "backfill-links: updated link");
+        updated++;
+      } else {
+        logger.info({ postingId: posting.id, trackingUrl, resolvedUrl }, "backfill-links: resolved tracking URL");
+        await db
+          .update(jobPostingsTable)
+          .set({ link: resolvedUrl })
+          .where(and(eq(jobPostingsTable.id, posting.id), eq(jobPostingsTable.userId, userId)));
         updated++;
       }
     } catch (err) {
-      logger.warn({ baseId, err }, "backfill-links: failed to process email");
-      skipped += group.length;
+      logger.warn({ postingId: posting.id, err }, "backfill-links: failed to resolve tracking URL");
+      skipped++;
     }
   }
 

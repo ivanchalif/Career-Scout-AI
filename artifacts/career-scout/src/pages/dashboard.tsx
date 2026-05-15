@@ -1239,7 +1239,8 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <DialogTitle className="text-lg leading-snug">{posting.title}</DialogTitle>
-                      <DialogDescription className="flex flex-wrap items-center gap-2 mt-1">
+                      <DialogDescription asChild>
+                      <div className="flex flex-wrap items-center gap-2 mt-1 text-sm text-muted-foreground">
                         <span>{posting.company}</span>
                         {posting.location && (
                           <span className="flex items-center gap-0.5 text-xs text-muted-foreground/80">
@@ -1266,6 +1267,7 @@ export default function DashboardPage() {
                             View job posting
                           </a>
                         )}
+                      </div>
                       </DialogDescription>
                     </div>
                   </div>

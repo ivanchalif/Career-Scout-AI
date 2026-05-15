@@ -7,6 +7,8 @@ const MIN_USEFUL_CHARS = 150;
 export interface PageResult {
   content: string;
   finalUrl: string;
+  /** False when the page was an error/gate/short page — callers should not use content for description but should still use finalUrl for the link. */
+  contentUsable: boolean;
 }
 
 /**
@@ -39,15 +41,19 @@ export async function fetchJobPageContent(url: string): Promise<PageResult | nul
 
     clearTimeout(tid);
 
+    // Always capture the final URL after following redirects — even if page content
+    // is unusable, the redirected URL is the real job-posting URL we want to store.
+    const finalUrl = res.url && res.url !== url ? res.url : url;
+
     if (!res.ok) {
-      logger.debug({ url, status: res.status }, "pageScraper: non-OK response");
-      return null;
+      logger.debug({ url, finalUrl, status: res.status }, "pageScraper: non-OK response");
+      return { content: "", finalUrl, contentUsable: false };
     }
 
     const contentType = res.headers.get("content-type") ?? "";
     if (!contentType.includes("text/html")) {
-      logger.debug({ url, contentType }, "pageScraper: skipping non-HTML content");
-      return null;
+      logger.debug({ url, finalUrl, contentType }, "pageScraper: skipping non-HTML content");
+      return { content: "", finalUrl, contentUsable: false };
     }
 
     const html = await res.text();
@@ -55,21 +61,20 @@ export async function fetchJobPageContent(url: string): Promise<PageResult | nul
 
     if (text.length < MIN_USEFUL_CHARS) {
       logger.debug(
-        { url, chars: text.length },
+        { url, finalUrl, chars: text.length },
         "pageScraper: extracted text too short — likely JS-only page",
       );
-      return null;
+      return { content: "", finalUrl, contentUsable: false };
     }
 
     const errorReason = detectErrorPage(text);
     if (errorReason) {
-      logger.info({ url, reason: errorReason }, "pageScraper: error/redirect page detected, skipping");
-      return null;
+      logger.info({ url, finalUrl, reason: errorReason }, "pageScraper: error/redirect page detected — storing finalUrl, skipping content");
+      return { content: "", finalUrl, contentUsable: false };
     }
 
-    const finalUrl = res.url && res.url !== url ? res.url : url;
     logger.info({ url, finalUrl, chars: text.length }, "pageScraper: page fetched successfully");
-    return { content: text.slice(0, MAX_PAGE_CONTENT_CHARS), finalUrl };
+    return { content: text.slice(0, MAX_PAGE_CONTENT_CHARS), finalUrl, contentUsable: true };
   } catch (err) {
     clearTimeout(tid);
     const msg = (err as Error)?.message ?? String(err);
