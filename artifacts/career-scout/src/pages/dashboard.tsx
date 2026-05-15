@@ -215,10 +215,14 @@ export default function DashboardPage() {
 
   async function flagAsDuplicate(postingId: number) {
     const token = await getToken();
-    await fetch(`/api/postings/${postingId}/flag-duplicate`, {
+    const res = await fetch(`/api/postings/${postingId}/flag-duplicate`, {
       method: "POST",
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
+    if (!res.ok) {
+      toast({ title: "Couldn't remove posting", description: `Server returned ${res.status}. Try refreshing the page.`, variant: "destructive" });
+      return;
+    }
     setNearDupMap((prev) => {
       const next = new Map(prev);
       const paired = next.get(postingId);

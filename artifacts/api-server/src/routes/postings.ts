@@ -168,23 +168,27 @@ router.get("/postings/near-duplicates", requireAuth, async (req, res): Promise<v
   const aCompanyNorm = dbNormalizeSql("a.company");
   const bCompanyNorm = dbNormalizeSql("b.company");
 
-  const rows = await db.execute(sql`
+  // Use sql.raw with inlined userId (Clerk IDs are always alphanumeric+underscore — no injection risk).
+  // Avoids Drizzle template-literal issues when both sides of similarity() are raw SQL expressions.
+  const safeId = userId.replace(/[^a-zA-Z0-9_]/g, "");
+  const querySql = `
     SELECT a.id AS id1, b.id AS id2,
            a.title AS title1, b.title AS title2,
            a.company AS company1, b.company AS company2,
-           similarity(${sql.raw(aTitleNorm)}, ${sql.raw(bTitleNorm)}) AS title_sim
+           similarity(${aTitleNorm}, ${bTitleNorm}) AS title_sim
     FROM job_postings a
     JOIN job_postings b ON a.id < b.id
-    WHERE a.user_id = ${userId}
-      AND b.user_id = ${userId}
+    WHERE a.user_id = '${safeId}'
+      AND b.user_id = '${safeId}'
       AND a.deleted_at IS NULL AND b.deleted_at IS NULL
       AND a.applied_at IS NULL AND b.applied_at IS NULL
-      AND similarity(${sql.raw(aTitleNorm)}, ${sql.raw(bTitleNorm)}) BETWEEN 0.45 AND 0.69
-      AND similarity(${sql.raw(aCompanyNorm)}, ${sql.raw(bCompanyNorm)}) > 0.35
+      AND similarity(${aTitleNorm}, ${bTitleNorm}) BETWEEN 0.45 AND 0.69
+      AND similarity(${aCompanyNorm}, ${bCompanyNorm}) > 0.35
     ORDER BY title_sim DESC
     LIMIT 40
-  `);
+  `;
 
+  const rows = await db.execute(sql.raw(querySql));
   res.json(rows.rows);
 });
 
@@ -389,12 +393,23 @@ router.post("/postings/:id/flag-duplicate", requireAuth, async (req, res): Promi
   const id = parseInt(req.params["id"] ?? "", 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
+  // Fetch regardless of deletion state so we can be idempotent
   const [posting] = await db
     .select()
     .from(jobPostingsTable)
-    .where(and(eq(jobPostingsTable.id, id), eq(jobPostingsTable.userId, userId), isNull(jobPostingsTable.deletedAt)));
+    .where(and(eq(jobPostingsTable.id, id), eq(jobPostingsTable.userId, userId)));
 
-  if (!posting) { res.status(404).json({ error: "Not found" }); return; }
+  if (!posting) {
+    logger.warn({ userId, postingId: id }, "flag-duplicate: posting not found for this user");
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  // Idempotent — if already deleted, just return success
+  if (posting.deletedAt) {
+    res.status(204).end();
+    return;
+  }
 
   await db
     .update(jobPostingsTable)
@@ -403,7 +418,7 @@ router.post("/postings/:id/flag-duplicate", requireAuth, async (req, res): Promi
 
   logger.info(
     { userId, postingId: id, title: posting.title, company: posting.company },
-    "postings: user flagged posting as duplicate — will be used for threshold tuning",
+    "postings: user flagged posting as duplicate",
   );
 
   sweepDuplicatesOf(userId, posting.title, posting.company, id).catch((err) => {
