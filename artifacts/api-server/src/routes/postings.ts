@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, ilike, or, gte, isNotNull, isNull, inArray } from "drizzle-orm";
+import { sql, eq, and, ilike, or, gte, isNotNull, isNull, inArray } from "drizzle-orm";
 import { db, jobPostingsTable, matchReportsTable, userProfilesTable, gmailConnectionsTable } from "@workspace/db";
 import {
   CreatePostingBody,
@@ -15,7 +15,7 @@ import {
 import { requireAuth } from "../middlewares/requireAuth";
 import { scorePosting, scorePostingBackground, extractJobListings } from "../lib/scoringService";
 import { fetchSingleEmail } from "../lib/gmailClient";
-import { isFuzzyDuplicate, sweepDuplicatesOf, runDedupSweep } from "../lib/dedup";
+import { isFuzzyDuplicate, sweepDuplicatesOf, runDedupSweep, dbNormalizeSql } from "../lib/dedup";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -157,6 +157,35 @@ router.get("/postings/deleted", requireAuth, async (req, res): Promise<void> => 
   );
 
   res.json(ListPostingsResponse.parse(results));
+});
+
+// Returns pairs of active postings whose normalised titles are similar enough
+// to be possible duplicates but below the auto-dedup threshold (0.45–0.69).
+router.get("/postings/near-duplicates", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId;
+  const aTitleNorm = dbNormalizeSql("a.title");
+  const bTitleNorm = dbNormalizeSql("b.title");
+  const aCompanyNorm = dbNormalizeSql("a.company");
+  const bCompanyNorm = dbNormalizeSql("b.company");
+
+  const rows = await db.execute(sql`
+    SELECT a.id AS id1, b.id AS id2,
+           a.title AS title1, b.title AS title2,
+           a.company AS company1, b.company AS company2,
+           similarity(${sql.raw(aTitleNorm)}, ${sql.raw(bTitleNorm)}) AS title_sim
+    FROM job_postings a
+    JOIN job_postings b ON a.id < b.id
+    WHERE a.user_id = ${userId}
+      AND b.user_id = ${userId}
+      AND a.deleted_at IS NULL AND b.deleted_at IS NULL
+      AND a.applied_at IS NULL AND b.applied_at IS NULL
+      AND similarity(${sql.raw(aTitleNorm)}, ${sql.raw(bTitleNorm)}) BETWEEN 0.45 AND 0.69
+      AND similarity(${sql.raw(aCompanyNorm)}, ${sql.raw(bCompanyNorm)}) > 0.35
+    ORDER BY title_sim DESC
+    LIMIT 40
+  `);
+
+  res.json(rows.rows);
 });
 
 router.patch("/postings/:id/restore", requireAuth, async (req, res): Promise<void> => {
@@ -350,6 +379,38 @@ router.post("/postings/backfill-links", requireAuth, async (req, res): Promise<v
   }
 
   res.json({ updated, skipped });
+});
+
+// Soft-deletes a posting the user has confirmed is a duplicate, then sweeps
+// for any remaining siblings in the background (same as delete but intent is
+// recorded in server logs for future threshold tuning).
+router.post("/postings/:id/flag-duplicate", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId;
+  const id = parseInt(req.params["id"] ?? "", 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [posting] = await db
+    .select()
+    .from(jobPostingsTable)
+    .where(and(eq(jobPostingsTable.id, id), eq(jobPostingsTable.userId, userId), isNull(jobPostingsTable.deletedAt)));
+
+  if (!posting) { res.status(404).json({ error: "Not found" }); return; }
+
+  await db
+    .update(jobPostingsTable)
+    .set({ deletedAt: new Date(), fullDescription: "" })
+    .where(and(eq(jobPostingsTable.id, id), eq(jobPostingsTable.userId, userId)));
+
+  logger.info(
+    { userId, postingId: id, title: posting.title, company: posting.company },
+    "postings: user flagged posting as duplicate — will be used for threshold tuning",
+  );
+
+  sweepDuplicatesOf(userId, posting.title, posting.company, id).catch((err) => {
+    logger.warn({ err, id }, "flag-duplicate: background sweep failed");
+  });
+
+  res.status(204).end();
 });
 
 router.post("/postings/:id/analyze", requireAuth, async (req, res): Promise<void> => {

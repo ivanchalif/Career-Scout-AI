@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import {
   Plus, Search, SlidersHorizontal, Mail, TrendingUp,
   BriefcaseBusiness, Star, ExternalLink, Trash2,
-  RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2, CheckCircle2, Undo2, MapPin, Ban, RotateCcw, Layers,
+  RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2, CheckCircle2, Undo2, MapPin, Ban, RotateCcw, Layers, Copy,
 } from "lucide-react";
 import {
   useGetDashboardSummary,
@@ -183,6 +183,8 @@ export default function DashboardPage() {
   const [backfillingLinks, setBackfillingLinks] = useState(false);
   const [sweepingDuplicates, setSweepingDuplicates] = useState(false);
   const [activeTab, setActiveTab] = useState<"active" | "applied" | "deleted">("active");
+  const [nearDupMap, setNearDupMap] = useState<Map<number, number>>(new Map());
+  const [dismissedNearDups, setDismissedNearDups] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const SESSION_KEY = "dedup-sweep-done";
@@ -210,6 +212,34 @@ export default function DashboardPage() {
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function flagAsDuplicate(postingId: number) {
+    const token = await getToken();
+    await fetch(`/api/postings/${postingId}/flag-duplicate`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    setNearDupMap((prev) => {
+      const next = new Map(prev);
+      const paired = next.get(postingId);
+      next.delete(postingId);
+      if (paired !== undefined) next.delete(paired);
+      return next;
+    });
+    qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
+    qc.invalidateQueries({ queryKey: getListDeletedPostingsQueryKey() });
+    qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+  }
+
+  function dismissNearDup(postingId: number) {
+    const paired = nearDupMap.get(postingId);
+    setDismissedNearDups((prev) => {
+      const next = new Set(prev);
+      next.add(postingId);
+      if (paired !== undefined) next.add(paired);
+      return next;
+    });
+  }
 
   const companyFilterQ = useGetCompanyFilterSettings();
   const updateCompanyFilterMutation = useUpdateCompanyFilterSettings();
@@ -277,6 +307,25 @@ export default function DashboardPage() {
   const summary = dashboardQ.data;
   const rawPostings = postingsQ.data ?? [];
   const gmailStatus = gmailStatusQ.data;
+
+  useEffect(() => {
+    if (rawPostings.length < 2) return;
+    getToken().then((token) => {
+      return fetch("/api/postings/near-duplicates", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+    }).then((r) => r.ok ? r.json() : [])
+      .then((pairs: Array<{ id1: number; id2: number }>) => {
+        const map = new Map<number, number>();
+        for (const { id1, id2 } of pairs) {
+          map.set(id1, id2);
+          map.set(id2, id1);
+        }
+        setNearDupMap(map);
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawPostings]);
 
   const postings = useMemo(() => {
     const items = [...rawPostings];
@@ -943,8 +992,8 @@ export default function DashboardPage() {
               const { posting, report } = item;
               const score = report?.fitScore ?? null;
               return (
+                <div key={posting.id} className="flex flex-col">
                 <div
-                  key={posting.id}
                   className="flex items-center gap-4 bg-card border border-border rounded-xl px-5 py-4 hover:border-indigo-800/50 transition-colors cursor-pointer"
                   data-testid={`posting-card-${posting.id}`}
                   onClick={() => setDetailPosting(item)}
@@ -1021,6 +1070,16 @@ export default function DashboardPage() {
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="w-8 h-8 text-muted-foreground hover:text-amber-400 hover:bg-amber-950/20"
+                      onClick={() => flagAsDuplicate(posting.id)}
+                      title="Flag as duplicate"
+                      data-testid={`posting-flag-dupe-${posting.id}`}
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       className="w-8 h-8 text-muted-foreground hover:text-red-400 hover:bg-red-950/20"
                       onClick={() => blockCompany(posting.company)}
                       disabled={updateCompanyFilterMutation.isPending}
@@ -1039,6 +1098,29 @@ export default function DashboardPage() {
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   </div>
+                </div>
+                {nearDupMap.has(posting.id) && !dismissedNearDups.has(posting.id) && (
+                  <div
+                    className="flex items-center gap-2 text-xs rounded-b-xl px-4 py-1.5 bg-amber-950/20 border-x border-b border-amber-800/30 text-amber-400"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Copy className="w-3 h-3 shrink-0" />
+                    <span className="flex-1">Looks like a duplicate — is this the same role?</span>
+                    <button
+                      className="font-medium hover:text-amber-200 underline underline-offset-2"
+                      onClick={() => flagAsDuplicate(posting.id)}
+                    >
+                      Yes, remove it
+                    </button>
+                    <span className="text-amber-800/60 select-none">·</span>
+                    <button
+                      className="text-amber-600 hover:text-amber-400"
+                      onClick={() => dismissNearDup(posting.id)}
+                    >
+                      Keep both
+                    </button>
+                  </div>
+                )}
                 </div>
               );
             })}

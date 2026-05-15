@@ -63,7 +63,7 @@ const SQL_ABBREV_REPLACEMENTS: [string, string][] = [
  *   5. collapse runs of spaces to a single space
  *   6. trim
  */
-function dbNormalize(col: string): string {
+export function dbNormalizeSql(col: string): string {
   // Build nested regexp_replace calls for each abbreviation expansion
   let expr = `lower(${col})`;
   for (const [pattern, replacement] of SQL_ABBREV_REPLACEMENTS) {
@@ -115,8 +115,8 @@ export async function isFuzzyDuplicate(
 
   if (!normTitle || !normCompany) return { isDuplicate: false };
 
-  const titleNorm = dbNormalize("title");
-  const companyNorm = dbNormalize("company");
+  const titleNorm = dbNormalizeSql("title");
+  const companyNorm = dbNormalizeSql("company");
 
   const excludeClause = options?.excludeId != null
     ? sql`AND id != ${options.excludeId}`
@@ -226,8 +226,8 @@ export async function sweepDuplicatesOf(
 
   if (!normTitle || !normCompany) return 0;
 
-  const titleNorm = dbNormalize("title");
-  const companyNorm = dbNormalize("company");
+  const titleNorm = dbNormalizeSql("title");
+  const companyNorm = dbNormalizeSql("company");
 
   const rows = await db.execute(sql`
     SELECT id
