@@ -1,9 +1,27 @@
 import { sql, and, eq, inArray, isNull } from "drizzle-orm";
 import { db, jobPostingsTable } from "@workspace/db";
 
+// Common job-title abbreviations expanded before similarity comparison so that
+// e.g. "Director AI Product Mgmt" matches "Director AI Product Management".
+const JOB_TITLE_ABBREVIATIONS: [RegExp, string][] = [
+  [/\bmgmt\b/gi, "management"],
+  [/\bmgr\b/gi, "manager"],
+  [/\bsvp\b/gi, "senior vice president"],
+  [/\bevp\b/gi, "executive vice president"],
+  [/\bvp\b/gi, "vice president"],
+  [/\bdir\b/gi, "director"],
+  [/\bsr\b/gi, "senior"],
+  [/\bjr\b/gi, "junior"],
+  [/\basst\b/gi, "assistant"],
+  [/\bengg?\b/gi, "engineering"],
+];
+
 export function normalizeFuzzy(text: string): string {
-  return text
-    .toLowerCase()
+  let s = text.toLowerCase();
+  for (const [pattern, replacement] of JOB_TITLE_ABBREVIATIONS) {
+    s = s.replace(pattern, replacement);
+  }
+  return s
     .replace(/\s*\([^)]*\)/g, " ")
     .replace(
       /\b(inc|llc|ltd|corp|co|gmbh|ag|plc|sa|technologies|technology|tech|solutions|group|holdings|services)\.?\b/gi,
@@ -19,24 +37,41 @@ export function normalizeFuzzy(text: string): string {
 const SUFFIX_REGEX =
   "\\m(inc|llc|ltd|corp|co|gmbh|ag|plc|sa|technologies|technology|tech|solutions|group|holdings|services)\\M";
 
+// Job-title abbreviation expansions mirrored in SQL so stored titles are also
+// expanded (handles the case where the stored title has the abbreviation).
+const SQL_ABBREV_REPLACEMENTS: [string, string][] = [
+  ["\\mmgmt\\M", "management"],
+  ["\\mmgr\\M", "manager"],
+  ["\\msvp\\M", "senior vice president"],
+  ["\\mevp\\M", "executive vice president"],
+  ["\\mvp\\M", "vice president"],
+  ["\\mdir\\M", "director"],
+  ["\\msr\\M", "senior"],
+  ["\\mjr\\M", "junior"],
+  ["\\masst\\M", "assistant"],
+  ["\\mengg?\\M", "engineering"],
+];
+
 /**
  * Applies the same normalization as normalizeFuzzy() but inside PostgreSQL.
  *
  * Steps (matching normalizeFuzzy order):
  *   1. lowercase
- *   2. strip common company suffixes using ARE word-boundary tokens (\m / \M)
- *   3. replace remaining non-alphanumeric chars (incl. paren content) with spaces
- *   4. collapse runs of spaces to a single space
- *   5. trim
- *
- * Note: '\(' in PostgreSQL ARE is a capturing-group opener, not a literal paren.
- * That's why we strip suffixes BEFORE the non-alphanumeric sweep rather than
- * using a paren-aware regex.
+ *   2. expand common job-title abbreviations (mgmt→management, etc.)
+ *   3. strip common company suffixes using ARE word-boundary tokens (\m / \M)
+ *   4. replace remaining non-alphanumeric chars with spaces
+ *   5. collapse runs of spaces to a single space
+ *   6. trim
  */
 function dbNormalize(col: string): string {
+  // Build nested regexp_replace calls for each abbreviation expansion
+  let expr = `lower(${col})`;
+  for (const [pattern, replacement] of SQL_ABBREV_REPLACEMENTS) {
+    expr = `regexp_replace(${expr}, '${pattern}', '${replacement}', 'g')`;
+  }
   return `btrim(regexp_replace(
       regexp_replace(
-        regexp_replace(lower(${col}), '${SUFFIX_REGEX}', ' ', 'g'),
+        regexp_replace(${expr}, '${SUFFIX_REGEX}', ' ', 'g'),
         '[^a-z0-9 ]', ' ', 'g'
       ),
       ' +', ' ', 'g'
