@@ -312,6 +312,13 @@ export default function DashboardPage() {
   const rawPostings = postingsQ.data ?? [];
   const gmailStatus = gmailStatusQ.data;
 
+  const allPostingsById = useMemo(() => {
+    const map = new Map<number, { posting: { id: number; title: string; company: string }; report: { fitScore?: number | null } | null }>();
+    for (const item of (activeCountQ.data ?? [])) map.set(item.posting.id, item);
+    for (const item of (appliedCountQ.data ?? [])) map.set(item.posting.id, item);
+    return map;
+  }, [activeCountQ.data, appliedCountQ.data]);
+
   useEffect(() => {
     if (rawPostings.length < 2) return;
     getToken().then((token) => {
@@ -1103,28 +1110,50 @@ export default function DashboardPage() {
                     </Button>
                   </div>
                 </div>
-                {nearDupMap.has(posting.id) && !dismissedNearDups.has(posting.id) && (
-                  <div
-                    className="flex items-center gap-2 text-xs rounded-b-xl px-4 py-1.5 bg-amber-950/20 border-x border-b border-amber-800/30 text-amber-400"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Copy className="w-3 h-3 shrink-0" />
-                    <span className="flex-1">Looks like a duplicate — is this the same role?</span>
-                    <button
-                      className="font-medium hover:text-amber-200 underline underline-offset-2"
-                      onClick={() => flagAsDuplicate(posting.id)}
+                {nearDupMap.has(posting.id) && !dismissedNearDups.has(posting.id) && (() => {
+                  const pairedId = nearDupMap.get(posting.id)!;
+                  const pairedRaw = allPostingsById.get(pairedId);
+                  const pairedVisible = postings.find((p) => p.posting.id === pairedId);
+                  return (
+                    <div
+                      className="flex items-center gap-2 text-xs rounded-b-xl px-4 py-1.5 bg-amber-950/20 border-x border-b border-amber-800/30 text-amber-400"
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      Yes, remove it
-                    </button>
-                    <span className="text-amber-800/60 select-none">·</span>
-                    <button
-                      className="text-amber-600 hover:text-amber-400"
-                      onClick={() => dismissNearDup(posting.id)}
-                    >
-                      Keep both
-                    </button>
-                  </div>
-                )}
+                      <Copy className="w-3 h-3 shrink-0" />
+                      <span className="flex-1">
+                        Looks like a duplicate of{" "}
+                        {pairedRaw ? (
+                          pairedVisible ? (
+                            <button
+                              className="font-semibold underline underline-offset-2 hover:text-amber-200"
+                              onClick={() => setDetailPosting(pairedVisible)}
+                            >
+                              {pairedRaw.posting.title} at {pairedRaw.posting.company}
+                            </button>
+                          ) : (
+                            <span className="font-semibold">{pairedRaw.posting.title} at {pairedRaw.posting.company}</span>
+                          )
+                        ) : (
+                          "another posting"
+                        )}{" "}
+                        — is this the same role?
+                      </span>
+                      <button
+                        className="font-medium hover:text-amber-200 underline underline-offset-2"
+                        onClick={() => flagAsDuplicate(posting.id)}
+                      >
+                        Yes, remove it
+                      </button>
+                      <span className="text-amber-800/60 select-none">·</span>
+                      <button
+                        className="text-amber-600 hover:text-amber-400"
+                        onClick={() => dismissNearDup(posting.id)}
+                      >
+                        Keep both
+                      </button>
+                    </div>
+                  );
+                })()}
                 </div>
               );
             })}
