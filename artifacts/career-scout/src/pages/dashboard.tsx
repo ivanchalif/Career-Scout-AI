@@ -3,8 +3,8 @@ import { useAuth } from "@clerk/react";
 import { Link } from "wouter";
 import {
   Plus, Search, SlidersHorizontal, Mail, TrendingUp,
-  BriefcaseBusiness, Star, ExternalLink, Trash2,
-  RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2, CheckCircle2, Undo2, MapPin, Ban, RotateCcw, Layers, Copy, Archive, Pencil, Check, X,
+  BriefcaseBusiness, Star, Trash2,
+  RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2, CheckCircle2, Undo2, MapPin, Ban, RotateCcw, Layers, Copy, Archive,
 } from "lucide-react";
 import {
   useGetDashboardSummary,
@@ -21,7 +21,6 @@ import {
   useRestorePosting,
   useClosePosting,
   useReopenPosting,
-  useUpdatePostingLink,
   getListPostingsQueryKey,
   getListDeletedPostingsQueryKey,
   getGetDashboardSummaryQueryKey,
@@ -48,66 +47,31 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import Layout from "@/components/layout";
 
-function ScoreRing({ score, onClick }: { score: number | null; onClick?: () => void }) {
+function ScoreBadge({ score }: { score: number | null }) {
   if (score === null) {
     return (
-      <div
-        className="relative flex items-center justify-center w-14 h-14"
-        title="AI scoring in progress"
+      <span
+        className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground animate-pulse"
         data-testid="score-ring-pending"
+        title="AI scoring in progress"
       >
-        <svg width="56" height="56" viewBox="0 0 56 56" className="-rotate-90 animate-spin" style={{ animationDuration: "3s" }}>
-          <circle cx="28" cy="28" r={22} fill="none" stroke="hsl(var(--muted))" strokeWidth="3" />
-          <circle
-            cx="28"
-            cy="28"
-            r={22}
-            fill="none"
-            stroke="hsl(var(--muted-foreground))"
-            strokeWidth="3"
-            strokeDasharray="20 118"
-            strokeLinecap="round"
-            opacity="0.4"
-          />
-        </svg>
-        <span className="absolute text-[9px] text-muted-foreground font-medium leading-none text-center">AI</span>
-      </div>
+        AI
+      </span>
     );
   }
-  const color =
-    score >= 80 ? "#22c55e" : score >= 60 ? "#f59e0b" : "#ef4444";
-  const radius = 22;
-  const circumference = 2 * Math.PI * radius;
-  const progress = (score / 100) * circumference;
-
+  const cls =
+    score >= 80
+      ? "bg-emerald-950/60 text-emerald-400 border border-emerald-800/40"
+      : score >= 60
+      ? "bg-amber-950/60 text-amber-400 border border-amber-800/40"
+      : "bg-red-950/60 text-red-400 border border-red-800/40";
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="relative flex items-center justify-center w-14 h-14 rounded-full hover:bg-muted/40 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      title="Click to see scoring details"
+    <span
+      className={`inline-flex items-center text-[11px] font-bold px-1.5 py-0.5 rounded tabular-nums ${cls}`}
       data-testid="score-ring"
     >
-      <svg width="56" height="56" viewBox="0 0 56 56" className="-rotate-90">
-        <circle cx="28" cy="28" r={radius} fill="none" stroke="hsl(var(--muted))" strokeWidth="3" />
-        <circle
-          cx="28"
-          cy="28"
-          r={radius}
-          fill="none"
-          stroke={color}
-          strokeWidth="3"
-          strokeDasharray={`${progress} ${circumference - progress}`}
-          strokeLinecap="round"
-        />
-      </svg>
-      <span
-        className="absolute text-xs font-bold"
-        style={{ color }}
-      >
-        {score}
-      </span>
-    </button>
+      {score}
+    </span>
   );
 }
 
@@ -161,19 +125,6 @@ export default function DashboardPage() {
   const [minFitScore, setMinFitScore] = useState<number | undefined>(undefined);
   const [showAddModal, setShowAddModal] = useState(false);
 
-  const [detailPosting, setDetailPosting] = useState<{
-    posting: {
-      id: number; title: string; company: string; link?: string | null;
-      appliedAt?: string | null; source: string; salaryMin?: number | null;
-      salaryMax?: number | null; fullDescription: string; extractedSkills: string[];
-      createdAt: Date | string;
-    };
-    report: {
-      fitScore?: number | null; reasoning?: string | null;
-      matchedSkills: string[]; missingSkills: string[];
-      compensationGap?: number | null;
-    } | null;
-  } | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [sortKey, setSortKeyState] = useState<string>(
     () => localStorage.getItem("dashboard-sort") ?? "date-desc"
@@ -306,9 +257,6 @@ export default function DashboardPage() {
   const restoreMutation = useRestorePosting();
   const closeMutation = useClosePosting();
   const reopenMutation = useReopenPosting();
-  const updateLinkMutation = useUpdatePostingLink();
-  const [editingLink, setEditingLink] = useState(false);
-  const [linkInput, setLinkInput] = useState("");
   const syncMutation = useSyncGmail();
   const disconnectMutation = useDisconnectGmail();
 
@@ -615,14 +563,9 @@ export default function DashboardPage() {
     await markAppliedMutation.mutateAsync(
       { id },
       {
-        onSuccess: (result) => {
+        onSuccess: (_result) => {
           qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
           qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
-          setDetailPosting((prev) =>
-            prev?.posting.id === id
-              ? { ...prev, posting: { ...prev.posting, appliedAt: result.appliedAt ?? null } }
-              : prev
-          );
           toast({
             title: isCurrentlyApplied ? "Marked as not applied" : "Marked as applied",
             description: isCurrentlyApplied
@@ -959,9 +902,9 @@ export default function DashboardPage() {
                     className="flex items-center gap-4 bg-card border border-border rounded-xl px-5 py-4 opacity-60"
                     data-testid={`deleted-posting-card-${posting.id}`}
                   >
-                    <ScoreRing score={score} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
+                        <ScoreBadge score={score} />
                         <span className="font-semibold text-foreground line-through">{posting.title}</span>
                         <Badge variant="secondary" className="text-xs">{posting.senderName ?? posting.source}</Badge>
                         {isClosed && (
@@ -1065,15 +1008,15 @@ export default function DashboardPage() {
               return (
                 <div key={posting.id} className="flex flex-col">
                 <div
-                  className="flex flex-col sm:flex-row sm:items-center gap-0 bg-card border border-border rounded-xl hover:border-indigo-800/50 transition-colors cursor-pointer overflow-hidden"
+                  className={`flex flex-col sm:flex-row sm:items-center gap-0 bg-card border border-border rounded-xl overflow-hidden transition-colors ${posting.link ? "hover:border-indigo-800/50 cursor-pointer" : "cursor-default"}`}
                   data-testid={`posting-card-${posting.id}`}
-                  onClick={() => setDetailPosting(item)}
+                  onClick={() => { if (posting.link) window.open(posting.link, "_blank", "noopener,noreferrer"); }}
                 >
-                  {/* Info row — score ring + text content */}
+                  {/* Info row — text content */}
                   <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0 px-4 pt-3 pb-2 sm:px-5 sm:py-4">
-                    <ScoreRing score={score} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
+                        <ScoreBadge score={score} />
                         <span
                           className="font-semibold text-foreground"
                           data-testid={`posting-title-${posting.id}`}
@@ -1127,15 +1070,6 @@ export default function DashboardPage() {
                     className="flex items-center justify-around sm:justify-start sm:gap-1 sm:shrink-0 sm:pr-2 border-t sm:border-t-0 border-border/40 px-1 py-1 sm:px-0 sm:py-0"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    {posting.link ? (
-                      <a href={posting.link} target="_blank" rel="noopener noreferrer">
-                        <Button variant="ghost" size="icon" className="w-9 h-9 sm:w-8 sm:h-8" data-testid={`posting-link-${posting.id}`} title="Open job posting">
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </Button>
-                      </a>
-                    ) : (
-                      <div className="w-9 h-9 sm:w-8 sm:h-8" />
-                    )}
                     <Button
                       variant="ghost"
                       size="icon"
@@ -1203,16 +1137,7 @@ export default function DashboardPage() {
                       <span className="flex-1">
                         Looks like a duplicate of{" "}
                         {pairedRaw ? (
-                          pairedVisible ? (
-                            <button
-                              className="font-semibold underline underline-offset-2 hover:text-amber-200"
-                              onClick={() => setDetailPosting(pairedVisible)}
-                            >
-                              {pairedRaw.posting.title} at {pairedRaw.posting.company}
-                            </button>
-                          ) : (
-                            <span className="font-semibold">{pairedRaw.posting.title} at {pairedRaw.posting.company}</span>
-                          )
+                          <span className="font-semibold">{pairedRaw.posting.title} at {pairedRaw.posting.company}</span>
                         ) : (
                           "another posting"
                         )}{" "}
@@ -1305,233 +1230,6 @@ export default function DashboardPage() {
               </Button>
             </DialogFooter>
           </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Job detail modal */}
-      <Dialog open={detailPosting !== null} onOpenChange={(open) => { if (!open) { setDetailPosting(null); setEditingLink(false); } }}>
-        <DialogContent className="sm:max-w-xl max-h-[90vh] flex flex-col overflow-hidden p-0">
-          {detailPosting && (() => {
-            const { posting, report } = detailPosting;
-            const fitScore = report?.fitScore ?? null;
-            const color = fitScore != null ? (fitScore >= 80 ? "#22c55e" : fitScore >= 60 ? "#f59e0b" : "#ef4444") : "hsl(var(--muted-foreground))";
-            const radius = 26;
-            const circumference = 2 * Math.PI * radius;
-            const progress = fitScore != null ? (fitScore / 100) * circumference : 0;
-            const isApplied = !!posting.appliedAt;
-            return (
-              <>
-                {/* Sticky header */}
-                <div className="px-6 pt-6 pb-4 border-b border-border shrink-0">
-                  <div className="flex items-start gap-4 pr-6">
-                    {/* Score ring */}
-                    <div className="relative flex items-center justify-center w-14 h-14 shrink-0">
-                      {fitScore != null ? (
-                        <>
-                          <svg width="56" height="56" viewBox="0 0 56 56" className="-rotate-90">
-                            <circle cx="28" cy="28" r={radius} fill="none" stroke="hsl(var(--muted))" strokeWidth="3" />
-                            <circle cx="28" cy="28" r={radius} fill="none" stroke={color} strokeWidth="3"
-                              strokeDasharray={`${progress} ${circumference - progress}`} strokeLinecap="round" />
-                          </svg>
-                          <span className="absolute text-xs font-bold" style={{ color }}>{fitScore}</span>
-                        </>
-                      ) : (
-                        <>
-                          <svg width="56" height="56" viewBox="0 0 56 56" className="-rotate-90 animate-spin" style={{ animationDuration: "3s" }}>
-                            <circle cx="28" cy="28" r={radius} fill="none" stroke="hsl(var(--muted))" strokeWidth="3" />
-                            <circle cx="28" cy="28" r={radius} fill="none" stroke="hsl(var(--muted-foreground))" strokeWidth="3"
-                              strokeDasharray="20 118" strokeLinecap="round" opacity="0.4" />
-                          </svg>
-                          <span className="absolute text-[9px] text-muted-foreground font-medium">AI</span>
-                        </>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <DialogTitle className="text-lg leading-snug">{posting.title}</DialogTitle>
-                      <DialogDescription asChild>
-                      <div className="flex flex-wrap items-center gap-2 mt-1 text-sm text-muted-foreground">
-                        <span>{posting.company}</span>
-                        {posting.location && (
-                          <span className="flex items-center gap-0.5 text-xs text-muted-foreground/80">
-                            <MapPin className="w-3 h-3" />
-                            {posting.location}
-                          </span>
-                        )}
-                        {(posting.salaryMin || posting.salaryMax) && (
-                          <span className="text-xs text-emerald-400 font-medium">
-                            {posting.salaryMin && posting.salaryMax
-                              ? `$${(posting.salaryMin / 1000).toFixed(0)}k–$${(posting.salaryMax / 1000).toFixed(0)}k`
-                              : posting.salaryMin ? `$${(posting.salaryMin / 1000).toFixed(0)}k+`
-                              : `up to $${(posting.salaryMax! / 1000).toFixed(0)}k`}
-                          </span>
-                        )}
-                        <Badge variant="secondary" className="text-xs">{posting.senderName ?? posting.source}</Badge>
-                        <span className="text-xs text-muted-foreground/60">
-                          Added {formatAdded(posting.createdAt)}
-                        </span>
-                        {editingLink ? (
-                          <form
-                            className="flex items-center gap-1 w-full mt-1"
-                            onSubmit={(e) => {
-                              e.preventDefault();
-                              const trimmed = linkInput.trim() || null;
-                              updateLinkMutation.mutate(
-                                { id: posting.id, link: trimmed },
-                                {
-                                  onSuccess: (data) => {
-                                    setDetailPosting((prev) =>
-                                      prev ? { ...prev, posting: { ...prev.posting, link: data.link } } : prev
-                                    );
-                                    queryClient.invalidateQueries({ queryKey: getListPostingsQueryKey() });
-                                    setEditingLink(false);
-                                    toast({ title: "Link updated" });
-                                  },
-                                  onError: () => toast({ title: "Failed to update link", variant: "destructive" }),
-                                }
-                              );
-                            }}
-                          >
-                            <Input
-                              autoFocus
-                              value={linkInput}
-                              onChange={(e) => setLinkInput(e.target.value)}
-                              placeholder="https://..."
-                              className="h-6 text-xs px-2 py-0 flex-1 min-w-0"
-                            />
-                            <button type="submit" disabled={updateLinkMutation.isPending}
-                              className="text-green-400 hover:text-green-300 disabled:opacity-50">
-                              <Check className="w-3.5 h-3.5" />
-                            </button>
-                            <button type="button" onClick={() => setEditingLink(false)}
-                              className="text-muted-foreground hover:text-foreground">
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </form>
-                        ) : (
-                          <span className="flex items-center gap-1">
-                            {posting.link ? (
-                              <a href={posting.link} target="_blank" rel="noopener noreferrer"
-                                className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 transition-colors text-xs">
-                                <ExternalLink className="w-3 h-3" />
-                                View job posting
-                              </a>
-                            ) : (
-                              <span className="text-xs text-muted-foreground/60">No link</span>
-                            )}
-                            <button
-                              onClick={() => { setLinkInput(posting.link ?? ""); setEditingLink(true); }}
-                              className="text-muted-foreground/50 hover:text-muted-foreground transition-colors ml-0.5"
-                              title="Edit link"
-                            >
-                              <Pencil className="w-3 h-3" />
-                            </button>
-                          </span>
-                        )}
-                      </div>
-                      </DialogDescription>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Scrollable body */}
-                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-                  {/* AI reasoning */}
-                  {report?.reasoning && (
-                    <div className="rounded-lg bg-muted/40 px-4 py-3 text-sm text-foreground leading-relaxed">
-                      {report.reasoning}
-                    </div>
-                  )}
-
-                  {/* Skills */}
-                  {fitScore != null && (
-                    (report?.matchedSkills?.length ?? 0) === 0 && (report?.missingSkills?.length ?? 0) === 0 ? (
-                      <div className="rounded-lg bg-muted/30 px-4 py-3 text-center">
-                        <p className="text-xs text-muted-foreground">No specific skill requirements were found in this posting.</p>
-                        <p className="text-xs text-muted-foreground mt-1">Use <span className="text-foreground font-medium">Re-analyze</span> to refresh.</p>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <p className="text-xs font-medium text-emerald-400 mb-2">Matched skills</p>
-                          {(report?.matchedSkills?.length ?? 0) > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {report!.matchedSkills.map((s) => (
-                                <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-emerald-950/40 text-emerald-400 border border-emerald-800/30">{s}</span>
-                              ))}
-                            </div>
-                          ) : <p className="text-xs text-muted-foreground">None from your profile</p>}
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium text-red-400 mb-2">Missing skills</p>
-                          {(report?.missingSkills?.length ?? 0) > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {report!.missingSkills.map((s) => (
-                                <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-red-950/40 text-red-400 border border-red-800/30">{s}</span>
-                              ))}
-                            </div>
-                          ) : <p className="text-xs text-muted-foreground">None — full match</p>}
-                        </div>
-                      </div>
-                    )
-                  )}
-
-                  {/* Compensation gap */}
-                  {report?.compensationGap != null && (
-                    <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-4 py-3">
-                      <span className="text-xs text-muted-foreground">Compensation gap</span>
-                      <span className={`ml-auto text-sm font-semibold ${report.compensationGap >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                        {report.compensationGap >= 0 ? "+" : ""}${Math.abs(report.compensationGap).toLocaleString()}
-                      </span>
-                      <span className="text-xs text-muted-foreground">{report.compensationGap >= 0 ? "above target" : "below target"}</span>
-                    </div>
-                  )}
-
-                  {/* Description */}
-                  {posting.fullDescription && (
-                    <div>
-                      <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Job description</p>
-                      <div className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap rounded-lg bg-muted/20 px-4 py-3 max-h-64 overflow-y-auto">
-                        {posting.fullDescription}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Footer actions */}
-                <div className="px-6 py-4 border-t border-border shrink-0 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant={isApplied ? "outline" : "default"}
-                      className={isApplied ? "gap-2 border-emerald-700 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/30" : "gap-2 bg-emerald-700 hover:bg-emerald-600"}
-                      onClick={() => onToggleApplied(posting.id, isApplied)}
-                      disabled={markAppliedMutation.isPending}
-                      data-testid="modal-apply-button"
-                    >
-                      {isApplied ? <><Undo2 className="w-4 h-4" /> Undo applied</> : <><CheckCircle2 className="w-4 h-4" /> Mark as applied</>}
-                    </Button>
-                    {posting.link && (
-                      <a href={posting.link} target="_blank" rel="noopener noreferrer">
-                        <Button variant="outline" size="sm" className="gap-2">
-                          <ExternalLink className="w-3.5 h-3.5" />
-                          Open job
-                        </Button>
-                      </a>
-                    )}
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive hover:text-destructive hover:bg-destructive/10 gap-2"
-                    onClick={() => { setDetailPosting(null); onDelete(posting.id); }}
-                    data-testid="modal-delete-button"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    Delete
-                  </Button>
-                </div>
-              </>
-            );
-          })()}
         </DialogContent>
       </Dialog>
 
