@@ -648,25 +648,18 @@ export default function DashboardPage() {
         {gmailStatus?.connected ? (
           <div className="flex flex-col bg-emerald-950/30 border border-emerald-800/30 rounded-xl px-5 pt-4 pb-3 mb-6 gap-3" data-testid="gmail-connected-banner">
             {/* Title row */}
-            <div className="flex items-center gap-3">
-              <Mail className="w-5 h-5 text-emerald-400 shrink-0" />
+            <div className="flex items-start gap-3">
+              <Mail className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
               <div className="min-w-0">
-                <p className="text-sm font-medium text-emerald-300 leading-snug">
-                  Gmail connected
-                  {gmailStatus.email && (
-                    <span className="text-emerald-400/70 font-normal ml-1 break-all">· {gmailStatus.email}</span>
-                  )}
-                </p>
+                <p className="text-sm font-medium text-emerald-300">Gmail connected</p>
+                {gmailStatus.email && (
+                  <p className="text-xs text-emerald-400/70 break-all mt-0.5">{gmailStatus.email}</p>
+                )}
               </div>
             </div>
-            {/* Bottom row: status + actions */}
-            <div className="flex items-center justify-between gap-3 border-t border-emerald-800/20 pt-2.5">
-              <p className="text-xs text-emerald-400/60 min-w-0">
-                {gmailStatus.lastSyncedAt
-                  ? `Last synced ${new Date(gmailStatus.lastSyncedAt).toLocaleString()}`
-                  : "Not yet synced — click Sync to import job emails"}
-              </p>
-              <div className="flex items-center gap-2 shrink-0">
+            {/* Actions + status */}
+            <div className="flex flex-col gap-1.5 border-t border-emerald-800/20 pt-2.5">
+              <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
@@ -690,6 +683,11 @@ export default function DashboardPage() {
                   Disconnect
                 </Button>
               </div>
+              <p className="text-xs text-emerald-400/60">
+                {gmailStatus.lastSyncedAt
+                  ? `Last synced ${new Date(gmailStatus.lastSyncedAt).toLocaleString()}`
+                  : "Not yet synced — click Sync to import job emails"}
+              </p>
             </div>
           </div>
         ) : (
