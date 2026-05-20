@@ -646,44 +646,50 @@ export default function DashboardPage() {
 
         {/* Gmail banner */}
         {gmailStatus?.connected ? (
-          <div className="flex flex-wrap items-center gap-3 bg-emerald-950/30 border border-emerald-800/30 rounded-xl px-5 py-3.5 mb-6" data-testid="gmail-connected-banner">
-            <Mail className="w-5 h-5 text-emerald-400 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-emerald-300">
-                Gmail connected
-                {gmailStatus.email && (
-                  <span className="text-emerald-400/70 font-normal ml-1">· {gmailStatus.email}</span>
-                )}
-              </p>
-              <p className="text-xs text-emerald-400/60 mt-0.5">
+          <div className="flex flex-col bg-emerald-950/30 border border-emerald-800/30 rounded-xl px-5 pt-4 pb-3 mb-6 gap-3" data-testid="gmail-connected-banner">
+            {/* Title row */}
+            <div className="flex items-center gap-3">
+              <Mail className="w-5 h-5 text-emerald-400 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-emerald-300 leading-snug">
+                  Gmail connected
+                  {gmailStatus.email && (
+                    <span className="text-emerald-400/70 font-normal ml-1 break-all">· {gmailStatus.email}</span>
+                  )}
+                </p>
+              </div>
+            </div>
+            {/* Bottom row: status + actions */}
+            <div className="flex items-center justify-between gap-3 border-t border-emerald-800/20 pt-2.5">
+              <p className="text-xs text-emerald-400/60 min-w-0">
                 {gmailStatus.lastSyncedAt
                   ? `Last synced ${new Date(gmailStatus.lastSyncedAt).toLocaleString()}`
                   : "Not yet synced — click Sync to import job emails"}
               </p>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onSyncGmail}
-                disabled={syncMutation.isPending}
-                className="text-emerald-400 border-emerald-700 hover:bg-emerald-950/50 gap-1.5"
-                data-testid="gmail-sync-button"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${syncMutation.isPending ? "animate-spin" : ""}`} />
-                {syncMutation.isPending ? "Syncing..." : "Sync now"}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onDisconnectGmail}
-                disabled={disconnectMutation.isPending}
-                className="text-muted-foreground hover:text-destructive gap-1.5"
-                data-testid="gmail-disconnect-button"
-              >
-                <Unplug className="w-3.5 h-3.5" />
-                Disconnect
-              </Button>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onSyncGmail}
+                  disabled={syncMutation.isPending}
+                  className="text-emerald-400 border-emerald-700 hover:bg-emerald-950/50 gap-1.5"
+                  data-testid="gmail-sync-button"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${syncMutation.isPending ? "animate-spin" : ""}`} />
+                  {syncMutation.isPending ? "Syncing..." : "Sync now"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onDisconnectGmail}
+                  disabled={disconnectMutation.isPending}
+                  className="text-muted-foreground hover:text-destructive gap-1.5"
+                  data-testid="gmail-disconnect-button"
+                >
+                  <Unplug className="w-3.5 h-3.5" />
+                  Disconnect
+                </Button>
+              </div>
             </div>
           </div>
         ) : (
