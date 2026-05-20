@@ -932,7 +932,7 @@ export default function DashboardPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="gap-1.5 text-emerald-400 border-emerald-800/50 hover:bg-emerald-950/30 hover:text-emerald-300"
+                          className="gap-1.5 text-sky-400 border-sky-800/50 hover:bg-sky-950/30 hover:text-sky-300"
                           onClick={() => onReopen(posting.id)}
                           disabled={reopenMutation.isPending}
                           data-testid={`posting-reopen-${posting.id}`}
@@ -944,7 +944,7 @@ export default function DashboardPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="gap-1.5 text-emerald-400 border-emerald-800/50 hover:bg-emerald-950/30 hover:text-emerald-300"
+                          className="gap-1.5 text-sky-400 border-sky-800/50 hover:bg-sky-950/30 hover:text-sky-300"
                           onClick={() => onRestore(posting.id)}
                           disabled={restoreMutation.isPending}
                           data-testid={`posting-restore-${posting.id}`}
@@ -1027,7 +1027,7 @@ export default function DashboardPage() {
                           {posting.senderName ?? posting.source}
                         </Badge>
                         {posting.appliedAt && (
-                          <span className="flex items-center gap-1 text-xs text-emerald-400">
+                          <span className="flex items-center gap-1 text-xs text-sky-400">
                             <CheckCircle2 className="w-3 h-3" />
                             Applied
                           </span>
@@ -1042,7 +1042,7 @@ export default function DashboardPage() {
                           </span>
                         )}
                         {(posting.salaryMin || posting.salaryMax) && (
-                          <span className="text-xs text-emerald-400 font-medium">
+                          <span className="text-xs text-sky-400 font-medium">
                             {posting.salaryMin && posting.salaryMax
                               ? `$${(posting.salaryMin / 1000).toFixed(0)}k–$${(posting.salaryMax / 1000).toFixed(0)}k`
                               : posting.salaryMin
@@ -1057,7 +1057,7 @@ export default function DashboardPage() {
                       {report?.matchedSkills && report.matchedSkills.length > 0 && (
                         <div className="hidden sm:flex flex-wrap gap-1 mt-2">
                           {report.matchedSkills.slice(0, 4).map((skill) => (
-                            <span key={skill} className="text-xs px-2 py-0.5 rounded-full bg-emerald-950/40 text-emerald-400 border border-emerald-800/30">
+                            <span key={skill} className="text-xs px-2 py-0.5 rounded-full bg-sky-950/40 text-sky-400 border border-sky-800/30">
                               {skill}
                             </span>
                           ))}
@@ -1077,7 +1077,7 @@ export default function DashboardPage() {
                       disabled={markAppliedMutation.isPending}
                       data-testid={`posting-apply-${posting.id}`}
                       title={posting.appliedAt ? "Undo applied" : "Mark as applied"}
-                      className={`w-9 h-9 sm:w-8 sm:h-8 ${posting.appliedAt ? "text-emerald-400 hover:text-emerald-300" : "text-muted-foreground hover:text-emerald-400"}`}
+                      className={`w-9 h-9 sm:w-8 sm:h-8 ${posting.appliedAt ? "text-sky-400 hover:text-sky-300" : "text-muted-foreground hover:text-sky-400"}`}
                     >
                       {posting.appliedAt ? <Undo2 className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
                     </Button>
