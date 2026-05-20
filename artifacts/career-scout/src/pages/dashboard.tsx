@@ -733,7 +733,7 @@ export default function DashboardPage() {
         </div>
 
         {/* View tabs + Filters — single row */}
-        <div className="flex items-center border-b border-border mb-5 overflow-x-hidden">
+        <div className="flex items-center border-b border-border mb-5">
           {/* Filters on left — icon-only on mobile */}
           <Button
             variant="outline"
