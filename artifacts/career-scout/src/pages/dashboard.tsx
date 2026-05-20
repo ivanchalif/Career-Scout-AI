@@ -1127,7 +1127,6 @@ export default function DashboardPage() {
                 {nearDupMap.has(posting.id) && !dismissedNearDups.has(posting.id) && (() => {
                   const pairedId = nearDupMap.get(posting.id)!;
                   const pairedRaw = allPostingsById.get(pairedId);
-                  const pairedVisible = postings.find((p) => p.posting.id === pairedId);
                   return (
                     <div
                       className="flex items-center gap-2 text-xs rounded-b-xl px-4 py-1.5 bg-amber-950/20 border-x border-b border-amber-800/30 text-amber-400"
