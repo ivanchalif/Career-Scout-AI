@@ -957,6 +957,80 @@ export const useReopenPosting = <
   return useMutation(getReopenPostingMutationOptions(options));
 };
 
+export const getUpdatePostingLinkUrl = (id: number) => {
+  return `/api/postings/${id}/link`;
+};
+
+export const updatePostingLink = async (
+  id: number,
+  link: string | null,
+  options?: RequestInit,
+): Promise<{ id: number; link: string | null }> => {
+  return customFetch<{ id: number; link: string | null }>(getUpdatePostingLinkUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ link }),
+  });
+};
+
+export const getUpdatePostingLinkMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updatePostingLink>>,
+    TError,
+    { id: number; link: string | null },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updatePostingLink>>,
+  TError,
+  { id: number; link: string | null },
+  TContext
+> => {
+  const mutationKey = ["updatePostingLink"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updatePostingLink>>,
+    { id: number; link: string | null }
+  > = (props) => {
+    const { id, link } = props ?? {};
+    return updatePostingLink(id, link, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useUpdatePostingLink = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updatePostingLink>>,
+    TError,
+    { id: number; link: string | null },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updatePostingLink>>,
+  TError,
+  { id: number; link: string | null },
+  TContext
+> => {
+  return useMutation(getUpdatePostingLinkMutationOptions(options));
+};
+
 /**
  * @summary Toggle applied status of a job posting
  */

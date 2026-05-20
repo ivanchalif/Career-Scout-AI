@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import {
   Plus, Search, SlidersHorizontal, Mail, TrendingUp,
   BriefcaseBusiness, Star, ExternalLink, Trash2,
-  RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2, CheckCircle2, Undo2, MapPin, Ban, RotateCcw, Layers, Copy, Archive,
+  RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2, CheckCircle2, Undo2, MapPin, Ban, RotateCcw, Layers, Copy, Archive, Pencil, Check, X,
 } from "lucide-react";
 import {
   useGetDashboardSummary,
@@ -21,6 +21,7 @@ import {
   useRestorePosting,
   useClosePosting,
   useReopenPosting,
+  useUpdatePostingLink,
   getListPostingsQueryKey,
   getListDeletedPostingsQueryKey,
   getGetDashboardSummaryQueryKey,
@@ -305,6 +306,9 @@ export default function DashboardPage() {
   const restoreMutation = useRestorePosting();
   const closeMutation = useClosePosting();
   const reopenMutation = useReopenPosting();
+  const updateLinkMutation = useUpdatePostingLink();
+  const [editingLink, setEditingLink] = useState(false);
+  const [linkInput, setLinkInput] = useState("");
   const syncMutation = useSyncGmail();
   const disconnectMutation = useDisconnectGmail();
 
@@ -1297,7 +1301,7 @@ export default function DashboardPage() {
       </Dialog>
 
       {/* Job detail modal */}
-      <Dialog open={detailPosting !== null} onOpenChange={(open) => { if (!open) setDetailPosting(null); }}>
+      <Dialog open={detailPosting !== null} onOpenChange={(open) => { if (!open) { setDetailPosting(null); setEditingLink(false); } }}>
         <DialogContent className="sm:max-w-xl max-h-[90vh] flex flex-col overflow-hidden p-0">
           {detailPosting && (() => {
             const { posting, report } = detailPosting;
@@ -1357,12 +1361,63 @@ export default function DashboardPage() {
                         <span className="text-xs text-muted-foreground/60">
                           Added {formatAdded(posting.createdAt)}
                         </span>
-                        {posting.link && (
-                          <a href={posting.link} target="_blank" rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 transition-colors text-xs">
-                            <ExternalLink className="w-3 h-3" />
-                            View job posting
-                          </a>
+                        {editingLink ? (
+                          <form
+                            className="flex items-center gap-1 w-full mt-1"
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              const trimmed = linkInput.trim() || null;
+                              updateLinkMutation.mutate(
+                                { id: posting.id, link: trimmed },
+                                {
+                                  onSuccess: (data) => {
+                                    setDetailPosting((prev) =>
+                                      prev ? { ...prev, posting: { ...prev.posting, link: data.link } } : prev
+                                    );
+                                    queryClient.invalidateQueries({ queryKey: getListPostingsQueryKey() });
+                                    setEditingLink(false);
+                                    toast({ title: "Link updated" });
+                                  },
+                                  onError: () => toast({ title: "Failed to update link", variant: "destructive" }),
+                                }
+                              );
+                            }}
+                          >
+                            <Input
+                              autoFocus
+                              value={linkInput}
+                              onChange={(e) => setLinkInput(e.target.value)}
+                              placeholder="https://..."
+                              className="h-6 text-xs px-2 py-0 flex-1 min-w-0"
+                            />
+                            <button type="submit" disabled={updateLinkMutation.isPending}
+                              className="text-green-400 hover:text-green-300 disabled:opacity-50">
+                              <Check className="w-3.5 h-3.5" />
+                            </button>
+                            <button type="button" onClick={() => setEditingLink(false)}
+                              className="text-muted-foreground hover:text-foreground">
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </form>
+                        ) : (
+                          <span className="flex items-center gap-1">
+                            {posting.link ? (
+                              <a href={posting.link} target="_blank" rel="noopener noreferrer"
+                                className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 transition-colors text-xs">
+                                <ExternalLink className="w-3 h-3" />
+                                View job posting
+                              </a>
+                            ) : (
+                              <span className="text-xs text-muted-foreground/60">No link</span>
+                            )}
+                            <button
+                              onClick={() => { setLinkInput(posting.link ?? ""); setEditingLink(true); }}
+                              className="text-muted-foreground/50 hover:text-muted-foreground transition-colors ml-0.5"
+                              title="Edit link"
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                          </span>
                         )}
                       </div>
                       </DialogDescription>

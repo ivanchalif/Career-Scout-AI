@@ -277,6 +277,34 @@ router.patch("/postings/:id/reopen", requireAuth, async (req, res): Promise<void
   res.json({ id: posting.id });
 });
 
+router.patch("/postings/:id/link", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId;
+  const params = DeletePostingParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const body = z.object({ link: z.string().url().nullable() }).safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "Invalid link URL" });
+    return;
+  }
+
+  const [posting] = await db
+    .update(jobPostingsTable)
+    .set({ link: body.data.link })
+    .where(and(eq(jobPostingsTable.id, params.data.id), eq(jobPostingsTable.userId, userId)))
+    .returning();
+
+  if (!posting) {
+    res.status(404).json({ error: "Posting not found" });
+    return;
+  }
+
+  res.json({ id: posting.id, link: posting.link });
+});
+
 router.get("/postings/:id", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId;
   const params = GetPostingParams.safeParse(req.params);
