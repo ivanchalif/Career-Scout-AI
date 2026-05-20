@@ -733,27 +733,27 @@ export default function DashboardPage() {
         </div>
 
         {/* View tabs + Filters — single row */}
-        <div className="flex items-center border-b border-border mb-5">
-          {/* Filters on left */}
+        <div className="flex items-center border-b border-border mb-5 overflow-x-hidden">
+          {/* Filters on left — icon-only on mobile */}
           <Button
             variant="outline"
             size="sm"
             onClick={() => setShowFilters((v) => !v)}
-            className={`gap-1.5 shrink-0 mr-2 h-8 px-2.5 text-xs ${showFilters ? "border-indigo-500 text-indigo-400" : ""}`}
+            className={`gap-1.5 shrink-0 mr-3 h-8 px-2 ${showFilters ? "border-indigo-500 text-indigo-400" : ""}`}
             data-testid="filter-button"
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
-            Filters
+            <span className="hidden sm:inline text-xs">Filters</span>
           </Button>
 
-          {/* Spacer pushes tabs to right */}
+          {/* Spacer */}
           <div className="flex-1" />
 
           {/* Tabs */}
           <button
             onClick={() => setActiveTab("active")}
             data-testid="tab-active"
-            className={`px-2.5 sm:px-4 py-2 text-xs sm:text-sm font-medium border-b-2 transition-colors -mb-px flex items-center gap-1.5 shrink-0 ${
+            className={`px-2 sm:px-4 py-2 text-xs font-medium border-b-2 transition-colors -mb-px flex items-center gap-1 shrink-0 ${
               activeTab === "active"
                 ? "border-indigo-500 text-indigo-400"
                 : "border-transparent text-muted-foreground hover:text-foreground"
@@ -771,7 +771,7 @@ export default function DashboardPage() {
           <button
             onClick={() => setActiveTab("applied")}
             data-testid="tab-applied"
-            className={`px-2.5 sm:px-4 py-2 text-xs sm:text-sm font-medium border-b-2 transition-colors -mb-px flex items-center gap-1.5 shrink-0 ${
+            className={`px-2 sm:px-4 py-2 text-xs font-medium border-b-2 transition-colors -mb-px flex items-center gap-1 shrink-0 ${
               activeTab === "applied"
                 ? "border-indigo-500 text-indigo-400"
                 : "border-transparent text-muted-foreground hover:text-foreground"
@@ -789,7 +789,7 @@ export default function DashboardPage() {
           <button
             onClick={() => setActiveTab("deleted")}
             data-testid="tab-deleted"
-            className={`px-2.5 sm:px-4 py-2 text-xs sm:text-sm font-medium border-b-2 transition-colors -mb-px flex items-center gap-1.5 shrink-0 ${
+            className={`px-2 sm:px-4 py-2 text-xs font-medium border-b-2 transition-colors -mb-px flex items-center gap-1 shrink-0 ${
               activeTab === "deleted"
                 ? "border-red-500 text-red-400"
                 : "border-transparent text-muted-foreground hover:text-foreground"
