@@ -1065,67 +1065,76 @@ export default function DashboardPage() {
               return (
                 <div key={posting.id} className="flex flex-col">
                 <div
-                  className="flex items-center gap-4 bg-card border border-border rounded-xl px-5 py-4 hover:border-indigo-800/50 transition-colors cursor-pointer"
+                  className="flex flex-col sm:flex-row sm:items-center gap-0 bg-card border border-border rounded-xl hover:border-indigo-800/50 transition-colors cursor-pointer overflow-hidden"
                   data-testid={`posting-card-${posting.id}`}
                   onClick={() => setDetailPosting(item)}
                 >
-                  <ScoreRing score={score} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span
-                        className="font-semibold text-foreground"
-                        data-testid={`posting-title-${posting.id}`}
-                      >
-                        {posting.title}
-                      </span>
-                      <Badge variant="secondary" className="text-xs">
-                        {posting.senderName ?? posting.source}
-                      </Badge>
-                      {posting.appliedAt && (
-                        <span className="flex items-center gap-1 text-xs text-emerald-400">
-                          <CheckCircle2 className="w-3 h-3" />
-                          Applied
+                  {/* Info row — score ring + text content */}
+                  <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0 px-4 pt-3 pb-2 sm:px-5 sm:py-4">
+                    <ScoreRing score={score} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span
+                          className="font-semibold text-foreground"
+                          data-testid={`posting-title-${posting.id}`}
+                        >
+                          {posting.title}
                         </span>
+                        <Badge variant="secondary" className="text-xs">
+                          {posting.senderName ?? posting.source}
+                        </Badge>
+                        {posting.appliedAt && (
+                          <span className="flex items-center gap-1 text-xs text-emerald-400">
+                            <CheckCircle2 className="w-3 h-3" />
+                            Applied
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2">
+                        <span>{posting.company}</span>
+                        {posting.location && (
+                          <span className="flex items-center gap-0.5 text-xs text-muted-foreground/80">
+                            <MapPin className="w-3 h-3" />
+                            {posting.location}
+                          </span>
+                        )}
+                        {(posting.salaryMin || posting.salaryMax) && (
+                          <span className="text-xs text-emerald-400 font-medium">
+                            {posting.salaryMin && posting.salaryMax
+                              ? `$${(posting.salaryMin / 1000).toFixed(0)}k–$${(posting.salaryMax / 1000).toFixed(0)}k`
+                              : posting.salaryMin
+                              ? `$${(posting.salaryMin / 1000).toFixed(0)}k+`
+                              : `up to $${(posting.salaryMax! / 1000).toFixed(0)}k`}
+                          </span>
+                        )}
+                        <span className="text-xs text-muted-foreground/60">
+                          {formatAdded(posting.createdAt)}
+                        </span>
+                      </p>
+                      {report?.matchedSkills && report.matchedSkills.length > 0 && (
+                        <div className="hidden sm:flex flex-wrap gap-1 mt-2">
+                          {report.matchedSkills.slice(0, 4).map((skill) => (
+                            <span key={skill} className="text-xs px-2 py-0.5 rounded-full bg-emerald-950/40 text-emerald-400 border border-emerald-800/30">
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2">
-                      <span>{posting.company}</span>
-                      {posting.location && (
-                        <span className="flex items-center gap-0.5 text-xs text-muted-foreground/80">
-                          <MapPin className="w-3 h-3" />
-                          {posting.location}
-                        </span>
-                      )}
-                      {(posting.salaryMin || posting.salaryMax) && (
-                        <span className="text-xs text-emerald-400 font-medium">
-                          {posting.salaryMin && posting.salaryMax
-                            ? `$${(posting.salaryMin / 1000).toFixed(0)}k–$${(posting.salaryMax / 1000).toFixed(0)}k`
-                            : posting.salaryMin
-                            ? `$${(posting.salaryMin / 1000).toFixed(0)}k+`
-                            : `up to $${(posting.salaryMax! / 1000).toFixed(0)}k`}
-                        </span>
-                      )}
-                      <span className="text-xs text-muted-foreground/60">
-                        {formatAdded(posting.createdAt)}
-                      </span>
-                    </p>
-                    {report?.matchedSkills && report.matchedSkills.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {report.matchedSkills.slice(0, 4).map((skill) => (
-                          <span key={skill} className="text-xs px-2 py-0.5 rounded-full bg-emerald-950/40 text-emerald-400 border border-emerald-800/30">
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
-                    )}
                   </div>
-                  <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                    {posting.link && (
+                  {/* Action buttons — spread full-width on mobile, compact row on desktop */}
+                  <div
+                    className="flex items-center justify-around sm:justify-start sm:gap-1 sm:shrink-0 sm:pr-2 border-t sm:border-t-0 border-border/40 px-1 py-1 sm:px-0 sm:py-0"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {posting.link ? (
                       <a href={posting.link} target="_blank" rel="noopener noreferrer">
-                        <Button variant="ghost" size="icon" className="w-8 h-8" data-testid={`posting-link-${posting.id}`}>
+                        <Button variant="ghost" size="icon" className="w-9 h-9 sm:w-8 sm:h-8" data-testid={`posting-link-${posting.id}`} title="Open job posting">
                           <ExternalLink className="w-3.5 h-3.5" />
                         </Button>
                       </a>
+                    ) : (
+                      <div className="w-9 h-9 sm:w-8 sm:h-8" />
                     )}
                     <Button
                       variant="ghost"
@@ -1134,15 +1143,14 @@ export default function DashboardPage() {
                       disabled={markAppliedMutation.isPending}
                       data-testid={`posting-apply-${posting.id}`}
                       title={posting.appliedAt ? "Undo applied" : "Mark as applied"}
-                      className={`w-8 h-8 ${posting.appliedAt ? "text-emerald-400 hover:text-emerald-300" : "text-muted-foreground hover:text-emerald-400"}`}
+                      className={`w-9 h-9 sm:w-8 sm:h-8 ${posting.appliedAt ? "text-emerald-400 hover:text-emerald-300" : "text-muted-foreground hover:text-emerald-400"}`}
                     >
                       {posting.appliedAt ? <Undo2 className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
                     </Button>
-                    {/* Power-user actions — visible on sm+ only; accessible via detail dialog on mobile */}
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="hidden sm:flex w-8 h-8 text-muted-foreground hover:text-amber-400 hover:bg-amber-950/20"
+                      className="w-9 h-9 sm:w-8 sm:h-8 text-muted-foreground hover:text-amber-400 hover:bg-amber-950/20"
                       onClick={() => flagAsDuplicate(posting.id)}
                       title="Flag as duplicate"
                       data-testid={`posting-flag-dupe-${posting.id}`}
@@ -1152,7 +1160,7 @@ export default function DashboardPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="hidden sm:flex w-8 h-8 text-muted-foreground hover:text-red-400 hover:bg-red-950/20"
+                      className="w-9 h-9 sm:w-8 sm:h-8 text-muted-foreground hover:text-red-400 hover:bg-red-950/20"
                       onClick={() => blockCompany(posting.company)}
                       disabled={updateCompanyFilterMutation.isPending}
                       title={`Block all jobs from ${posting.company}`}
@@ -1163,10 +1171,10 @@ export default function DashboardPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="hidden sm:flex w-8 h-8 text-muted-foreground hover:text-orange-400 hover:bg-orange-950/20"
+                      className="w-9 h-9 sm:w-8 sm:h-8 text-muted-foreground hover:text-orange-400 hover:bg-orange-950/20"
                       onClick={() => onClose(posting.id)}
                       disabled={closeMutation.isPending}
-                      title="Mark as closed — position is no longer accepting applications"
+                      title="Mark as closed"
                       data-testid={`posting-close-${posting.id}`}
                     >
                       <Archive className="w-3.5 h-3.5" />
@@ -1174,7 +1182,7 @@ export default function DashboardPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="w-8 h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      className="w-9 h-9 sm:w-8 sm:h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                       onClick={() => onDelete(posting.id)}
                       data-testid={`posting-delete-${posting.id}`}
                     >
