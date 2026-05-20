@@ -46,9 +46,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <TooltipProvider>
       <div className="flex min-h-screen bg-background" data-testid="app-layout">
-        {/* Sidebar */}
+        {/* Sidebar — desktop only */}
         <aside
-          className={`relative flex flex-col border-r border-border bg-sidebar shrink-0 transition-[width] duration-200 ease-in-out ${collapsed ? "w-16" : "w-60"}`}
+          className={`hidden md:relative md:flex flex-col border-r border-border bg-sidebar shrink-0 transition-[width] duration-200 ease-in-out ${collapsed ? "w-16" : "w-60"}`}
         >
           {/* Logo — click to expand/collapse */}
           <div className="flex items-center border-b border-sidebar-border h-[60px] shrink-0">
@@ -153,9 +153,34 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </aside>
 
         {/* Main content */}
-        <main className="flex-1 min-w-0 overflow-auto">
+        <main className="flex-1 min-w-0 overflow-auto pb-16 md:pb-0">
           {children}
         </main>
+
+        {/* Mobile bottom nav */}
+        <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-sidebar border-t border-sidebar-border" data-testid="mobile-bottom-nav">
+          <div className="flex items-center justify-around px-2 py-1.5">
+            {navItems.map(({ href, icon: Icon, label }) => {
+              const active = location.startsWith(href);
+              return (
+                <Link key={href} href={href}>
+                  <div className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-lg transition-colors ${active ? "text-indigo-400" : "text-sidebar-foreground hover:text-foreground"}`}>
+                    <Icon className="w-5 h-5" />
+                    <span className="text-xs font-medium">{label}</span>
+                  </div>
+                </Link>
+              );
+            })}
+            <button
+              onClick={() => signOut({ redirectUrl: "/" })}
+              className="flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-lg text-muted-foreground hover:text-destructive transition-colors"
+              data-testid="mobile-sign-out"
+            >
+              <LogOut className="w-5 h-5" />
+              <span className="text-xs font-medium">Sign out</span>
+            </button>
+          </div>
+        </nav>
       </div>
     </TooltipProvider>
   );

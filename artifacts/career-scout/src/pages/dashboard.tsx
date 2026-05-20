@@ -641,6 +641,7 @@ export default function DashboardPage() {
             <p className="text-sm text-muted-foreground mt-0.5">Your job opportunities, ranked by fit</p>
           </div>
           <div className="flex items-center gap-2">
+            {/* Utility buttons — icon-only on small screens, full label on sm+ */}
             <Button
               variant="outline"
               size="sm"
@@ -655,7 +656,7 @@ export default function DashboardPage() {
               ) : (
                 <Layers className="w-3.5 h-3.5" />
               )}
-              {sweepingDuplicates ? "Scanning..." : "Clean up duplicates"}
+              <span className="hidden sm:inline">{sweepingDuplicates ? "Scanning..." : "Clean up"}</span>
             </Button>
             <Button
               variant="outline"
@@ -671,7 +672,7 @@ export default function DashboardPage() {
               ) : (
                 <Link2 className="w-3.5 h-3.5" />
               )}
-              {backfillingLinks ? "Finding links..." : "Find links"}
+              <span className="hidden sm:inline">{backfillingLinks ? "Finding..." : "Find links"}</span>
             </Button>
             <Button
               variant="outline"
@@ -683,7 +684,7 @@ export default function DashboardPage() {
               title="Re-run AI analysis on all jobs to refresh skill matching"
             >
               <Sparkles className={`w-3.5 h-3.5 ${reanalyzing ? "animate-pulse" : ""}`} />
-              {reanalyzing ? "Analyzing..." : "Re-analyze"}
+              <span className="hidden sm:inline">{reanalyzing ? "Analyzing..." : "Re-analyze"}</span>
             </Button>
             <Button
               onClick={() => setShowAddModal(true)}
@@ -691,14 +692,14 @@ export default function DashboardPage() {
               data-testid="add-job-button"
             >
               <Plus className="w-4 h-4" />
-              Add job
+              <span className="hidden sm:inline">Add job</span>
             </Button>
           </div>
         </div>
 
         {/* Gmail banner */}
         {gmailStatus?.connected ? (
-          <div className="flex items-center gap-3 bg-emerald-950/30 border border-emerald-800/30 rounded-xl px-5 py-3.5 mb-6" data-testid="gmail-connected-banner">
+          <div className="flex flex-wrap items-center gap-3 bg-emerald-950/30 border border-emerald-800/30 rounded-xl px-5 py-3.5 mb-6" data-testid="gmail-connected-banner">
             <Mail className="w-5 h-5 text-emerald-400 shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-emerald-300">
@@ -713,7 +714,7 @@ export default function DashboardPage() {
                   : "Not yet synced — click Sync to import job emails"}
               </p>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 flex-wrap">
               <Button
                 variant="outline"
                 size="sm"
@@ -1133,10 +1134,11 @@ export default function DashboardPage() {
                     >
                       {posting.appliedAt ? <Undo2 className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
                     </Button>
+                    {/* Power-user actions — visible on sm+ only; accessible via detail dialog on mobile */}
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="w-8 h-8 text-muted-foreground hover:text-amber-400 hover:bg-amber-950/20"
+                      className="hidden sm:flex w-8 h-8 text-muted-foreground hover:text-amber-400 hover:bg-amber-950/20"
                       onClick={() => flagAsDuplicate(posting.id)}
                       title="Flag as duplicate"
                       data-testid={`posting-flag-dupe-${posting.id}`}
@@ -1146,7 +1148,7 @@ export default function DashboardPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="w-8 h-8 text-muted-foreground hover:text-red-400 hover:bg-red-950/20"
+                      className="hidden sm:flex w-8 h-8 text-muted-foreground hover:text-red-400 hover:bg-red-950/20"
                       onClick={() => blockCompany(posting.company)}
                       disabled={updateCompanyFilterMutation.isPending}
                       title={`Block all jobs from ${posting.company}`}
@@ -1157,7 +1159,7 @@ export default function DashboardPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="w-8 h-8 text-muted-foreground hover:text-orange-400 hover:bg-orange-950/20"
+                      className="hidden sm:flex w-8 h-8 text-muted-foreground hover:text-orange-400 hover:bg-orange-950/20"
                       onClick={() => onClose(posting.id)}
                       disabled={closeMutation.isPending}
                       title="Mark as closed — position is no longer accepting applications"
