@@ -502,7 +502,7 @@ export async function rescoreAllPostings(userId: string, { forceParse = false }:
   const allPostings = await db
     .select({ id: jobPostingsTable.id })
     .from(jobPostingsTable)
-    .where(and(eq(jobPostingsTable.userId, userId), isNull(jobPostingsTable.deletedAt)));
+    .where(and(eq(jobPostingsTable.userId, userId), isNull(jobPostingsTable.deletedAt), isNull(jobPostingsTable.closedAt)));
 
   if (allPostings.length > 0) {
     logger.info({ userId, count: allPostings.length, forceParse }, "scoringService: queuing all postings for re-score");
@@ -529,7 +529,7 @@ export async function sweepUnscoredPostings(userId: string): Promise<void> {
     db
       .select({ id: jobPostingsTable.id })
       .from(jobPostingsTable)
-      .where(and(eq(jobPostingsTable.userId, userId), isNull(jobPostingsTable.deletedAt))),
+      .where(and(eq(jobPostingsTable.userId, userId), isNull(jobPostingsTable.deletedAt), isNull(jobPostingsTable.closedAt))),
   ]);
 
   const scoredIds = new Set(scored.map((r) => r.id));

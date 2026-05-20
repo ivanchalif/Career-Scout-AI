@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import {
   Plus, Search, SlidersHorizontal, Mail, TrendingUp,
   BriefcaseBusiness, Star, ExternalLink, Trash2,
-  RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2, CheckCircle2, Undo2, MapPin, Ban, RotateCcw, Layers, Copy,
+  RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2, CheckCircle2, Undo2, MapPin, Ban, RotateCcw, Layers, Copy, Archive,
 } from "lucide-react";
 import {
   useGetDashboardSummary,
@@ -19,6 +19,8 @@ import {
   useUpdateCompanyFilterSettings,
   useListDeletedPostings,
   useRestorePosting,
+  useClosePosting,
+  useReopenPosting,
   getListPostingsQueryKey,
   getListDeletedPostingsQueryKey,
   getGetDashboardSummaryQueryKey,
@@ -301,6 +303,8 @@ export default function DashboardPage() {
   const deleteMutation = useDeletePosting();
   const markAppliedMutation = useMarkApplied();
   const restoreMutation = useRestorePosting();
+  const closeMutation = useClosePosting();
+  const reopenMutation = useReopenPosting();
   const syncMutation = useSyncGmail();
   const disconnectMutation = useDisconnectGmail();
 
@@ -569,6 +573,36 @@ export default function DashboardPage() {
           toast({ title: "Restored", description: "Job posting moved back to Active." });
         },
         onError: () => toast({ title: "Error", description: "Failed to restore posting.", variant: "destructive" }),
+      }
+    );
+  }
+
+  async function onClose(id: number) {
+    await closeMutation.mutateAsync(
+      { id },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
+          qc.invalidateQueries({ queryKey: getListDeletedPostingsQueryKey() });
+          qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+          toast({ title: "Marked as closed", description: "Job posting archived. It can re-import if the role reopens." });
+        },
+        onError: () => toast({ title: "Error", description: "Failed to archive posting.", variant: "destructive" }),
+      }
+    );
+  }
+
+  async function onReopen(id: number) {
+    await reopenMutation.mutateAsync(
+      { id },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
+          qc.invalidateQueries({ queryKey: getListDeletedPostingsQueryKey() });
+          qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+          toast({ title: "Reopened", description: "Job posting moved back to Active." });
+        },
+        onError: () => toast({ title: "Error", description: "Failed to reopen posting.", variant: "destructive" }),
       }
     );
   }
@@ -886,7 +920,7 @@ export default function DashboardPage() {
         {/* Deleted tab info bar */}
         {activeTab === "deleted" && (
           <p className="text-xs text-muted-foreground mb-4">
-            Jobs you've deleted are listed below. Restore any of them to move them back to Active.
+            Deleted jobs are listed below. Closed jobs (position no longer open) are also shown here — they can re-import if the role reopens.
           </p>
         )}
 
@@ -900,12 +934,12 @@ export default function DashboardPage() {
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <Trash2 className="w-10 h-10 text-muted-foreground mb-4" />
               <p className="text-foreground font-medium">
-                {deletedQ.data && deletedQ.data.length > 0 ? "No matching deleted jobs" : "No deleted jobs"}
+                {deletedQ.data && deletedQ.data.length > 0 ? "No matching archived jobs" : "No archived jobs"}
               </p>
               <p className="text-sm text-muted-foreground mt-1">
                 {deletedQ.data && deletedQ.data.length > 0
                   ? "Try adjusting your search or filters."
-                  : "Jobs you delete will appear here so you can restore them."}
+                  : "Jobs you delete or close will appear here."}
               </p>
             </div>
           ) : (
@@ -913,6 +947,7 @@ export default function DashboardPage() {
               {deletedPostings.map((item) => {
                 const { posting, report } = item;
                 const score = report?.fitScore ?? null;
+                const isClosed = !!posting.closedAt && !posting.deletedAt;
                 return (
                   <div
                     key={posting.id}
@@ -924,6 +959,12 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-foreground line-through">{posting.title}</span>
                         <Badge variant="secondary" className="text-xs">{posting.senderName ?? posting.source}</Badge>
+                        {isClosed && (
+                          <Badge variant="outline" className="text-xs text-orange-400 border-orange-800/50 gap-1">
+                            <Archive className="w-3 h-3" />
+                            Closed
+                          </Badge>
+                        )}
                       </div>
                       <p className="text-sm text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2">
                         <span>{posting.company}</span>
@@ -939,17 +980,31 @@ export default function DashboardPage() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5 text-emerald-400 border-emerald-800/50 hover:bg-emerald-950/30 hover:text-emerald-300"
-                        onClick={() => onRestore(posting.id)}
-                        disabled={restoreMutation.isPending}
-                        data-testid={`posting-restore-${posting.id}`}
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                        Restore
-                      </Button>
+                      {isClosed ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5 text-emerald-400 border-emerald-800/50 hover:bg-emerald-950/30 hover:text-emerald-300"
+                          onClick={() => onReopen(posting.id)}
+                          disabled={reopenMutation.isPending}
+                          data-testid={`posting-reopen-${posting.id}`}
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          Reopen
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5 text-emerald-400 border-emerald-800/50 hover:bg-emerald-950/30 hover:text-emerald-300"
+                          onClick={() => onRestore(posting.id)}
+                          disabled={restoreMutation.isPending}
+                          data-testid={`posting-restore-${posting.id}`}
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          Restore
+                        </Button>
+                      )}
                     </div>
                   </div>
                 );
@@ -1098,6 +1153,17 @@ export default function DashboardPage() {
                       data-testid={`posting-block-company-${posting.id}`}
                     >
                       <Ban className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="w-8 h-8 text-muted-foreground hover:text-orange-400 hover:bg-orange-950/20"
+                      onClick={() => onClose(posting.id)}
+                      disabled={closeMutation.isPending}
+                      title="Mark as closed — position is no longer accepting applications"
+                      data-testid={`posting-close-${posting.id}`}
+                    >
+                      <Archive className="w-3.5 h-3.5" />
                     </Button>
                     <Button
                       variant="ghost"

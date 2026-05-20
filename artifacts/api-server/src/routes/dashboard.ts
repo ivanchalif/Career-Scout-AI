@@ -29,6 +29,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
   // Mirror the same filter chain the list endpoint uses
   const activeOnly = allPostings.filter((p) => {
     if (p.deletedAt) return false;
+    if (p.closedAt) return false;
     if (p.appliedAt) return false;
     if (companyFilter.mode !== "off" && companyFilter.companies.length > 0) {
       const company = p.company.toLowerCase();

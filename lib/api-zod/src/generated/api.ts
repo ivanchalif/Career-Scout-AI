@@ -161,6 +161,8 @@ export const ListPostingsResponseItem = zod.object({
     senderName: zod.string().nullish(),
     gmailMessageId: zod.string().nullish(),
     appliedAt: zod.coerce.date().nullish(),
+    closedAt: zod.coerce.date().nullish(),
+    deletedAt: zod.coerce.date().nullish(),
     createdAt: zod.coerce.date(),
   }),
   report: zod.union([

@@ -815,6 +815,148 @@ export const useDeletePosting = <
   return useMutation(getDeletePostingMutationOptions(options));
 };
 
+export const getClosePostingUrl = (id: number) => {
+  return `/api/postings/${id}/close`;
+};
+
+export const closePosting = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getClosePostingUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getClosePostingMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof closePosting>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof closePosting>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["closePosting"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof closePosting>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+    return closePosting(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useClosePosting = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof closePosting>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof closePosting>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getClosePostingMutationOptions(options));
+};
+
+export const getReopenPostingUrl = (id: number) => {
+  return `/api/postings/${id}/reopen`;
+};
+
+export const reopenPosting = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getReopenPostingUrl(id), {
+    ...options,
+    method: "PATCH",
+  });
+};
+
+export const getReopenPostingMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reopenPosting>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reopenPosting>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["reopenPosting"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reopenPosting>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+    return reopenPosting(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useReopenPosting = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reopenPosting>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reopenPosting>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getReopenPostingMutationOptions(options));
+};
+
 /**
  * @summary Toggle applied status of a job posting
  */

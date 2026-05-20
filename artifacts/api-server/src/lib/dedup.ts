@@ -129,6 +129,7 @@ export async function isFuzzyDuplicate(
     SELECT id, title, company, deleted_at, applied_at
     FROM job_postings
     WHERE user_id = ${userId}
+      AND closed_at IS NULL
       AND similarity(
         ${sql.raw(titleNorm)},
         ${normTitle}
@@ -180,6 +181,7 @@ export async function runDedupSweep(userId: string): Promise<number> {
     .where(and(
       eq(jobPostingsTable.userId, userId),
       isNull(jobPostingsTable.deletedAt),
+      isNull(jobPostingsTable.closedAt),
       isNull(jobPostingsTable.appliedAt),
     ));
 
@@ -235,6 +237,7 @@ export async function sweepDuplicatesOf(
     WHERE user_id = ${userId}
       AND id != ${excludeId}
       AND deleted_at IS NULL
+      AND closed_at IS NULL
       AND applied_at IS NULL
       AND similarity(
         ${sql.raw(titleNorm)},

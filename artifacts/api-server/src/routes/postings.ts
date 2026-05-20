@@ -57,6 +57,7 @@ router.get("/postings", requireAuth, async (req, res): Promise<void> => {
   const conditions: ReturnType<typeof eq>[] = [
     eq(jobPostingsTable.userId, userId),
     isNull(jobPostingsTable.deletedAt),
+    isNull(jobPostingsTable.closedAt),
   ];
 
   if (source) {
@@ -144,7 +145,10 @@ router.get("/postings/deleted", requireAuth, async (req, res): Promise<void> => 
   const postings = await db
     .select()
     .from(jobPostingsTable)
-    .where(and(eq(jobPostingsTable.userId, userId), isNotNull(jobPostingsTable.deletedAt)))
+    .where(and(
+      eq(jobPostingsTable.userId, userId),
+      or(isNotNull(jobPostingsTable.deletedAt), isNotNull(jobPostingsTable.closedAt)),
+    ))
     .orderBy(jobPostingsTable.deletedAt);
 
   const results = await Promise.all(
@@ -182,6 +186,7 @@ router.get("/postings/near-duplicates", requireAuth, async (req, res): Promise<v
     WHERE a.user_id = '${safeId}'
       AND b.user_id = '${safeId}'
       AND a.deleted_at IS NULL AND b.deleted_at IS NULL
+      AND a.closed_at IS NULL AND b.closed_at IS NULL
       AND a.applied_at IS NULL AND b.applied_at IS NULL
       AND similarity(${aTitleNorm}, ${bTitleNorm}) BETWEEN 0.45 AND 0.69
       AND similarity(${aCompanyNorm}, ${bCompanyNorm}) > 0.35
@@ -205,6 +210,63 @@ router.patch("/postings/:id/restore", requireAuth, async (req, res): Promise<voi
     .update(jobPostingsTable)
     .set({ deletedAt: null })
     .where(and(eq(jobPostingsTable.id, params.data.id), eq(jobPostingsTable.userId, userId), isNotNull(jobPostingsTable.deletedAt)))
+    .returning();
+
+  if (!posting) {
+    res.status(404).json({ error: "Posting not found" });
+    return;
+  }
+
+  res.json({ id: posting.id });
+});
+
+// Marks a posting as closed (position no longer accepting applications).
+// Unlike delete, closed postings do NOT block re-import — the same role can
+// reappear if it opens again.
+router.post("/postings/:id/close", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId;
+  const params = DeletePostingParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [posting] = await db
+    .update(jobPostingsTable)
+    .set({ closedAt: new Date() })
+    .where(and(
+      eq(jobPostingsTable.id, params.data.id),
+      eq(jobPostingsTable.userId, userId),
+      isNull(jobPostingsTable.deletedAt),
+      isNull(jobPostingsTable.closedAt),
+    ))
+    .returning();
+
+  if (!posting) {
+    res.status(404).json({ error: "Posting not found" });
+    return;
+  }
+
+  res.sendStatus(204);
+});
+
+// Reopens a closed posting, returning it to the active dashboard.
+router.patch("/postings/:id/reopen", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId;
+  const params = DeletePostingParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [posting] = await db
+    .update(jobPostingsTable)
+    .set({ closedAt: null })
+    .where(and(
+      eq(jobPostingsTable.id, params.data.id),
+      eq(jobPostingsTable.userId, userId),
+      isNotNull(jobPostingsTable.closedAt),
+    ))
     .returning();
 
   if (!posting) {

@@ -73,6 +73,10 @@ export interface JobPosting {
   gmailMessageId?: string | null;
   /** @nullable */
   appliedAt?: string | null;
+  /** @nullable */
+  closedAt?: string | null;
+  /** @nullable */
+  deletedAt?: string | null;
   createdAt: string;
 }
 

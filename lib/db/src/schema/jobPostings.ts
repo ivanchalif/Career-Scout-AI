@@ -21,6 +21,7 @@ export const jobPostingsTable = pgTable("job_postings", {
   senderName: text("sender_name"),
   gmailMessageId: text("gmail_message_id"),
   appliedAt: timestamp("applied_at", { withTimezone: true }),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
