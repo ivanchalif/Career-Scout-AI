@@ -512,14 +512,10 @@ router.post("/postings/backfill-links", requireAuth, async (req, res): Promise<v
 
       const resolvedUrl = pageResult.finalUrl;
       if (resolvedUrl === trackingUrl) {
-        // URL didn't change — likely blocked or returned the same tracking URL.
-        // Clear the link so it's not shown as a broken tracking URL.
-        logger.info({ postingId: posting.id, trackingUrl }, "backfill-links: tracking URL unresolvable, clearing link");
-        await db
-          .update(jobPostingsTable)
-          .set({ link: null })
-          .where(and(eq(jobPostingsTable.id, posting.id), eq(jobPostingsTable.userId, userId)));
-        updated++;
+        // URL didn't change — resolution was blocked. Keep the original tracking URL
+        // so the card remains clickable; the user can still open it manually.
+        logger.info({ postingId: posting.id, trackingUrl }, "backfill-links: tracking URL unresolvable, keeping original");
+        skipped++;
       } else {
         logger.info({ postingId: posting.id, trackingUrl, resolvedUrl }, "backfill-links: resolved tracking URL");
         await db
