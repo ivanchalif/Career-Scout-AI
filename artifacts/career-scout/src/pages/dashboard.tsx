@@ -358,7 +358,39 @@ export default function DashboardPage() {
       });
       if (!res.ok) throw new Error("Failed to get auth URL");
       const { url } = await res.json() as { url: string };
-      window.location.href = url;
+
+      // Open in a popup to avoid X-Frame-Options issues inside Replit's iframe preview
+      const popup = window.open(url, "gmail_oauth", "width=520,height=640,left=200,top=100");
+      if (!popup) {
+        // Popup blocked — fall back to same-window navigation
+        window.location.href = url;
+        return;
+      }
+
+      function onMessage(event: MessageEvent) {
+        if (event.data?.type === "gmail_connected") {
+          qc.invalidateQueries({ queryKey: getGetGmailStatusQueryKey() });
+          toast({ title: "Gmail connected", description: "Your Gmail account is now linked to Career Scout." });
+          cleanup();
+        } else if (event.data?.type === "gmail_error") {
+          toast({ title: "Gmail connection failed", description: "Could not connect your Gmail account. Please try again.", variant: "destructive" });
+          cleanup();
+        }
+      }
+
+      const pollTimer = setInterval(() => {
+        if (popup.closed) {
+          qc.invalidateQueries({ queryKey: getGetGmailStatusQueryKey() });
+          cleanup();
+        }
+      }, 800);
+
+      function cleanup() {
+        window.removeEventListener("message", onMessage);
+        clearInterval(pollTimer);
+      }
+
+      window.addEventListener("message", onMessage);
     } catch {
       toast({ title: "Error", description: "Could not start Gmail connection. Try again.", variant: "destructive" });
     }
