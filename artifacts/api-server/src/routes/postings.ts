@@ -183,6 +183,7 @@ router.get("/postings/near-duplicates", requireAuth, async (req, res): Promise<v
            a.location AS location1, b.location AS location2,
            a.url AS url1, b.url AS url2,
            a.applied_at AS applied_at1, b.applied_at AS applied_at2,
+           a.deleted_at AS deleted_at1, b.deleted_at AS deleted_at2,
            a.salary_min AS salary_min1, b.salary_min AS salary_min2,
            a.salary_max AS salary_max1, b.salary_max AS salary_max2,
            a.created_at AS created_at1, b.created_at AS created_at2,
@@ -191,9 +192,11 @@ router.get("/postings/near-duplicates", requireAuth, async (req, res): Promise<v
     JOIN job_postings b ON a.id < b.id
     WHERE a.user_id = '${safeId}'
       AND b.user_id = '${safeId}'
-      AND a.deleted_at IS NULL AND b.deleted_at IS NULL
       AND a.closed_at IS NULL AND b.closed_at IS NULL
-      AND (a.applied_at IS NULL OR b.applied_at IS NULL)
+      AND (
+        (a.deleted_at IS NULL AND a.applied_at IS NULL) OR
+        (b.deleted_at IS NULL AND b.applied_at IS NULL)
+      )
       AND similarity(${aTitleNorm}, ${bTitleNorm}) BETWEEN 0.45 AND 0.69
       AND similarity(${aCompanyNorm}, ${bCompanyNorm}) > 0.35
     ORDER BY title_sim DESC

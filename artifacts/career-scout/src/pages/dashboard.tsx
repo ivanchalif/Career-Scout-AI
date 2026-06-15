@@ -145,6 +145,7 @@ export default function DashboardPage() {
     location1: string | null; location2: string | null;
     url1: string | null; url2: string | null;
     applied_at1: string | null; applied_at2: string | null;
+    deleted_at1: string | null; deleted_at2: string | null;
     salary_min1: number | null; salary_min2: number | null;
     salary_max1: number | null; salary_max2: number | null;
     created_at1: string; created_at2: string;
@@ -1206,6 +1207,7 @@ export default function DashboardPage() {
                   const pairedTitle   = isId1 ? entry.title2   : entry.title1;
                   const pairedCompany = isId1 ? entry.company2  : entry.company1;
                   const pairedAppliedAt = isId1 ? entry.applied_at2 : entry.applied_at1;
+                  const pairedDeletedAt = isId1 ? entry.deleted_at2 : entry.deleted_at1;
                   const pairedLocation  = isId1 ? entry.location2  : entry.location1;
                   const pairedUrl       = isId1 ? entry.url2       : entry.url1;
                   const pairedSalMin    = isId1 ? entry.salary_min2 : entry.salary_min1;
@@ -1216,6 +1218,36 @@ export default function DashboardPage() {
                   const selfSalMin      = isId1 ? entry.salary_min1 : entry.salary_min2;
                   const selfSalMax      = isId1 ? entry.salary_max1 : entry.salary_max2;
                   const selfAppliedAt   = isId1 ? entry.applied_at1 : entry.applied_at2;
+
+                  const cfSettings = companyFilterQ.data as { mode: string; companies: string[] } | undefined;
+                  function isBlocked(company: string) {
+                    if (!cfSettings || cfSettings.mode !== "exclude" || cfSettings.companies.length === 0) return false;
+                    const c = company.toLowerCase();
+                    return cfSettings.companies.some((e: string) => { const en = e.toLowerCase(); return c.includes(en) || en.includes(c); });
+                  }
+
+                  function StatusPill({ appliedAt, deletedAt, company }: { appliedAt: string | null; deletedAt: string | null; company: string }) {
+                    if (deletedAt) return (
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-red-950/50 text-red-400 border border-red-800/40">
+                        Deleted
+                      </span>
+                    );
+                    if (appliedAt) return (
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-sky-950/50 text-sky-400 border border-sky-800/40">
+                        <CheckCircle2 className="w-2.5 h-2.5" /> Applied
+                      </span>
+                    );
+                    if (isBlocked(company)) return (
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-orange-950/50 text-orange-400 border border-orange-800/40">
+                        Blocked
+                      </span>
+                    );
+                    return (
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-950/40 text-emerald-400 border border-emerald-800/30">
+                        Active
+                      </span>
+                    );
+                  }
                   const pairedScore     = allPostingsById.get(pairedId)?.report?.fitScore ?? null;
                   const selfScore       = allPostingsById.get(posting.id)?.report?.fitScore ?? null;
                   const isReviewing = reviewingNearDups.has(posting.id);
@@ -1238,15 +1270,7 @@ export default function DashboardPage() {
                         <span className="flex-1 flex items-center gap-1.5 flex-wrap">
                           Looks like a duplicate of{" "}
                           <span className="font-semibold">{pairedTitle} at {pairedCompany}</span>
-                          {pairedAppliedAt ? (
-                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-sky-950/50 text-sky-400 border border-sky-800/40">
-                              <CheckCircle2 className="w-2.5 h-2.5" /> Applied
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-950/40 text-emerald-400 border border-emerald-800/30">
-                              Active
-                            </span>
-                          )}
+                          <StatusPill appliedAt={pairedAppliedAt} deletedAt={pairedDeletedAt} company={pairedCompany} />
                         </span>
                         <button
                           className="flex items-center gap-0.5 text-amber-400 hover:text-amber-200"
@@ -1281,15 +1305,7 @@ export default function DashboardPage() {
                             <p className="font-semibold text-zinc-200 leading-tight">{posting.title}</p>
                             <p className="text-zinc-400">{posting.company}</p>
                             <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                              {selfAppliedAt ? (
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-sky-950/50 text-sky-400 border border-sky-800/40">
-                                  <CheckCircle2 className="w-2.5 h-2.5" /> Applied
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-950/40 text-emerald-400 border border-emerald-800/30">
-                                  Active
-                                </span>
-                              )}
+                              <StatusPill appliedAt={selfAppliedAt} deletedAt={null} company={posting.company} />
                               {selfScore != null && (
                                 <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold border ${selfScore >= 80 ? "bg-emerald-950/50 text-emerald-400 border-emerald-800/40" : selfScore >= 60 ? "bg-amber-950/50 text-amber-400 border-amber-800/40" : "bg-red-950/50 text-red-400 border-red-800/40"}`}>
                                   {selfScore}% fit
@@ -1311,15 +1327,7 @@ export default function DashboardPage() {
                             <p className="font-semibold text-zinc-200 leading-tight">{pairedTitle}</p>
                             <p className="text-zinc-400">{pairedCompany}</p>
                             <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                              {pairedAppliedAt ? (
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-sky-950/50 text-sky-400 border border-sky-800/40">
-                                  <CheckCircle2 className="w-2.5 h-2.5" /> Applied
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-950/40 text-emerald-400 border border-emerald-800/30">
-                                  Active
-                                </span>
-                              )}
+                              <StatusPill appliedAt={pairedAppliedAt} deletedAt={pairedDeletedAt} company={pairedCompany} />
                               {pairedScore != null && (
                                 <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold border ${pairedScore >= 80 ? "bg-emerald-950/50 text-emerald-400 border-emerald-800/40" : pairedScore >= 60 ? "bg-amber-950/50 text-amber-400 border-amber-800/40" : "bg-red-950/50 text-red-400 border-red-800/40"}`}>
                                   {pairedScore}% fit
