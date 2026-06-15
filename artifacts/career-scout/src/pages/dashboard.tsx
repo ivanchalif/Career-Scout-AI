@@ -5,6 +5,7 @@ import {
   Plus, Search, SlidersHorizontal, Mail, TrendingUp,
   BriefcaseBusiness, Star, Trash2,
   RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2, CheckCircle2, Undo2, MapPin, Ban, RotateCcw, Layers, Copy, Archive,
+  ChevronDown, ChevronUp, ExternalLink,
 } from "lucide-react";
 import {
   useGetDashboardSummary,
@@ -137,8 +138,20 @@ export default function DashboardPage() {
   const [backfillingLinks, setBackfillingLinks] = useState(false);
   const [sweepingDuplicates, setSweepingDuplicates] = useState(false);
   const [activeTab, setActiveTab] = useState<"active" | "applied" | "deleted">("active");
-  const [nearDupMap, setNearDupMap] = useState<Map<number, number>>(new Map());
+  type NearDupPair = {
+    id1: number; id2: number;
+    title1: string; title2: string;
+    company1: string; company2: string;
+    location1: string | null; location2: string | null;
+    url1: string | null; url2: string | null;
+    applied_at1: string | null; applied_at2: string | null;
+    salary_min1: number | null; salary_min2: number | null;
+    salary_max1: number | null; salary_max2: number | null;
+    created_at1: string; created_at2: string;
+  };
+  const [nearDupMap, setNearDupMap] = useState<Map<number, NearDupPair & { isId1: boolean }>>(new Map());
   const [dismissedNearDups, setDismissedNearDups] = useState<Set<number>>(new Set());
+  const [reviewingNearDups, setReviewingNearDups] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const SESSION_KEY = "dedup-sweep-done";
@@ -179,9 +192,10 @@ export default function DashboardPage() {
     }
     setNearDupMap((prev) => {
       const next = new Map(prev);
-      const paired = next.get(postingId);
+      const entry = next.get(postingId);
+      const pairedId = entry ? (entry.isId1 ? entry.id2 : entry.id1) : undefined;
       next.delete(postingId);
-      if (paired !== undefined) next.delete(paired);
+      if (pairedId !== undefined) next.delete(pairedId);
       return next;
     });
     qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
@@ -190,11 +204,34 @@ export default function DashboardPage() {
   }
 
   function dismissNearDup(postingId: number) {
-    const paired = nearDupMap.get(postingId);
+    const entry = nearDupMap.get(postingId);
+    const pairedId = entry ? (entry.isId1 ? entry.id2 : entry.id1) : undefined;
     setDismissedNearDups((prev) => {
       const next = new Set(prev);
       next.add(postingId);
-      if (paired !== undefined) next.add(paired);
+      if (pairedId !== undefined) next.add(pairedId);
+      return next;
+    });
+    setReviewingNearDups((prev) => {
+      const next = new Set(prev);
+      next.delete(postingId);
+      if (pairedId !== undefined) next.delete(pairedId);
+      return next;
+    });
+  }
+
+  function toggleReviewNearDup(postingId: number) {
+    const entry = nearDupMap.get(postingId);
+    const pairedId = entry ? (entry.isId1 ? entry.id2 : entry.id1) : undefined;
+    setReviewingNearDups((prev) => {
+      const next = new Set(prev);
+      if (next.has(postingId)) {
+        next.delete(postingId);
+        if (pairedId !== undefined) next.delete(pairedId);
+      } else {
+        next.add(postingId);
+        if (pairedId !== undefined) next.add(pairedId);
+      }
       return next;
     });
   }
@@ -282,11 +319,11 @@ export default function DashboardPage() {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
     }).then((r) => r.ok ? r.json() : [])
-      .then((pairs: Array<{ id1: number; id2: number }>) => {
-        const map = new Map<number, number>();
-        for (const { id1, id2 } of pairs) {
-          map.set(id1, id2);
-          map.set(id2, id1);
+      .then((pairs: NearDupPair[]) => {
+        const map = new Map<number, NearDupPair & { isId1: boolean }>();
+        for (const pair of pairs) {
+          map.set(pair.id1, { ...pair, isId1: true });
+          map.set(pair.id2, { ...pair, isId1: false });
         }
         setNearDupMap(map);
       })
@@ -1163,36 +1200,143 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 {nearDupMap.has(posting.id) && !dismissedNearDups.has(posting.id) && (() => {
-                  const pairedId = nearDupMap.get(posting.id)!;
-                  const pairedRaw = allPostingsById.get(pairedId);
+                  const entry = nearDupMap.get(posting.id)!;
+                  const isId1 = entry.isId1;
+                  const pairedId    = isId1 ? entry.id2 : entry.id1;
+                  const pairedTitle   = isId1 ? entry.title2   : entry.title1;
+                  const pairedCompany = isId1 ? entry.company2  : entry.company1;
+                  const pairedAppliedAt = isId1 ? entry.applied_at2 : entry.applied_at1;
+                  const pairedLocation  = isId1 ? entry.location2  : entry.location1;
+                  const pairedUrl       = isId1 ? entry.url2       : entry.url1;
+                  const pairedSalMin    = isId1 ? entry.salary_min2 : entry.salary_min1;
+                  const pairedSalMax    = isId1 ? entry.salary_max2 : entry.salary_max1;
+                  const pairedCreatedAt = isId1 ? entry.created_at2 : entry.created_at1;
+                  const selfLocation    = isId1 ? entry.location1  : entry.location2;
+                  const selfUrl         = isId1 ? entry.url1       : entry.url2;
+                  const selfSalMin      = isId1 ? entry.salary_min1 : entry.salary_min2;
+                  const selfSalMax      = isId1 ? entry.salary_max1 : entry.salary_max2;
+                  const selfAppliedAt   = isId1 ? entry.applied_at1 : entry.applied_at2;
+                  const pairedScore     = allPostingsById.get(pairedId)?.report?.fitScore ?? null;
+                  const selfScore       = allPostingsById.get(posting.id)?.report?.fitScore ?? null;
+                  const isReviewing = reviewingNearDups.has(posting.id);
+
+                  function fmtSalary(min: number | null, max: number | null) {
+                    if (!min && !max) return null;
+                    if (min && max) return `$${(min/1000).toFixed(0)}k–$${(max/1000).toFixed(0)}k`;
+                    if (min) return `$${(min/1000).toFixed(0)}k+`;
+                    return `up to $${(max!/1000).toFixed(0)}k`;
+                  }
+
                   return (
                     <div
-                      className="flex items-center gap-2 text-xs rounded-b-xl px-4 py-1.5 bg-amber-950/20 border-x border-b border-amber-800/30 text-amber-400"
+                      className="rounded-b-xl border-x border-b border-amber-800/30 bg-amber-950/20 text-amber-400"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <Copy className="w-3 h-3 shrink-0" />
-                      <span className="flex-1">
-                        Looks like a duplicate of{" "}
-                        {pairedRaw ? (
-                          <span className="font-semibold">{pairedRaw.posting.title} at {pairedRaw.posting.company}</span>
-                        ) : (
-                          "another posting"
-                        )}{" "}
-                        — is this the same role?
-                      </span>
-                      <button
-                        className="font-medium hover:text-amber-200 underline underline-offset-2"
-                        onClick={() => flagAsDuplicate(posting.id)}
-                      >
-                        Yes, remove it
-                      </button>
-                      <span className="text-amber-800/60 select-none">·</span>
-                      <button
-                        className="text-amber-600 hover:text-amber-400"
-                        onClick={() => dismissNearDup(posting.id)}
-                      >
-                        Keep both
-                      </button>
+                      {/* Banner row */}
+                      <div className="flex items-center gap-2 text-xs px-4 py-1.5">
+                        <Copy className="w-3 h-3 shrink-0" />
+                        <span className="flex-1 flex items-center gap-1.5 flex-wrap">
+                          Looks like a duplicate of{" "}
+                          <span className="font-semibold">{pairedTitle} at {pairedCompany}</span>
+                          {pairedAppliedAt ? (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-sky-950/50 text-sky-400 border border-sky-800/40">
+                              <CheckCircle2 className="w-2.5 h-2.5" /> Applied
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-950/40 text-emerald-400 border border-emerald-800/30">
+                              Active
+                            </span>
+                          )}
+                        </span>
+                        <button
+                          className="flex items-center gap-0.5 text-amber-400 hover:text-amber-200"
+                          onClick={() => toggleReviewNearDup(posting.id)}
+                          title={isReviewing ? "Hide comparison" : "Review both roles"}
+                        >
+                          {isReviewing ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                          <span className="font-medium">Review</span>
+                        </button>
+                        <span className="text-amber-800/60 select-none">·</span>
+                        <button
+                          className="font-medium hover:text-amber-200 underline underline-offset-2"
+                          onClick={() => flagAsDuplicate(posting.id)}
+                        >
+                          Remove this
+                        </button>
+                        <span className="text-amber-800/60 select-none">·</span>
+                        <button
+                          className="text-amber-600 hover:text-amber-400"
+                          onClick={() => dismissNearDup(posting.id)}
+                        >
+                          Keep both
+                        </button>
+                      </div>
+
+                      {/* Expandable side-by-side comparison */}
+                      {isReviewing && (
+                        <div className="grid grid-cols-2 gap-px mx-4 mb-3 rounded-lg overflow-hidden border border-amber-800/20 text-xs">
+                          {/* Self (this card) */}
+                          <div className="bg-zinc-900/60 px-3 py-2.5 flex flex-col gap-1">
+                            <p className="text-[10px] uppercase tracking-wide text-amber-700 font-semibold mb-0.5">This posting</p>
+                            <p className="font-semibold text-zinc-200 leading-tight">{posting.title}</p>
+                            <p className="text-zinc-400">{posting.company}</p>
+                            <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                              {selfAppliedAt ? (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-sky-950/50 text-sky-400 border border-sky-800/40">
+                                  <CheckCircle2 className="w-2.5 h-2.5" /> Applied
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-950/40 text-emerald-400 border border-emerald-800/30">
+                                  Active
+                                </span>
+                              )}
+                              {selfScore != null && (
+                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold border ${selfScore >= 80 ? "bg-emerald-950/50 text-emerald-400 border-emerald-800/40" : selfScore >= 60 ? "bg-amber-950/50 text-amber-400 border-amber-800/40" : "bg-red-950/50 text-red-400 border-red-800/40"}`}>
+                                  {selfScore}% fit
+                                </span>
+                              )}
+                            </div>
+                            {selfLocation && <p className="flex items-center gap-0.5 text-zinc-500"><MapPin className="w-2.5 h-2.5" />{selfLocation}</p>}
+                            {fmtSalary(selfSalMin, selfSalMax) && <p className="text-sky-400">{fmtSalary(selfSalMin, selfSalMax)}</p>}
+                            {posting.createdAt && <p className="text-zinc-600">{formatAdded(posting.createdAt)}</p>}
+                            {selfUrl && (
+                              <a href={selfUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-0.5 text-amber-600 hover:text-amber-400 mt-0.5">
+                                <ExternalLink className="w-2.5 h-2.5" /> View posting
+                              </a>
+                            )}
+                          </div>
+                          {/* Paired posting */}
+                          <div className="bg-zinc-900/40 px-3 py-2.5 flex flex-col gap-1">
+                            <p className="text-[10px] uppercase tracking-wide text-amber-700 font-semibold mb-0.5">Similar posting</p>
+                            <p className="font-semibold text-zinc-200 leading-tight">{pairedTitle}</p>
+                            <p className="text-zinc-400">{pairedCompany}</p>
+                            <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                              {pairedAppliedAt ? (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-sky-950/50 text-sky-400 border border-sky-800/40">
+                                  <CheckCircle2 className="w-2.5 h-2.5" /> Applied
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-950/40 text-emerald-400 border border-emerald-800/30">
+                                  Active
+                                </span>
+                              )}
+                              {pairedScore != null && (
+                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold border ${pairedScore >= 80 ? "bg-emerald-950/50 text-emerald-400 border-emerald-800/40" : pairedScore >= 60 ? "bg-amber-950/50 text-amber-400 border-amber-800/40" : "bg-red-950/50 text-red-400 border-red-800/40"}`}>
+                                  {pairedScore}% fit
+                                </span>
+                              )}
+                            </div>
+                            {pairedLocation && <p className="flex items-center gap-0.5 text-zinc-500"><MapPin className="w-2.5 h-2.5" />{pairedLocation}</p>}
+                            {fmtSalary(pairedSalMin, pairedSalMax) && <p className="text-sky-400">{fmtSalary(pairedSalMin, pairedSalMax)}</p>}
+                            {pairedCreatedAt && <p className="text-zinc-600">{formatAdded(pairedCreatedAt)}</p>}
+                            {pairedUrl && (
+                              <a href={pairedUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-0.5 text-amber-600 hover:text-amber-400 mt-0.5">
+                                <ExternalLink className="w-2.5 h-2.5" /> View posting
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
