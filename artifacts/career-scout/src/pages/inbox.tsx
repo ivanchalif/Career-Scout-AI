@@ -19,8 +19,12 @@ import {
   useGetCompanyFilterSettings,
   useUpdateCompanyFilterSettings,
   getGetCompanyFilterSettingsQueryKey,
+  useGetTitleExcludeSettings,
+  useUpdateTitleExcludeSettings,
+  getGetTitleExcludeSettingsQueryKey,
   type EmailFilterSettings,
   type CompanyFilterSettings,
+  type TitleExcludeSettings,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSearch } from "wouter";
@@ -576,6 +580,7 @@ function FilterSettingsTab() {
   const qc = useQueryClient();
   const { data: settings, isLoading } = useGetFilterSettings();
   const { data: companyFilter, isLoading: companyFilterLoading } = useGetCompanyFilterSettings();
+  const { data: titleExcludeData, isLoading: titleExcludeLoading } = useGetTitleExcludeSettings();
 
   const updateMutation = useUpdateFilterSettings({
     mutation: {
@@ -602,11 +607,25 @@ function FilterSettingsTab() {
     },
   });
 
+  const updateTitleExcludeMutation = useUpdateTitleExcludeSettings({
+    mutation: {
+      onSuccess: (data) => {
+        qc.setQueryData(getGetTitleExcludeSettingsQueryKey(), data);
+        qc.invalidateQueries({ queryKey: ["/api/postings"] });
+        toast({ title: "Title filter saved", description: "Jobs with blocked title keywords will be hidden from the dashboard." });
+      },
+      onError: () => {
+        toast({ title: "Save failed", description: "Could not save title filter.", variant: "destructive" });
+      },
+    },
+  });
+
   const [subjectInput, setSubjectInput] = useState("");
   const [fromInput, setFromInput] = useState("");
   const [bodyInput, setBodyInput] = useState("");
   const [blockedBodyInput, setBlockedBodyInput] = useState("");
   const [companyInput, setCompanyInput] = useState("");
+  const [titleExcludeInput, setTitleExcludeInput] = useState("");
 
   const [localSettings, setLocalSettings] = useState<EmailFilterSettings>({
     subjectKeywords: [],
@@ -620,6 +639,8 @@ function FilterSettingsTab() {
     companies: [],
   });
 
+  const [localTitleExclude, setLocalTitleExclude] = useState<TitleExcludeSettings>({ keywords: [] });
+
   useEffect(() => {
     if (settings) setLocalSettings({ blockedBodyKeywords: [], ...settings });
   }, [settings]);
@@ -627,6 +648,10 @@ function FilterSettingsTab() {
   useEffect(() => {
     if (companyFilter) setLocalCompanySettings(companyFilter);
   }, [companyFilter]);
+
+  useEffect(() => {
+    if (titleExcludeData) setLocalTitleExclude(titleExcludeData);
+  }, [titleExcludeData]);
 
   function addItem(field: keyof EmailFilterSettings, value: string, setInput: (v: string) => void) {
     const trimmed = value.trim().toLowerCase();
@@ -660,7 +685,23 @@ function FilterSettingsTab() {
     updateCompanyMutation.mutate(localCompanySettings);
   }
 
-  if (isLoading || companyFilterLoading) {
+  function addTitleExcludeKeyword(value: string) {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    if (localTitleExclude.keywords.map((k) => k.toLowerCase()).includes(trimmed.toLowerCase())) return;
+    setLocalTitleExclude((prev) => ({ keywords: [...prev.keywords, trimmed] }));
+    setTitleExcludeInput("");
+  }
+
+  function removeTitleExcludeKeyword(kw: string) {
+    setLocalTitleExclude((prev) => ({ keywords: prev.keywords.filter((k) => k !== kw) }));
+  }
+
+  function handleSaveTitleExclude() {
+    updateTitleExcludeMutation.mutate(localTitleExclude);
+  }
+
+  if (isLoading || companyFilterLoading || titleExcludeLoading) {
     return (
       <section className="bg-card border border-border rounded-xl p-6">
         <div className="space-y-3">
@@ -935,6 +976,77 @@ function FilterSettingsTab() {
           >
             {updateCompanyMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             Save company filter
+          </Button>
+        </div>
+      </div>
+
+      {/* Title Keyword Filter */}
+      <div className="pt-4 border-t-2 border-border space-y-5">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <SlidersHorizontal className="w-4 h-4 text-rose-400" />
+            <h2 className="font-semibold text-foreground">Title Keyword Filter</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Jobs whose title contains any of these keywords will be permanently hidden from your dashboard.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          {localTitleExclude.keywords.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {localTitleExclude.keywords.map((kw) => (
+                <span
+                  key={kw}
+                  className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border bg-red-950/40 text-red-300 border-red-800/30"
+                >
+                  {kw}
+                  <button
+                    type="button"
+                    onClick={() => removeTitleExcludeKeyword(kw)}
+                    className="ml-0.5 text-red-400 hover:text-red-200"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          {localTitleExclude.keywords.length === 0 && (
+            <p className="text-xs text-muted-foreground/60 italic">
+              No keywords blocked — add keywords to hide matching job titles
+            </p>
+          )}
+          <div className="flex gap-2">
+            <Input
+              placeholder="e.g. Engineering Manager"
+              value={titleExcludeInput}
+              onChange={(e) => setTitleExcludeInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addTitleExcludeKeyword(titleExcludeInput)}
+              className="h-8 text-sm max-w-xs"
+              data-testid="title-exclude-input"
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1"
+              onClick={() => addTitleExcludeKeyword(titleExcludeInput)}
+            >
+              <Plus className="w-3.5 h-3.5" /> Add
+            </Button>
+          </div>
+        </div>
+
+        <div>
+          <Button
+            onClick={handleSaveTitleExclude}
+            disabled={updateTitleExcludeMutation.isPending}
+            className="gap-2 bg-rose-800 hover:bg-rose-700"
+            data-testid="save-title-exclude"
+          >
+            {updateTitleExcludeMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            Save title filter
           </Button>
         </div>
       </div>

@@ -35,6 +35,7 @@ import type {
   MarkAppliedResult,
   MatchReport,
   PostingWithReport,
+  TitleExcludeSettings,
   UploadUrlRequest,
   UploadUrlResponse,
   UpsertProfileBody,
@@ -2186,3 +2187,68 @@ export const useUpdateFilterSettings = <
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<Awaited<ReturnType<typeof updateFilterSettings>>, TError, EmailFilterSettings, TContext> =>
   useMutation(getUpdateFilterSettingsMutationOptions(options));
+
+export const getGetTitleExcludeSettingsUrl = () => `/api/title-exclude-settings`;
+
+export const getTitleExcludeSettings = async (options?: RequestInit): Promise<TitleExcludeSettings> =>
+  customFetch<TitleExcludeSettings>(getGetTitleExcludeSettingsUrl(), { ...options, method: "GET" });
+
+export const getGetTitleExcludeSettingsQueryKey = () => [`/api/title-exclude-settings`] as const;
+
+export const getGetTitleExcludeSettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTitleExcludeSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof getTitleExcludeSettings>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const queryKey = options?.queryKey ?? getGetTitleExcludeSettingsQueryKey();
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getTitleExcludeSettings>>> = () =>
+    getTitleExcludeSettings(options?.request);
+  return { queryKey, queryFn, ...options?.query } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTitleExcludeSettings>>, TError, TData
+  >;
+};
+
+export const useGetTitleExcludeSettings = <
+  TData = Awaited<ReturnType<typeof getTitleExcludeSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof getTitleExcludeSettings>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> => useQuery(getGetTitleExcludeSettingsQueryOptions(options));
+
+export const updateTitleExcludeSettings = async (
+  settings: TitleExcludeSettings,
+  options?: RequestInit,
+): Promise<TitleExcludeSettings> =>
+  customFetch<TitleExcludeSettings>(getGetTitleExcludeSettingsUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(settings),
+  });
+
+export const getUpdateTitleExcludeSettingsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateTitleExcludeSettings>>, TError, TitleExcludeSettings, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const mutationKey = ["updateTitleExcludeSettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options ?? {};
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateTitleExcludeSettings>>, TitleExcludeSettings> = (
+    settings,
+  ) => updateTitleExcludeSettings(settings, requestOptions);
+  return { mutationKey, mutationFn, ...mutationOptions };
+};
+
+export const useUpdateTitleExcludeSettings = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateTitleExcludeSettings>>, TError, TitleExcludeSettings, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<Awaited<ReturnType<typeof updateTitleExcludeSettings>>, TError, TitleExcludeSettings, TContext> =>
+  useMutation(getUpdateTitleExcludeSettingsMutationOptions(options));

@@ -18,6 +18,7 @@ export const userProfilesTable = pgTable("user_profiles", {
     mode: "off" | "include" | "exclude";
     companies: string[];
   }>().notNull().default({ mode: "off", companies: [] }),
+  titleExcludeKeywords: jsonb("title_exclude_keywords").$type<string[]>().notNull().default([]),
   emailFilterSettings: jsonb("email_filter_settings").$type<{
     subjectKeywords: string[];
     fromAddresses: string[];

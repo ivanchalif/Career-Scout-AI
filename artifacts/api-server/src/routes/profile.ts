@@ -227,4 +227,33 @@ router.put("/company-filter-settings", requireAuth, async (req, res): Promise<vo
   res.json(parsed.data);
 });
 
+const titleExcludeKeywordsSchema = z.object({
+  keywords: z.array(z.string()),
+});
+
+router.get("/title-exclude-settings", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId;
+  const [profile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, userId));
+  res.json({ keywords: profile?.titleExcludeKeywords ?? [] });
+});
+
+router.put("/title-exclude-settings", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId;
+  const parsed = titleExcludeKeywordsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  await db
+    .insert(userProfilesTable)
+    .values({ userId, titleExcludeKeywords: parsed.data.keywords })
+    .onConflictDoUpdate({
+      target: userProfilesTable.userId,
+      set: { titleExcludeKeywords: parsed.data.keywords, updatedAt: new Date() },
+    });
+
+  res.json(parsed.data);
+});
+
 export default router;

@@ -224,3 +224,7 @@ export type GmailCallbackParams = {
   state?: string;
   error?: string;
 };
+
+export interface TitleExcludeSettings {
+  keywords: string[];
+}

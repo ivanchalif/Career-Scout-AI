@@ -48,11 +48,15 @@ router.get("/postings", requireAuth, async (req, res): Promise<void> => {
   const { search, minFitScore, source, applied } = queryParsed.data;
 
   const [userProfile] = await db
-    .select({ companyFilterSettings: userProfilesTable.companyFilterSettings })
+    .select({
+      companyFilterSettings: userProfilesTable.companyFilterSettings,
+      titleExcludeKeywords: userProfilesTable.titleExcludeKeywords,
+    })
     .from(userProfilesTable)
     .where(eq(userProfilesTable.userId, userId));
 
   const companyFilter = userProfile?.companyFilterSettings ?? { mode: "off" as const, companies: [] };
+  const titleExcludeKeywords: string[] = userProfile?.titleExcludeKeywords ?? [];
 
   const conditions: ReturnType<typeof eq>[] = [
     eq(jobPostingsTable.userId, userId),
@@ -89,6 +93,10 @@ router.get("/postings", requireAuth, async (req, res): Promise<void> => {
       });
       if (companyFilter.mode === "include" && !matches) return false;
       if (companyFilter.mode === "exclude" && matches) return false;
+    }
+    if (titleExcludeKeywords.length > 0) {
+      const title = p.title.toLowerCase();
+      if (titleExcludeKeywords.some((kw: string) => title.includes(kw.toLowerCase()))) return false;
     }
     return true;
   });
