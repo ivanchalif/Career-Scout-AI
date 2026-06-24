@@ -124,6 +124,7 @@ export default function DashboardPage() {
   const { getToken } = useAuth();
   const [search, setSearch] = useState("");
   const [minFitScore, setMinFitScore] = useState<number | undefined>(undefined);
+  const [titleKeywords, setTitleKeywords] = useState<string[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
 
   const [showFilters, setShowFilters] = useState(false);
@@ -313,6 +314,29 @@ export default function DashboardPage() {
     return map;
   }, [activeCountQ.data, appliedCountQ.data]);
 
+  const TITLE_KEYWORD_LIST = [
+    "CPO", "Chief Product", "EVP", "SVP", "VP", "Vice President",
+    "Director", "Head of", "Principal", "Senior", "Lead", "Manager",
+  ];
+
+  const availableTitleKeywords = useMemo(() => {
+    const allTitles = [
+      ...(activeCountQ.data ?? []),
+      ...(appliedCountQ.data ?? []),
+      ...(deletedQ.data ?? []),
+    ].map((p) => p.posting.title.toLowerCase());
+    return TITLE_KEYWORD_LIST.filter((kw) =>
+      allTitles.some((t) => t.includes(kw.toLowerCase()))
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCountQ.data, appliedCountQ.data, deletedQ.data]);
+
+  function toggleTitleKeyword(kw: string) {
+    setTitleKeywords((prev) =>
+      prev.includes(kw) ? prev.filter((k) => k !== kw) : [...prev, kw]
+    );
+  }
+
   useEffect(() => {
     if (rawPostings.length < 2) return;
     getToken().then((token) => {
@@ -333,7 +357,12 @@ export default function DashboardPage() {
   }, [rawPostings]);
 
   const postings = useMemo(() => {
-    const items = [...rawPostings];
+    let items = [...rawPostings];
+    if (titleKeywords.length > 0) {
+      items = items.filter((p) =>
+        titleKeywords.some((kw) => p.posting.title.toLowerCase().includes(kw.toLowerCase()))
+      );
+    }
     switch (sortKey) {
       case "date-desc":
         return items.sort((a, b) => new Date(b.posting.createdAt).getTime() - new Date(a.posting.createdAt).getTime());
@@ -362,7 +391,7 @@ export default function DashboardPage() {
       default:
         return items;
     }
-  }, [rawPostings, sortKey]);
+  }, [rawPostings, sortKey, titleKeywords]);
 
   const deletedPostings = useMemo(() => {
     let items = [...(deletedQ.data ?? [])];
@@ -370,6 +399,11 @@ export default function DashboardPage() {
       const q = search.toLowerCase();
       items = items.filter((p) =>
         p.posting.title.toLowerCase().includes(q) || p.posting.company.toLowerCase().includes(q)
+      );
+    }
+    if (titleKeywords.length > 0) {
+      items = items.filter((p) =>
+        titleKeywords.some((kw) => p.posting.title.toLowerCase().includes(kw.toLowerCase()))
       );
     }
     if (minFitScore != null) {
@@ -386,7 +420,7 @@ export default function DashboardPage() {
       case "company-desc":return items.sort((a, b) => b.posting.company.localeCompare(a.posting.company));
       default: return items;
     }
-  }, [deletedQ.data, search, minFitScore, sortKey]);
+  }, [deletedQ.data, search, minFitScore, sortKey, titleKeywords]);
 
   async function handleConnectGmail() {
     try {
@@ -928,11 +962,31 @@ export default function DashboardPage() {
                     data-testid="min-score-input"
                   />
                 </div>
-                {(search || minFitScore != null || sortKey !== "date-desc") && (
+                {availableTitleKeywords.length > 0 && (
+                  <div className="w-full space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Title level</Label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {availableTitleKeywords.map((kw) => (
+                        <button
+                          key={kw}
+                          onClick={() => toggleTitleKeyword(kw)}
+                          className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${
+                            titleKeywords.includes(kw)
+                              ? "bg-indigo-600/30 border-indigo-500/60 text-indigo-300"
+                              : "bg-background border-border text-muted-foreground hover:border-indigo-500/40 hover:text-foreground"
+                          }`}
+                        >
+                          {kw}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {(search || minFitScore != null || sortKey !== "date-desc" || titleKeywords.length > 0) && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => { setSearch(""); setMinFitScore(undefined); setSortKey("date-desc"); }}
+                    onClick={() => { setSearch(""); setMinFitScore(undefined); setSortKey("date-desc"); setTitleKeywords([]); }}
                   >
                     Reset
                   </Button>
