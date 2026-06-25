@@ -796,7 +796,7 @@ export default function DashboardPage() {
           />
           <StatCard
             icon={Star}
-            label="Strong matches (70+)"
+            label="Strong matches (85+)"
             value={summary?.strongMatches ?? 0}
             loading={dashboardQ.isLoading}
           />
