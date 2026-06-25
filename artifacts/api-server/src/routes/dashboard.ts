@@ -20,6 +20,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     .where(eq(gmailConnectionsTable.userId, userId));
 
   const companyFilter = (profile?.companyFilterSettings as { mode: string; companies: string[] } | null) ?? { mode: "off", companies: [] };
+  const titleExcludeKeywords: string[] = (profile?.titleExcludeKeywords as string[] | null) ?? [];
 
   const allPostings = await db
     .select()
@@ -39,6 +40,10 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       });
       if (companyFilter.mode === "include" && !matches) return false;
       if (companyFilter.mode === "exclude" && matches) return false;
+    }
+    if (titleExcludeKeywords.length > 0) {
+      const title = p.title.toLowerCase();
+      if (titleExcludeKeywords.some((kw: string) => title.includes(kw.toLowerCase()))) return false;
     }
     return true;
   });
