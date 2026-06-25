@@ -63,8 +63,8 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       ? activeReports.reduce((sum, r) => sum + (r.fitScore ?? 0), 0) / activeReports.length
       : null;
 
-  // Strong matches: active jobs scoring >= 70
-  const strongMatches = activeReports.filter((r) => (r.fitScore ?? 0) >= 70).length;
+  // Strong matches: active jobs scoring >= 85
+  const strongMatches = activeReports.filter((r) => (r.fitScore ?? 0) >= 85).length;
 
   res.json(
     GetDashboardSummaryResponse.parse({
