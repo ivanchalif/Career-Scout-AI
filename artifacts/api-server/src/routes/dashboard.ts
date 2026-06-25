@@ -48,6 +48,9 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     return true;
   });
 
+  // CONTRACT: every stat returned by this endpoint MUST be derived from `activeOnly`
+  // (or a subset of it via `activeIds`). Never compute a stat from `allPostings` directly,
+  // as that would silently bypass the company and title keyword filters from the user's profile.
   const totalPostings = activeOnly.length;
   const activeIds = new Set(activeOnly.map((p) => p.id));
 
@@ -56,7 +59,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     .from(matchReportsTable)
     .where(eq(matchReportsTable.userId, userId));
 
-  // Avg fit score across active scored postings
+  // Avg fit score across active scored postings (respects all profile filters via activeIds)
   const activeReports = reports.filter((r) => activeIds.has(r.jobPostingId) && r.fitScore != null);
   const avgFitScore =
     activeReports.length > 0
