@@ -439,6 +439,7 @@ router.post("/postings/backfill-links", requireAuth, async (req, res): Promise<v
     "%sg3email%",
     "%ls/click%",
     "%jobgether%",
+    "%callings.ai%",
   ];
 
   // Phase 1: postings with no link at all — re-extract URL from the email body.
@@ -553,6 +554,71 @@ router.post("/postings/backfill-links", requireAuth, async (req, res): Promise<v
 // Soft-deletes a posting the user has confirmed is a duplicate, then sweeps
 // for any remaining siblings in the background (same as delete but intent is
 // recorded in server logs for future threshold tuning).
+router.post("/postings/:id/retry-link", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId;
+  const id = parseInt(req.params["id"] ?? "", 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [posting] = await db
+    .select()
+    .from(jobPostingsTable)
+    .where(and(eq(jobPostingsTable.id, id), eq(jobPostingsTable.userId, userId), isNull(jobPostingsTable.deletedAt)));
+
+  if (!posting) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  if (posting.source !== "gmail" || !posting.gmailMessageId) {
+    res.status(400).json({ error: "No Gmail message associated with this posting" });
+    return;
+  }
+
+  const [conn] = await db
+    .select()
+    .from(gmailConnectionsTable)
+    .where(eq(gmailConnectionsTable.userId, userId));
+
+  if (!conn) {
+    res.status(400).json({ error: "Gmail account not connected" });
+    return;
+  }
+
+  try {
+    const baseId = posting.gmailMessageId.split(":")[0];
+    const email = await fetchSingleEmail(conn.accessToken, conn.refreshToken, baseId);
+
+    if (!email || !email.body.trim()) {
+      res.status(422).json({ error: "Could not fetch email" });
+      return;
+    }
+
+    const listings = await extractJobListings(email.body, email.subject, email.sender);
+    const idx = Number(posting.gmailMessageId.split(":")[1] ?? "0");
+    const listing = listings[idx];
+    const jobUrl = listing?.url;
+
+    if (!jobUrl) {
+      res.status(422).json({ error: "No URL found in email" });
+      return;
+    }
+
+    const pageResult = await fetchJobPageContent(jobUrl);
+    const resolvedUrl = pageResult ? pageResult.finalUrl : jobUrl;
+
+    await db
+      .update(jobPostingsTable)
+      .set({ link: resolvedUrl })
+      .where(and(eq(jobPostingsTable.id, id), eq(jobPostingsTable.userId, userId)));
+
+    logger.info({ postingId: id, jobUrl, resolvedUrl }, "retry-link: updated link from email");
+    res.json({ link: resolvedUrl });
+  } catch (err) {
+    logger.warn({ postingId: id, err }, "retry-link: failed");
+    res.status(500).json({ error: "Failed to extract link" });
+  }
+});
+
 router.post("/postings/:id/flag-duplicate", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId;
   const id = parseInt(req.params["id"] ?? "", 10);

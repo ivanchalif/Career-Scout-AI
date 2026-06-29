@@ -246,19 +246,44 @@ function extractBody(
   return "";
 }
 
+function decodeHref(raw: string): string {
+  return raw
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&#39;/gi, "'")
+    .trim();
+}
+
+function extractHrefFromAttrs(attrs: string): string | null {
+  // 1. Standard single or double quotes: href="URL" or href='URL'
+  const quoted = attrs.match(/\bhref=["']([^"']+)["']/i);
+  if (quoted) return decodeHref(quoted[1]);
+
+  // 2. HTML-entity-encoded quotes: href=&quot;URL&quot;
+  const entityQuoted = attrs.match(/\bhref=&quot;([^<]*?)&quot;/i);
+  if (entityQuoted) return decodeHref(entityQuoted[1]);
+
+  // 3. Unquoted href terminated by whitespace or >: href=https://...
+  const unquoted = attrs.match(/\bhref=([^\s>"'&][^\s>"']*)/i);
+  if (unquoted) return decodeHref(unquoted[1]);
+
+  return null;
+}
+
 function stripHtml(html: string): string {
   return html
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
-    // Preserve anchor hrefs: <a href="URL">text</a> → "text [URL]"
-    .replace(/<a\s[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (_, href, inner) => {
+    // Preserve anchor hrefs — handles standard quotes, &quot;-encoded quotes, and unquoted hrefs
+    .replace(/<a(\s[^>]*?)>([\s\S]*?)<\/a>/gi, (_, attrs, inner) => {
       const text = inner.replace(/<[^>]+>/g, " ").trim();
-      const cleanHref = href.trim();
-      // Skip tracking pixels, empty hrefs, mailto, and internal anchors
-      if (!cleanHref || cleanHref.startsWith("mailto:") || cleanHref.startsWith("#")) {
+      const href = extractHrefFromAttrs(attrs);
+      if (!href || href.startsWith("mailto:") || href.startsWith("#")) {
         return text;
       }
-      return text ? `${text} [${cleanHref}]` : `[${cleanHref}]`;
+      return text ? `${text} [${href}]` : `[${href}]`;
     })
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/gi, " ")

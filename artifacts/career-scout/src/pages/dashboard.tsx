@@ -5,7 +5,7 @@ import {
   Plus, Search, SlidersHorizontal, Mail, TrendingUp,
   BriefcaseBusiness, Star, Trash2, X,
   RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2, CheckCircle2, Undo2, MapPin, Ban, RotateCcw, Layers, Copy, Archive,
-  ChevronDown, ChevronUp, ExternalLink,
+  ChevronDown, ChevronUp, ExternalLink, SearchCode,
 } from "lucide-react";
 import {
   useGetDashboardSummary,
@@ -140,6 +140,7 @@ export default function DashboardPage() {
   const [reanalyzing, setReanalyzing] = useState(false);
   const [backfillingLinks, setBackfillingLinks] = useState(false);
   const [sweepingDuplicates, setSweepingDuplicates] = useState(false);
+  const [retryingLinks, setRetryingLinks] = useState<Set<number>>(new Set());
   const [activeTab, setActiveTab] = useState<"active" | "applied" | "deleted">("active");
   type NearDupPair = {
     id1: number; id2: number;
@@ -571,6 +572,37 @@ export default function DashboardPage() {
       toast({ title: "Error", description: msg === "Gmail account not connected" ? "Connect Gmail to backfill links." : "Failed to fetch links from Gmail.", variant: "destructive" });
     } finally {
       setBackfillingLinks(false);
+    }
+  }
+
+  async function onRetryLink(postingId: number) {
+    setRetryingLinks((prev) => new Set(prev).add(postingId));
+    try {
+      const token = await getToken();
+      const res = await fetch(`/api/postings/${postingId}/retry-link`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Unknown error" })) as { error?: string };
+        throw new Error(err.error ?? "Unknown error");
+      }
+      const { link } = await res.json() as { link: string };
+      toast({ title: "Link found", description: link });
+      qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      toast({
+        title: "Couldn't find link",
+        description: msg === "No URL found in email" ? "No job URL was found in the original email." : msg,
+        variant: "destructive",
+      });
+    } finally {
+      setRetryingLinks((prev) => {
+        const next = new Set(prev);
+        next.delete(postingId);
+        return next;
+      });
     }
   }
 
@@ -1223,6 +1255,23 @@ export default function DashboardPage() {
                     className="flex items-center justify-around sm:justify-start sm:gap-1 sm:shrink-0 sm:pr-2 border-t sm:border-t-0 border-border/40 px-1 py-1 sm:px-0 sm:py-0"
                     onClick={(e) => e.stopPropagation()}
                   >
+                    {!posting.link && posting.source === "gmail" && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="w-9 h-9 sm:w-8 sm:h-8 text-muted-foreground hover:text-indigo-400 hover:bg-indigo-950/20"
+                        onClick={() => onRetryLink(posting.id)}
+                        disabled={retryingLinks.has(posting.id)}
+                        title="Find link from original email"
+                        data-testid={`posting-retry-link-${posting.id}`}
+                      >
+                        {retryingLinks.has(posting.id) ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <SearchCode className="w-3.5 h-3.5" />
+                        )}
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"
