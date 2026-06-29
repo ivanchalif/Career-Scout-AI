@@ -3,7 +3,7 @@ import { useAuth } from "@clerk/react";
 import { Link } from "wouter";
 import {
   Plus, Search, SlidersHorizontal, Mail, TrendingUp,
-  BriefcaseBusiness, Star, Trash2,
+  BriefcaseBusiness, Star, Trash2, X,
   RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2, CheckCircle2, Undo2, MapPin, Ban, RotateCcw, Layers, Copy, Archive,
   ChevronDown, ChevronUp, ExternalLink,
 } from "lucide-react";
@@ -18,6 +18,9 @@ import {
   useDisconnectGmail,
   useGetCompanyFilterSettings,
   useUpdateCompanyFilterSettings,
+  useGetTitleExcludeSettings,
+  useUpdateTitleExcludeSettings,
+  getGetTitleExcludeSettingsQueryKey,
   useListDeletedPostings,
   useRestorePosting,
   useClosePosting,
@@ -239,6 +242,38 @@ export default function DashboardPage() {
 
   const companyFilterQ = useGetCompanyFilterSettings();
   const updateCompanyFilterMutation = useUpdateCompanyFilterSettings();
+
+  const titleExcludeQ = useGetTitleExcludeSettings();
+  const updateTitleExcludeMutation = useUpdateTitleExcludeSettings();
+  const [titleExcludeInput, setTitleExcludeInput] = useState("");
+
+  async function addTitleExcludeKeyword(value: string) {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    const current = titleExcludeQ.data?.keywords ?? [];
+    if (current.some((k) => k.toLowerCase() === trimmed.toLowerCase())) return;
+    const next = [...current, trimmed];
+    setTitleExcludeInput("");
+    await updateTitleExcludeMutation.mutateAsync({ keywords: next }, {
+      onSuccess: (data) => {
+        qc.setQueryData(getGetTitleExcludeSettingsQueryKey(), data);
+        qc.invalidateQueries({ queryKey: ["/api/postings"] });
+        qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+      },
+    });
+  }
+
+  async function removeTitleExcludeKeyword(kw: string) {
+    const current = titleExcludeQ.data?.keywords ?? [];
+    const next = current.filter((k) => k !== kw);
+    await updateTitleExcludeMutation.mutateAsync({ keywords: next }, {
+      onSuccess: (data) => {
+        qc.setQueryData(getGetTitleExcludeSettingsQueryKey(), data);
+        qc.invalidateQueries({ queryKey: ["/api/postings"] });
+        qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+      },
+    });
+  }
 
   async function blockCompany(companyName: string) {
     const current = companyFilterQ.data ?? { mode: "off" as const, companies: [] };
@@ -927,6 +962,48 @@ export default function DashboardPage() {
                     onChange={(e) => setMinFitScore(e.target.value ? Number(e.target.value) : undefined)}
                     data-testid="min-score-input"
                   />
+                </div>
+                <div className="w-full space-y-1.5 pt-1 border-t border-border/50">
+                  <Label className="text-xs text-muted-foreground">Blocked title keywords</Label>
+                  {(titleExcludeQ.data?.keywords ?? []).length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {(titleExcludeQ.data?.keywords ?? []).map((kw) => (
+                        <span
+                          key={kw}
+                          className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border bg-red-950/40 text-red-300 border-red-800/30"
+                        >
+                          {kw}
+                          <button
+                            type="button"
+                            onClick={() => removeTitleExcludeKeyword(kw)}
+                            disabled={updateTitleExcludeMutation.isPending}
+                            className="ml-0.5 text-red-400 hover:text-red-200 disabled:opacity-50"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-1.5">
+                    <Input
+                      placeholder="e.g. Engineering Manager"
+                      value={titleExcludeInput}
+                      onChange={(e) => setTitleExcludeInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTitleExcludeKeyword(titleExcludeInput); } }}
+                      className="h-7 text-xs flex-1"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => addTitleExcludeKeyword(titleExcludeInput)}
+                      disabled={!titleExcludeInput.trim() || updateTitleExcludeMutation.isPending}
+                    >
+                      {updateTitleExcludeMutation.isPending ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                    </Button>
+                  </div>
                 </div>
                 {(search || minFitScore != null || sortKey !== "date-desc") && (
                   <Button
