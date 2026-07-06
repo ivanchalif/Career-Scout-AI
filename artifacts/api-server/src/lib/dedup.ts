@@ -1,4 +1,4 @@
-import { sql, and, eq, inArray, isNull } from "drizzle-orm";
+import { sql, and, eq, inArray } from "drizzle-orm";
 import { db, jobPostingsTable } from "@workspace/db";
 
 // Common job-title abbreviations expanded before similarity comparison so that
@@ -168,34 +168,59 @@ export async function isFuzzyDuplicate(
  * Sweeps all active postings for `userId` and soft-deletes any that fuzzy-match
  * a posting the user has already deleted or applied to.
  *
- * This is the shared implementation used by both the manual "dedup-sweep" HTTP
- * endpoint and the background Gmail scheduler so that duplicates introduced by
- * scheduled syncs are also cleaned up automatically.
+ * Uses tiered thresholds so that same-company near-duplicates are caught even
+ * when the wording differs slightly:
+ *   Standard path  — title > 0.70 AND company > 0.60 (original behaviour)
+ *   Same-co path   — title > 0.50 AND company > 0.85 (catches role variants at
+ *                    the same company, e.g. "Director PM" vs "Director PM – AI"
+ *                    when the company name is essentially identical)
+ *
+ * Both conditions only match against applied or deleted rows so that active
+ * duplicates of *other* active postings are never silently removed here
+ * (that is handled by sweepDuplicatesOf).
+ *
+ * Runs as a single SQL query instead of N+1 isFuzzyDuplicate calls.
  *
  * Returns the count of postings removed.
  */
 export async function runDedupSweep(userId: string): Promise<number> {
-  const activePostings = await db
-    .select({ id: jobPostingsTable.id, title: jobPostingsTable.title, company: jobPostingsTable.company })
-    .from(jobPostingsTable)
-    .where(and(
-      eq(jobPostingsTable.userId, userId),
-      isNull(jobPostingsTable.deletedAt),
-      isNull(jobPostingsTable.closedAt),
-      isNull(jobPostingsTable.appliedAt),
-    ));
+  // Pre-compute normalised strings in CTEs so similarity() is evaluated on
+  // the small pre-filtered sets rather than the full O(total²) cross-product.
+  // Simple normalisation (lowercase + strip non-alphanum) is used here because:
+  //   a) it is computed once per row, not once per pair
+  //   b) it is adequate for the advisory sweep (full normalisation including
+  //      abbreviation expansion is still used by isFuzzyDuplicate at import time)
+  const simpleNorm = "btrim(regexp_replace(regexp_replace(lower(title), '[^a-z0-9 ]', ' ', 'g'), ' +', ' ', 'g'))";
+  const simpleNormCo = "btrim(regexp_replace(regexp_replace(lower(company), '[^a-z0-9 ]', ' ', 'g'), ' +', ' ', 'g'))";
 
-  const toDelete: number[] = [];
+  const rows = await db.execute(sql`
+    WITH active AS (
+      SELECT id,
+        ${sql.raw(simpleNorm)} AS ntitle,
+        ${sql.raw(simpleNormCo)} AS ncompany
+      FROM job_postings
+      WHERE user_id = ${userId}
+        AND deleted_at IS NULL AND closed_at IS NULL AND applied_at IS NULL
+    ),
+    already_actioned AS (
+      SELECT id,
+        ${sql.raw(simpleNorm)} AS ntitle,
+        ${sql.raw(simpleNormCo)} AS ncompany
+      FROM job_postings
+      WHERE user_id = ${userId}
+        AND closed_at IS NULL
+        AND (deleted_at IS NOT NULL OR applied_at IS NOT NULL)
+    )
+    SELECT DISTINCT a.id
+    FROM active a, already_actioned p
+    WHERE (
+      (similarity(a.ntitle, p.ntitle) > 0.70 AND similarity(a.ncompany, p.ncompany) > 0.60)
+      OR
+      (similarity(a.ntitle, p.ntitle) > 0.50 AND similarity(a.ncompany, p.ncompany) > 0.85)
+    )
+  `);
 
-  for (const posting of activePostings) {
-    const { isDuplicate, wasDeleted, wasApplied } = await isFuzzyDuplicate(
-      userId, posting.title, posting.company,
-      { excludeId: posting.id, deletedOrAppliedOnly: true },
-    );
-    if (isDuplicate && (wasDeleted || wasApplied)) {
-      toDelete.push(posting.id);
-    }
-  }
+  const toDelete = (rows.rows as { id: number }[]).map((r) => r.id);
 
   if (toDelete.length > 0) {
     await db
@@ -211,6 +236,10 @@ export async function runDedupSweep(userId: string): Promise<number> {
  * Finds all active (non-deleted, non-applied) postings for `userId` that
  * fuzzy-match `title` + `company`, excludes the posting that was just actioned
  * (`excludeId`), and soft-deletes them in bulk.
+ *
+ * Uses the same tiered thresholds as runDedupSweep:
+ *   Standard  — title > 0.70 AND company > 0.60
+ *   Same-co   — title > 0.50 AND company > 0.85
  *
  * Intended to be called in the background after a posting is deleted or marked
  * applied so that near-duplicate active cards disappear automatically.
@@ -228,9 +257,6 @@ export async function sweepDuplicatesOf(
 
   if (!normTitle || !normCompany) return 0;
 
-  const titleNorm = dbNormalizeSql("title");
-  const companyNorm = dbNormalizeSql("company");
-
   const rows = await db.execute(sql`
     SELECT id
     FROM job_postings
@@ -239,14 +265,27 @@ export async function sweepDuplicatesOf(
       AND deleted_at IS NULL
       AND closed_at IS NULL
       AND applied_at IS NULL
-      AND similarity(
-        ${sql.raw(titleNorm)},
-        ${normTitle}
-      ) > 0.70
-      AND similarity(
-        ${sql.raw(companyNorm)},
-        ${normCompany}
-      ) > 0.60
+      AND (
+        (
+          similarity(
+            btrim(regexp_replace(regexp_replace(lower(title), '[^a-z0-9 ]', ' ', 'g'), ' +', ' ', 'g')),
+            ${normTitle}
+          ) > 0.70
+          AND similarity(
+            btrim(regexp_replace(regexp_replace(lower(company), '[^a-z0-9 ]', ' ', 'g'), ' +', ' ', 'g')),
+            ${normCompany}
+          ) > 0.60
+        ) OR (
+          similarity(
+            btrim(regexp_replace(regexp_replace(lower(title), '[^a-z0-9 ]', ' ', 'g'), ' +', ' ', 'g')),
+            ${normTitle}
+          ) > 0.50
+          AND similarity(
+            btrim(regexp_replace(regexp_replace(lower(company), '[^a-z0-9 ]', ' ', 'g'), ' +', ' ', 'g')),
+            ${normCompany}
+          ) > 0.85
+        )
+      )
   `);
 
   if (rows.rows.length === 0) return 0;

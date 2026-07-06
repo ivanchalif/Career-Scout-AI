@@ -193,7 +193,27 @@ router.get("/postings/near-duplicates", requireAuth, async (req, res): Promise<v
   const norm = (col: string) =>
     `btrim(regexp_replace(regexp_replace(lower(${col}), '[^a-z0-9 ]', ' ', 'g'), ' +', ' ', 'g'))`;
 
-  const COLS = (a: string, b: string) => `
+  // CTEs pre-filter to small row-sets before the cross-join so that
+  // similarity() is only evaluated on O(active × applied) pairs, not
+  // the full O(total²) table cross-product.
+  const CTE_ACTIVE = `
+    SELECT id, title, company, location, link AS url, applied_at, deleted_at,
+           salary_min, salary_max, created_at,
+           ${norm("title")} AS ntitle, ${norm("company")} AS ncompany
+    FROM job_postings
+    WHERE user_id = '${safeId}'
+      AND deleted_at IS NULL AND applied_at IS NULL AND closed_at IS NULL
+  `;
+  const CTE_APPLIED = `
+    SELECT id, title, company, location, link AS url, applied_at, deleted_at,
+           salary_min, salary_max, created_at,
+           ${norm("title")} AS ntitle, ${norm("company")} AS ncompany
+    FROM job_postings
+    WHERE user_id = '${safeId}'
+      AND applied_at IS NOT NULL AND deleted_at IS NULL AND closed_at IS NULL
+  `;
+
+  const SELECT_COLS = (a: string, b: string) => `
     ${a}.id AS id1, ${b}.id AS id2,
     ${a}.title AS title1, ${b}.title AS title2,
     ${a}.company AS company1, ${b}.company AS company2,
@@ -204,36 +224,29 @@ router.get("/postings/near-duplicates", requireAuth, async (req, res): Promise<v
     ${a}.salary_min AS salary_min1, ${b}.salary_min AS salary_min2,
     ${a}.salary_max AS salary_max1, ${b}.salary_max AS salary_max2,
     ${a}.created_at AS created_at1, ${b}.created_at AS created_at2,
-    similarity(${norm(`${a}.title`)}, ${norm(`${b}.title`)}) AS title_sim
+    similarity(${a}.ntitle, ${b}.ntitle) AS title_sim
   `;
 
-  // Query 1: active jobs whose title + company are similar to an applied job.
-  // id1 = active, id2 = applied so applied_at2 is always set in results.
+  // Query 1: active jobs similar to something the user already applied to.
+  // id1 = active, id2 = applied (applied_at2 is always set).
   const appliedPairsQ = `
-    SELECT ${COLS("a", "p")}
-    FROM job_postings a
-    JOIN job_postings p ON a.id != p.id
-    WHERE a.user_id = '${safeId}' AND p.user_id = '${safeId}'
-      AND a.closed_at IS NULL AND p.closed_at IS NULL
-      AND a.deleted_at IS NULL AND a.applied_at IS NULL
-      AND p.deleted_at IS NULL AND p.applied_at IS NOT NULL
-      AND similarity(${norm("a.title")}, ${norm("p.title")}) BETWEEN 0.40 AND 0.69
-      AND similarity(${norm("a.company")}, ${norm("p.company")}) > 0.40
+    WITH active AS (${CTE_ACTIVE}), applied AS (${CTE_APPLIED})
+    SELECT ${SELECT_COLS("a", "p")}
+    FROM active a, applied p
+    WHERE similarity(a.ntitle, p.ntitle) BETWEEN 0.40 AND 0.69
+      AND similarity(a.ncompany, p.ncompany) > 0.40
     ORDER BY title_sim DESC
     LIMIT 20
   `;
 
   // Query 2: pairs of active jobs that look similar to each other.
   const activePairsQ = `
-    SELECT ${COLS("a", "b")}
-    FROM job_postings a
-    JOIN job_postings b ON a.id < b.id
-    WHERE a.user_id = '${safeId}' AND b.user_id = '${safeId}'
-      AND a.closed_at IS NULL AND b.closed_at IS NULL
-      AND a.deleted_at IS NULL AND a.applied_at IS NULL
-      AND b.deleted_at IS NULL AND b.applied_at IS NULL
-      AND similarity(${norm("a.title")}, ${norm("b.title")}) BETWEEN 0.45 AND 0.69
-      AND similarity(${norm("a.company")}, ${norm("b.company")}) > 0.35
+    WITH active AS (${CTE_ACTIVE})
+    SELECT ${SELECT_COLS("a", "b")}
+    FROM active a, active b
+    WHERE a.id < b.id
+      AND similarity(a.ntitle, b.ntitle) BETWEEN 0.45 AND 0.69
+      AND similarity(a.ncompany, b.ncompany) > 0.35
     ORDER BY title_sim DESC
     LIMIT 20
   `;
