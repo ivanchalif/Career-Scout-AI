@@ -174,47 +174,89 @@ router.get("/postings/deleted", requireAuth, async (req, res): Promise<void> => 
   res.json(ListPostingsResponse.parse(results));
 });
 
-// Returns pairs of active postings whose normalised titles are similar enough
-// to be possible duplicates but below the auto-dedup threshold (0.45–0.69).
+// Returns pairs of postings whose titles are similar enough to be possible
+// duplicates but below the auto-dedup threshold.
+//
+// Two separate queries are run and merged:
+//   1. Active-vs-applied  (title 0.40–0.69, company > 0.40) — highest priority;
+//      flags active jobs the user has already applied to something similar for.
+//   2. Active-vs-active   (title 0.45–0.69, company > 0.35) — existing behaviour.
+//
+// Simple normalization (lowercase + strip non-alphanumeric + collapse spaces) is
+// used intentionally — the full dbNormalizeSql() expansion embeds 10+ nested
+// regexp_replace calls on each side of the join, making the query time out at
+// scale. Simple normalization is adequate for the advisory banner.
 router.get("/postings/near-duplicates", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId;
-  const aTitleNorm = dbNormalizeSql("a.title");
-  const bTitleNorm = dbNormalizeSql("b.title");
-  const aCompanyNorm = dbNormalizeSql("a.company");
-  const bCompanyNorm = dbNormalizeSql("b.company");
-
-  // Use sql.raw with inlined userId (Clerk IDs are always alphanumeric+underscore — no injection risk).
-  // Avoids Drizzle template-literal issues when both sides of similarity() are raw SQL expressions.
   const safeId = userId.replace(/[^a-zA-Z0-9_]/g, "");
-  const querySql = `
-    SELECT a.id AS id1, b.id AS id2,
-           a.title AS title1, b.title AS title2,
-           a.company AS company1, b.company AS company2,
-           a.location AS location1, b.location AS location2,
-           a.url AS url1, b.url AS url2,
-           a.applied_at AS applied_at1, b.applied_at AS applied_at2,
-           a.deleted_at AS deleted_at1, b.deleted_at AS deleted_at2,
-           a.salary_min AS salary_min1, b.salary_min AS salary_min2,
-           a.salary_max AS salary_max1, b.salary_max AS salary_max2,
-           a.created_at AS created_at1, b.created_at AS created_at2,
-           similarity(${aTitleNorm}, ${bTitleNorm}) AS title_sim
-    FROM job_postings a
-    JOIN job_postings b ON a.id < b.id
-    WHERE a.user_id = '${safeId}'
-      AND b.user_id = '${safeId}'
-      AND a.closed_at IS NULL AND b.closed_at IS NULL
-      AND (
-        (a.deleted_at IS NULL AND a.applied_at IS NULL) OR
-        (b.deleted_at IS NULL AND b.applied_at IS NULL)
-      )
-      AND similarity(${aTitleNorm}, ${bTitleNorm}) BETWEEN 0.45 AND 0.69
-      AND similarity(${aCompanyNorm}, ${bCompanyNorm}) > 0.35
-    ORDER BY title_sim DESC
-    LIMIT 40
+
+  const norm = (col: string) =>
+    `btrim(regexp_replace(regexp_replace(lower(${col}), '[^a-z0-9 ]', ' ', 'g'), ' +', ' ', 'g'))`;
+
+  const COLS = (a: string, b: string) => `
+    ${a}.id AS id1, ${b}.id AS id2,
+    ${a}.title AS title1, ${b}.title AS title2,
+    ${a}.company AS company1, ${b}.company AS company2,
+    ${a}.location AS location1, ${b}.location AS location2,
+    ${a}.url AS url1, ${b}.url AS url2,
+    ${a}.applied_at AS applied_at1, ${b}.applied_at AS applied_at2,
+    ${a}.deleted_at AS deleted_at1, ${b}.deleted_at AS deleted_at2,
+    ${a}.salary_min AS salary_min1, ${b}.salary_min AS salary_min2,
+    ${a}.salary_max AS salary_max1, ${b}.salary_max AS salary_max2,
+    ${a}.created_at AS created_at1, ${b}.created_at AS created_at2,
+    similarity(${norm(`${a}.title`)}, ${norm(`${b}.title`)}) AS title_sim
   `;
 
-  const rows = await db.execute(sql.raw(querySql));
-  res.json(rows.rows);
+  // Query 1: active jobs whose title + company are similar to an applied job.
+  // id1 = active, id2 = applied so applied_at2 is always set in results.
+  const appliedPairsQ = `
+    SELECT ${COLS("a", "p")}
+    FROM job_postings a
+    JOIN job_postings p ON a.id != p.id
+    WHERE a.user_id = '${safeId}' AND p.user_id = '${safeId}'
+      AND a.closed_at IS NULL AND p.closed_at IS NULL
+      AND a.deleted_at IS NULL AND a.applied_at IS NULL
+      AND p.deleted_at IS NULL AND p.applied_at IS NOT NULL
+      AND similarity(${norm("a.title")}, ${norm("p.title")}) BETWEEN 0.40 AND 0.69
+      AND similarity(${norm("a.company")}, ${norm("p.company")}) > 0.40
+    ORDER BY title_sim DESC
+    LIMIT 20
+  `;
+
+  // Query 2: pairs of active jobs that look similar to each other.
+  const activePairsQ = `
+    SELECT ${COLS("a", "b")}
+    FROM job_postings a
+    JOIN job_postings b ON a.id < b.id
+    WHERE a.user_id = '${safeId}' AND b.user_id = '${safeId}'
+      AND a.closed_at IS NULL AND b.closed_at IS NULL
+      AND a.deleted_at IS NULL AND a.applied_at IS NULL
+      AND b.deleted_at IS NULL AND b.applied_at IS NULL
+      AND similarity(${norm("a.title")}, ${norm("b.title")}) BETWEEN 0.45 AND 0.69
+      AND similarity(${norm("a.company")}, ${norm("b.company")}) > 0.35
+    ORDER BY title_sim DESC
+    LIMIT 20
+  `;
+
+  const [appliedPairs, activePairs] = await Promise.all([
+    db.execute(sql.raw(appliedPairsQ)),
+    db.execute(sql.raw(activePairsQ)),
+  ]);
+
+  // Merge: applied-vs-active pairs first (higher priority). Deduplicate by
+  // posting ID so each card only gets one banner.
+  const seen = new Set<number>();
+  const results: unknown[] = [];
+  for (const row of [...appliedPairs.rows, ...activePairs.rows]) {
+    const r = row as { id1: number; id2: number };
+    if (!seen.has(r.id1) && !seen.has(r.id2)) {
+      seen.add(r.id1);
+      seen.add(r.id2);
+      results.push(row);
+    }
+  }
+
+  res.json(results);
 });
 
 const CSV_COLUMNS = ["title", "company", "link", "location", "remoteType", "salaryMin", "salaryMax", "fitScore", "source", "applied", "dateAdded"] as const;

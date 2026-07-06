@@ -1494,40 +1494,52 @@ export default function DashboardPage() {
                     return `up to $${(max!/1000).toFixed(0)}k`;
                   }
 
+                  const isAppliedPair = !!pairedAppliedAt;
+
                   return (
                     <div
-                      className="rounded-b-xl border-x border-b border-amber-800/30 bg-amber-950/20 text-amber-400"
+                      className={`rounded-b-xl border-x border-b ${isAppliedPair ? "border-orange-700/40 bg-orange-950/25 text-orange-400" : "border-amber-800/30 bg-amber-950/20 text-amber-400"}`}
                       onClick={(e) => e.stopPropagation()}
                     >
                       {/* Banner row */}
                       <div className="flex items-center gap-2 text-xs px-4 py-1.5">
                         <Copy className="w-3 h-3 shrink-0" />
                         <span className="flex-1 flex items-center gap-1.5 flex-wrap">
-                          Looks like a duplicate of{" "}
-                          <span className="font-semibold">{pairedTitle} at {pairedCompany}</span>
-                          <StatusPill appliedAt={pairedAppliedAt} deletedAt={pairedDeletedAt} company={pairedCompany} />
+                          {isAppliedPair ? (
+                            <>
+                              Already applied to a similar role at{" "}
+                              <span className="font-semibold">{pairedCompany}</span>
+                              <StatusPill appliedAt={pairedAppliedAt} deletedAt={pairedDeletedAt} company={pairedCompany} />
+                            </>
+                          ) : (
+                            <>
+                              Looks like a duplicate of{" "}
+                              <span className="font-semibold">{pairedTitle} at {pairedCompany}</span>
+                              <StatusPill appliedAt={pairedAppliedAt} deletedAt={pairedDeletedAt} company={pairedCompany} />
+                            </>
+                          )}
                         </span>
                         <button
-                          className="flex items-center gap-0.5 text-amber-400 hover:text-amber-200"
+                          className={`flex items-center gap-0.5 hover:text-white ${isAppliedPair ? "text-orange-400" : "text-amber-400"}`}
                           onClick={() => toggleReviewNearDup(posting.id)}
                           title={isReviewing ? "Hide comparison" : "Review both roles"}
                         >
                           {isReviewing ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                           <span className="font-medium">Review</span>
                         </button>
-                        <span className="text-amber-800/60 select-none">·</span>
+                        <span className={`select-none ${isAppliedPair ? "text-orange-800/60" : "text-amber-800/60"}`}>·</span>
                         <button
-                          className="font-medium hover:text-amber-200 underline underline-offset-2"
+                          className={`font-medium underline underline-offset-2 ${isAppliedPair ? "text-orange-300 hover:text-orange-100" : "hover:text-amber-200"}`}
                           onClick={() => flagAsDuplicate(posting.id)}
                         >
                           Remove this
                         </button>
-                        <span className="text-amber-800/60 select-none">·</span>
+                        <span className={`select-none ${isAppliedPair ? "text-orange-800/60" : "text-amber-800/60"}`}>·</span>
                         <button
-                          className="text-amber-600 hover:text-amber-400"
+                          className={`${isAppliedPair ? "text-orange-700 hover:text-orange-500" : "text-amber-600 hover:text-amber-400"}`}
                           onClick={() => dismissNearDup(posting.id)}
                         >
-                          Keep both
+                          Not a dup
                         </button>
                       </div>
 
