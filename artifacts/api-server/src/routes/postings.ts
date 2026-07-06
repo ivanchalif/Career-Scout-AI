@@ -6,7 +6,6 @@ import {
   GetPostingParams,
   DeletePostingParams,
   AnalyzePostingParams,
-  MarkAppliedParams,
   ListPostingsQueryParams,
   GetPostingResponse,
   ListPostingsResponse,
@@ -18,6 +17,9 @@ import { fetchSingleEmail } from "../lib/gmailClient";
 import { isFuzzyDuplicate, sweepDuplicatesOf, runDedupSweep, dbNormalizeSql } from "../lib/dedup";
 import { logger } from "../lib/logger";
 import { fetchJobPageContent } from "../lib/pageScraper";
+import multer from "multer";
+import { stringify } from "csv-stringify/sync";
+import { parse } from "csv-parse/sync";
 
 const router: IRouter = Router();
 
@@ -215,6 +217,143 @@ router.get("/postings/near-duplicates", requireAuth, async (req, res): Promise<v
   res.json(rows.rows);
 });
 
+const CSV_COLUMNS = ["title", "company", "link", "location", "remoteType", "salaryMin", "salaryMax", "fitScore", "source", "applied", "dateAdded"] as const;
+
+router.get("/postings/export.csv", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId;
+
+  const postings = await db
+    .select()
+    .from(jobPostingsTable)
+    .where(and(eq(jobPostingsTable.userId, userId), isNull(jobPostingsTable.deletedAt)))
+    .orderBy(jobPostingsTable.createdAt);
+
+  const postingIds = postings.map((p) => p.id);
+  const reports = postingIds.length > 0
+    ? await db
+        .select()
+        .from(matchReportsTable)
+        .where(and(eq(matchReportsTable.userId, userId), inArray(matchReportsTable.jobPostingId, postingIds)))
+    : [];
+
+  const reportsByPostingId = new Map(reports.map((r) => [r.jobPostingId, r]));
+
+  const rows = postings.map((p) => {
+    const report = reportsByPostingId.get(p.id);
+    return {
+      title: p.title,
+      company: p.company,
+      link: p.link ?? "",
+      location: p.location ?? "",
+      remoteType: p.remoteType ?? "",
+      salaryMin: p.salaryMin ?? "",
+      salaryMax: p.salaryMax ?? "",
+      fitScore: report?.fitScore ?? "",
+      source: p.source,
+      applied: p.appliedAt ? "yes" : "no",
+      dateAdded: p.createdAt.toISOString(),
+    };
+  });
+
+  const csv = stringify(rows, { header: true, columns: CSV_COLUMNS as unknown as string[] });
+
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", `attachment; filename="career-scout-jobs-${new Date().toISOString().slice(0, 10)}.csv"`);
+  res.send(csv);
+});
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+router.post("/postings/import", requireAuth, upload.single("file"), async (req, res): Promise<void> => {
+  const userId = req.userId;
+
+  if (!req.file) {
+    res.status(400).json({ error: "No file uploaded" });
+    return;
+  }
+
+  let records: Record<string, string>[];
+  try {
+    records = parse(req.file.buffer, {
+      columns: true,
+      skip_empty_lines: true,
+      trim: true,
+      relax_column_count: true,
+    }) as Record<string, string>[];
+  } catch {
+    res.status(400).json({ error: "Failed to parse CSV file" });
+    return;
+  }
+
+  const existingPostings = await db
+    .select({ title: jobPostingsTable.title, company: jobPostingsTable.company, link: jobPostingsTable.link })
+    .from(jobPostingsTable)
+    .where(and(eq(jobPostingsTable.userId, userId), isNull(jobPostingsTable.deletedAt)));
+
+  const existingLinks = new Set(existingPostings.map((p) => p.link?.trim().toLowerCase()).filter(Boolean));
+  const existingTitleCompany = new Set(
+    existingPostings.map((p) => `${p.title.trim().toLowerCase()}||${p.company.trim().toLowerCase()}`),
+  );
+
+  let imported = 0;
+  let skipped = 0;
+  let invalid = 0;
+
+  for (const record of records) {
+    const title = (record["title"] ?? "").trim();
+    const company = (record["company"] ?? "").trim();
+
+    if (!title || !company) {
+      invalid++;
+      continue;
+    }
+
+    const link = (record["link"] ?? "").trim() || null;
+    const location = (record["location"] ?? "").trim() || null;
+    const remoteType = (record["remoteType"] ?? "").trim() || null;
+    const salaryMinRaw = parseInt(record["salaryMin"] ?? "", 10);
+    const salaryMaxRaw = parseInt(record["salaryMax"] ?? "", 10);
+    const salaryMin = isNaN(salaryMinRaw) ? null : salaryMinRaw;
+    const salaryMax = isNaN(salaryMaxRaw) ? null : salaryMaxRaw;
+
+    const linkKey = link?.toLowerCase();
+    const titleCompanyKey = `${title.toLowerCase()}||${company.toLowerCase()}`;
+
+    if ((linkKey && existingLinks.has(linkKey)) || existingTitleCompany.has(titleCompanyKey)) {
+      skipped++;
+      continue;
+    }
+
+    const [inserted] = await db
+      .insert(jobPostingsTable)
+      .values({
+        userId,
+        title,
+        company,
+        link,
+        location,
+        remoteType,
+        salaryMin,
+        salaryMax,
+        source: "csv-import",
+        fullDescription: "",
+        extractedSkills: [],
+        requiredSkills: [],
+        niceToHaveSkills: [],
+      })
+      .returning();
+
+    existingLinks.add(linkKey ?? "");
+    existingTitleCompany.add(titleCompanyKey);
+
+    imported++;
+    scorePostingBackground(inserted.id, userId);
+  }
+
+  logger.info({ userId, imported, skipped, invalid }, "postings: csv import completed");
+  res.json({ imported, skipped, invalid });
+});
+
 router.patch("/postings/:id/restore", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId;
   const params = DeletePostingParams.safeParse(req.params);
@@ -369,7 +508,7 @@ router.delete("/postings/:id", requireAuth, async (req, res): Promise<void> => {
 
 router.patch("/postings/:id/applied", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId;
-  const params = MarkAppliedParams.safeParse(req.params);
+  const params = DeletePostingParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;

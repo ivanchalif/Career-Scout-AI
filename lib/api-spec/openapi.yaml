@@ -153,6 +153,11 @@ paths:
           schema:
             type: string
           description: Filter by source (manual, gmail)
+        - name: applied
+          in: query
+          schema:
+            type: boolean
+          description: Filter by applied status
       responses:
         "200":
           description: List of job postings with match reports
@@ -179,6 +184,21 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/JobPosting"
+
+  /postings/deleted:
+    get:
+      operationId: listDeletedPostings
+      tags: [postings]
+      summary: List deleted job postings
+      responses:
+        "200":
+          description: List of deleted postings with match reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PostingWithReport"
 
   /postings/{id}:
     get:
@@ -217,6 +237,136 @@ paths:
       responses:
         "204":
           description: Deleted
+
+  /postings/{id}/restore:
+    patch:
+      operationId: restorePosting
+      tags: [postings]
+      summary: Restore a deleted job posting
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Restored posting id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                required: [id]
+        "404":
+          description: Not found
+
+  /postings/{id}/close:
+    post:
+      operationId: closePosting
+      tags: [postings]
+      summary: Mark a posting as closed
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Closed
+
+  /postings/{id}/reopen:
+    patch:
+      operationId: reopenPosting
+      tags: [postings]
+      summary: Reopen a closed posting
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Reopened posting id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                required: [id]
+
+  /postings/{id}/applied:
+    patch:
+      operationId: markApplied
+      tags: [postings]
+      summary: Toggle applied status on a posting
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated applied status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarkAppliedResult"
+        "404":
+          description: Not found
+
+  /postings/export.csv:
+    get:
+      operationId: exportPostingsCsv
+      tags: [postings]
+      summary: Export job postings as CSV
+      description: Downloads all active job postings for the current user as a CSV file
+      responses:
+        "200":
+          description: CSV file download
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+
+  /postings/import:
+    post:
+      operationId: importPostingsCsv
+      tags: [postings]
+      summary: Import job postings from CSV
+      description: Parses a CSV file and inserts valid job postings, skipping duplicates and invalid rows
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Import summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportSummary"
+        "400":
+          description: No file uploaded or invalid CSV
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /postings/{id}/analyze:
     post:
@@ -282,6 +432,187 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
+  /filter-settings:
+    get:
+      operationId: getFilterSettings
+      tags: [gmail]
+      summary: Get email filter settings
+      responses:
+        "200":
+          description: Email filter settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailFilterSettings"
+    put:
+      operationId: updateFilterSettings
+      tags: [gmail]
+      summary: Update email filter settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailFilterSettings"
+      responses:
+        "200":
+          description: Updated filter settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailFilterSettings"
+
+  /company-filter-settings:
+    get:
+      operationId: getCompanyFilterSettings
+      tags: [profile]
+      summary: Get company filter settings
+      responses:
+        "200":
+          description: Company filter settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanyFilterSettings"
+    put:
+      operationId: updateCompanyFilterSettings
+      tags: [profile]
+      summary: Update company filter settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompanyFilterSettings"
+      responses:
+        "200":
+          description: Updated company filter settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanyFilterSettings"
+
+  /title-exclude-settings:
+    get:
+      operationId: getTitleExcludeSettings
+      tags: [profile]
+      summary: Get title exclude keyword settings
+      responses:
+        "200":
+          description: Title exclude settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TitleExcludeSettings"
+    put:
+      operationId: updateTitleExcludeSettings
+      tags: [profile]
+      summary: Update title exclude keyword settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TitleExcludeSettings"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TitleExcludeSettings"
+
+  /profile/parse-resume:
+    post:
+      operationId: parseResume
+      tags: [profile]
+      summary: Parse resume and extract experience history
+      responses:
+        "200":
+          description: Parsed experience entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  experienceHistory:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ExperienceEntry"
+                required: [experienceHistory]
+        "400":
+          description: No resume found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Could not parse resume
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /imap/status:
+    get:
+      operationId: getImapStatus
+      tags: [imap]
+      summary: Get IMAP connection status
+      responses:
+        "200":
+          description: IMAP connection status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImapStatus"
+
+  /imap/connect:
+    post:
+      operationId: connectImap
+      tags: [imap]
+      summary: Connect an IMAP account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectImapBody"
+      responses:
+        "200":
+          description: IMAP connected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImapConnected"
+        "400":
+          description: Missing required fields
+        "422":
+          description: Connection failed
+
+  /imap/disconnect:
+    delete:
+      operationId: disconnectImap
+      tags: [imap]
+      summary: Disconnect IMAP account
+      responses:
+        "200":
+          description: Disconnected
+
+  /imap/sync:
+    post:
+      operationId: syncImap
+      tags: [imap]
+      summary: Trigger a manual IMAP sync
+      responses:
+        "200":
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImapSyncResult"
+        "400":
+          description: No IMAP connection configured
 
   /gmail/connect:
     get:
@@ -386,6 +717,23 @@ components:
       required:
         - error
 
+    ImportSummary:
+      type: object
+      properties:
+        imported:
+          type: integer
+          description: Number of rows successfully imported
+        skipped:
+          type: integer
+          description: Number of rows skipped as duplicates
+        invalid:
+          type: integer
+          description: Number of rows skipped due to missing required fields
+      required:
+        - imported
+        - skipped
+        - invalid
+
     UserProfile:
       type: object
       properties:
@@ -405,10 +753,20 @@ components:
           type: ["integer", "null"]
         remotePreference:
           type: string
+        remotePreferences:
+          type: array
+          items:
+            type: string
+        locationPreferences:
+          type: array
+          items:
+            type: string
         resumeUrl:
           type: ["string", "null"]
         resumeText:
           type: ["string", "null"]
+        syncScheduleHours:
+          type: ["integer", "null"]
         createdAt:
           type: string
           format: date-time
@@ -459,10 +817,20 @@ components:
           type: ["integer", "null"]
         remotePreference:
           type: string
+        remotePreferences:
+          type: array
+          items:
+            type: string
+        locationPreferences:
+          type: array
+          items:
+            type: string
         resumeUrl:
           type: ["string", "null"]
         resumeText:
           type: ["string", "null"]
+        syncScheduleHours:
+          type: ["integer", "null"]
 
     JobPosting:
       type: object
@@ -491,6 +859,21 @@ components:
           type: string
         gmailMessageId:
           type: ["string", "null"]
+        senderName:
+          type: ["string", "null"]
+        appliedAt:
+          type: ["string", "null"]
+          format: date-time
+        location:
+          type: ["string", "null"]
+        remoteType:
+          type: ["string", "null"]
+        deletedAt:
+          type: ["string", "null"]
+          format: date-time
+        closedAt:
+          type: ["string", "null"]
+          format: date-time
         createdAt:
           type: string
           format: date-time
@@ -651,6 +1034,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PostingWithReport"
+        strongMatches:
+          type: integer
         hasProfile:
           type: boolean
         gmailConnected:
@@ -661,3 +1046,131 @@ components:
         - topMatches
         - hasProfile
         - gmailConnected
+
+    MarkAppliedResult:
+      type: object
+      properties:
+        id:
+          type: integer
+        appliedAt:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        - id
+
+    EmailFilterSettings:
+      type: object
+      properties:
+        subjectKeywords:
+          type: array
+          items:
+            type: string
+        fromAddresses:
+          type: array
+          items:
+            type: string
+        bodyKeywords:
+          type: array
+          items:
+            type: string
+        blockedBodyKeywords:
+          type: array
+          items:
+            type: string
+      required:
+        - subjectKeywords
+        - fromAddresses
+        - bodyKeywords
+        - blockedBodyKeywords
+
+    CompanyFilterSettings:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum: [off, include, exclude]
+        companies:
+          type: array
+          items:
+            type: string
+      required:
+        - mode
+        - companies
+
+    TitleExcludeSettings:
+      type: object
+      properties:
+        keywords:
+          type: array
+          items:
+            type: string
+      required:
+        - keywords
+
+    ImapStatus:
+      type: object
+      properties:
+        connected:
+          type: boolean
+        host:
+          type: ["string", "null"]
+        port:
+          type: ["integer", "null"]
+        username:
+          type: ["string", "null"]
+        tls:
+          type: ["boolean", "null"]
+        lastSyncedAt:
+          type: ["string", "null"]
+          format: date-time
+        postingCount:
+          type: ["integer", "null"]
+      required:
+        - connected
+
+    ConnectImapBody:
+      type: object
+      properties:
+        host:
+          type: string
+        port:
+          type: integer
+        username:
+          type: string
+        password:
+          type: string
+        tls:
+          type: boolean
+      required:
+        - host
+        - port
+        - username
+        - password
+
+    ImapConnected:
+      type: object
+      properties:
+        connected:
+          type: boolean
+        host:
+          type: string
+        port:
+          type: integer
+        username:
+          type: string
+        tls:
+          type: boolean
+      required:
+        - connected
+        - host
+        - port
+        - username
+        - tls
+
+    ImapSyncResult:
+      type: object
+      properties:
+        synced:
+          type: integer
+      required:
+        - synced

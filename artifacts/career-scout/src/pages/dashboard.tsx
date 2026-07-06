@@ -1,11 +1,11 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useAuth } from "@clerk/react";
 import { Link } from "wouter";
 import {
   Plus, Search, SlidersHorizontal, Mail, TrendingUp,
   BriefcaseBusiness, Star, Trash2, X,
   RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2, CheckCircle2, Undo2, MapPin, Ban, RotateCcw, Layers, Copy, Archive,
-  ChevronDown, ChevronUp, ExternalLink, SearchCode,
+  ChevronDown, ChevronUp, ExternalLink, SearchCode, Download, Upload,
 } from "lucide-react";
 import {
   useGetDashboardSummary,
@@ -141,6 +141,9 @@ export default function DashboardPage() {
   const [backfillingLinks, setBackfillingLinks] = useState(false);
   const [sweepingDuplicates, setSweepingDuplicates] = useState(false);
   const [retryingLinks, setRetryingLinks] = useState<Set<number>>(new Set());
+  const [exportingCsv, setExportingCsv] = useState(false);
+  const [importingCsv, setImportingCsv] = useState(false);
+  const importFileRef = useRef<HTMLInputElement>(null);
   const [activeTab, setActiveTab] = useState<"active" | "applied" | "deleted">("active");
   type NearDupPair = {
     id1: number; id2: number;
@@ -255,7 +258,7 @@ export default function DashboardPage() {
     if (current.some((k) => k.toLowerCase() === trimmed.toLowerCase())) return;
     const next = [...current, trimmed];
     setTitleExcludeInput("");
-    await updateTitleExcludeMutation.mutateAsync({ keywords: next }, {
+    await updateTitleExcludeMutation.mutateAsync({ data: { keywords: next } }, {
       onSuccess: (data) => {
         qc.setQueryData(getGetTitleExcludeSettingsQueryKey(), data);
         qc.invalidateQueries({ queryKey: ["/api/postings"] });
@@ -267,7 +270,7 @@ export default function DashboardPage() {
   async function removeTitleExcludeKeyword(kw: string) {
     const current = titleExcludeQ.data?.keywords ?? [];
     const next = current.filter((k) => k !== kw);
-    await updateTitleExcludeMutation.mutateAsync({ keywords: next }, {
+    await updateTitleExcludeMutation.mutateAsync({ data: { keywords: next } }, {
       onSuccess: (data) => {
         qc.setQueryData(getGetTitleExcludeSettingsQueryKey(), data);
         qc.invalidateQueries({ queryKey: ["/api/postings"] });
@@ -288,7 +291,7 @@ export default function DashboardPage() {
       mode: "exclude" as const,
       companies: [...(current.mode === "exclude" ? current.companies : []), companyName],
     };
-    await updateCompanyFilterMutation.mutateAsync(newSettings, {
+    await updateCompanyFilterMutation.mutateAsync({ data: newSettings }, {
       onSuccess: () => {
         qc.setQueryData(getGetCompanyFilterSettingsQueryKey(), newSettings);
         qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
@@ -311,14 +314,15 @@ export default function DashboardPage() {
       applied: activeTab === "applied" ? true : activeTab === "active" ? false : undefined,
     },
     {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       query: {
-        refetchInterval: (query) => {
+        refetchInterval: (query: any) => {
           const data = query.state.data;
           if (!data) return false;
-          const hasUnscored = data.some((p) => p.report?.fitScore == null);
+          const hasUnscored = data.some((p: any) => p.report?.fitScore == null);
           return hasUnscored ? 4000 : false;
         },
-      },
+      } as any,
     },
   );
   const activeCountQ = useListPostings({ applied: false });
@@ -575,6 +579,69 @@ export default function DashboardPage() {
     }
   }
 
+  async function onExportCsv() {
+    setExportingCsv(true);
+    try {
+      const token = await getToken();
+      const res = await fetch("/api/postings/export.csv", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const disposition = res.headers.get("Content-Disposition") ?? "";
+      const match = disposition.match(/filename="([^"]+)"/);
+      a.download = match?.[1] ?? "career-scout-jobs.csv";
+      a.href = url;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: "Export failed", description: "Could not export jobs to CSV.", variant: "destructive" });
+    } finally {
+      setExportingCsv(false);
+    }
+  }
+
+  async function onImportCsv(file: File) {
+    setImportingCsv(true);
+    try {
+      const token = await getToken();
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/postings/import", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Unknown error" })) as { error?: string };
+        throw new Error(err.error ?? "Unknown error");
+      }
+      const { imported, skipped, invalid } = await res.json() as { imported: number; skipped: number; invalid: number };
+      const parts: string[] = [];
+      if (imported > 0) parts.push(`${imported} job${imported === 1 ? "" : "s"} imported`);
+      if (skipped > 0) parts.push(`${skipped} skipped as duplicate${skipped === 1 ? "" : "s"}`);
+      if (invalid > 0) parts.push(`${invalid} invalid row${invalid === 1 ? "" : "s"} skipped`);
+      toast({
+        title: imported > 0 ? "Import complete" : "Nothing imported",
+        description: parts.length > 0 ? parts.join(", ") + "." : "No valid jobs found in file.",
+      });
+      if (imported > 0) {
+        qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      toast({ title: "Import failed", description: msg, variant: "destructive" });
+    } finally {
+      setImportingCsv(false);
+      if (importFileRef.current) importFileRef.current.value = "";
+    }
+  }
+
   async function onRetryLink(postingId: number) {
     setRetryingLinks((prev) => new Set(prev).add(postingId));
     try {
@@ -770,6 +837,48 @@ export default function DashboardPage() {
               <Sparkles className={`w-3.5 h-3.5 ${reanalyzing ? "animate-pulse" : ""}`} />
               <span className="hidden sm:inline">{reanalyzing ? "Analyzing..." : "Re-analyze"}</span>
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onExportCsv}
+              disabled={exportingCsv}
+              className="gap-2 text-muted-foreground"
+              data-testid="export-csv-button"
+              title="Download all your active job postings as a CSV file"
+            >
+              {exportingCsv ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Download className="w-3.5 h-3.5" />
+              )}
+              <span className="hidden sm:inline">{exportingCsv ? "Exporting..." : "Export CSV"}</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => importFileRef.current?.click()}
+              disabled={importingCsv}
+              className="gap-2 text-muted-foreground"
+              data-testid="import-csv-button"
+              title="Import jobs from a CSV file"
+            >
+              {importingCsv ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Upload className="w-3.5 h-3.5" />
+              )}
+              <span className="hidden sm:inline">{importingCsv ? "Importing..." : "Import CSV"}</span>
+            </Button>
+            <input
+              ref={importFileRef}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) onImportCsv(file);
+              }}
+            />
             <Button
               onClick={() => setShowAddModal(true)}
               className="bg-indigo-600 hover:bg-indigo-500 gap-2"

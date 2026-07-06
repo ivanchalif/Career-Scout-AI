@@ -138,7 +138,7 @@ export default function ProfilePage() {
     setIsUploadingResume(true);
     try {
       const token = await getToken();
-      const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
+      const authHeader: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
 
       const uploadRes = await fetch("/api/storage/uploads/request-url", {
         method: "POST",

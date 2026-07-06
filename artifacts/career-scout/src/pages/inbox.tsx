@@ -102,10 +102,10 @@ export default function InboxPage() {
     if (imapStatus?.connected) {
       setImapForm((f) => ({
         ...f,
-        host: imapStatus.host,
-        port: imapStatus.port,
-        username: imapStatus.username,
-        tls: imapStatus.tls,
+        host: imapStatus.host ?? f.host,
+        port: imapStatus.port ?? f.port,
+        username: imapStatus.username ?? f.username,
+        tls: imapStatus.tls ?? f.tls,
       }));
     }
   }, [imapStatus]);
@@ -255,11 +255,13 @@ export default function InboxPage() {
 
   function handleImapConnect() {
     connectImapMutation.mutate({
-      host: imapForm.host.trim(),
-      port: Number(imapForm.port),
-      username: imapForm.username.trim(),
-      password: imapForm.password,
-      tls: imapForm.tls,
+      data: {
+        host: imapForm.host.trim(),
+        port: Number(imapForm.port),
+        username: imapForm.username.trim(),
+        password: imapForm.password,
+        tls: imapForm.tls,
+      },
     });
   }
 
@@ -642,7 +644,7 @@ function FilterSettingsTab() {
   const [localTitleExclude, setLocalTitleExclude] = useState<TitleExcludeSettings>({ keywords: [] });
 
   useEffect(() => {
-    if (settings) setLocalSettings({ blockedBodyKeywords: [], ...settings });
+    if (settings) setLocalSettings({ ...{ blockedBodyKeywords: [] }, ...settings });
   }, [settings]);
 
   useEffect(() => {
@@ -678,11 +680,11 @@ function FilterSettingsTab() {
   }
 
   function handleSave() {
-    updateMutation.mutate(localSettings);
+    updateMutation.mutate({ data: localSettings });
   }
 
   function handleSaveCompanyFilter() {
-    updateCompanyMutation.mutate(localCompanySettings);
+    updateCompanyMutation.mutate({ data: localCompanySettings });
   }
 
   function addTitleExcludeKeyword(value: string) {
@@ -698,7 +700,7 @@ function FilterSettingsTab() {
   }
 
   function handleSaveTitleExclude() {
-    updateTitleExcludeMutation.mutate(localTitleExclude);
+    updateTitleExcludeMutation.mutate({ data: localTitleExclude });
   }
 
   if (isLoading || companyFilterLoading || titleExcludeLoading) {

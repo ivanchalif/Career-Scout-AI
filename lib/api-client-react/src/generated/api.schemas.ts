@@ -13,6 +13,15 @@ export interface ErrorResponse {
   error: string;
 }
 
+export interface ImportSummary {
+  /** Number of rows successfully imported */
+  imported: number;
+  /** Number of rows skipped as duplicates */
+  skipped: number;
+  /** Number of rows skipped due to missing required fields */
+  invalid: number;
+}
+
 export interface ExperienceEntry {
   title: string;
   company: string;
@@ -31,8 +40,14 @@ export interface UserProfile {
   /** @nullable */
   targetSalary?: number | null;
   remotePreference: string;
+  remotePreferences?: string[];
+  locationPreferences?: string[];
   /** @nullable */
   resumeUrl?: string | null;
+  /** @nullable */
+  resumeText?: string | null;
+  /** @nullable */
+  syncScheduleHours?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -45,8 +60,14 @@ export interface UpsertProfileBody {
   /** @nullable */
   targetSalary?: number | null;
   remotePreference?: string;
+  remotePreferences?: string[];
+  locationPreferences?: string[];
   /** @nullable */
   resumeUrl?: string | null;
+  /** @nullable */
+  resumeText?: string | null;
+  /** @nullable */
+  syncScheduleHours?: number | null;
 }
 
 export interface JobPosting {
@@ -55,8 +76,6 @@ export interface JobPosting {
   title: string;
   company: string;
   /** @nullable */
-  location?: string | null;
-  /** @nullable */
   link?: string | null;
   fullDescription: string;
   extractedSkills: string[];
@@ -64,38 +83,22 @@ export interface JobPosting {
   salaryMin?: number | null;
   /** @nullable */
   salaryMax?: number | null;
-  /** @nullable */
-  remoteType?: string | null;
   source: string;
-  /** @nullable */
-  senderName?: string | null;
   /** @nullable */
   gmailMessageId?: string | null;
   /** @nullable */
+  senderName?: string | null;
+  /** @nullable */
   appliedAt?: string | null;
   /** @nullable */
-  closedAt?: string | null;
+  location?: string | null;
+  /** @nullable */
+  remoteType?: string | null;
   /** @nullable */
   deletedAt?: string | null;
-  createdAt: string;
-}
-
-export interface EmailFilterSettings {
-  subjectKeywords: string[];
-  fromAddresses: string[];
-  bodyKeywords: string[];
-  blockedBodyKeywords: string[];
-}
-
-export interface CompanyFilterSettings {
-  mode: 'off' | 'include' | 'exclude';
-  companies: string[];
-}
-
-export interface MarkAppliedResult {
-  id: number;
   /** @nullable */
-  appliedAt?: string | null;
+  closedAt?: string | null;
+  createdAt: string;
 }
 
 export interface MatchReport {
@@ -171,25 +174,69 @@ export interface DashboardSummary {
   totalPostings: number;
   /** @nullable */
   avgFitScore: number | null;
-  strongMatches: number;
+  topMatches: PostingWithReport[];
+  strongMatches?: number;
   hasProfile: boolean;
   gmailConnected: boolean;
 }
 
-export type ImapStatus =
-  | { connected: false }
-  | { connected: true; host: string; port: number; username: string; tls: boolean; lastSyncedAt: string | null; postingCount: number };
+export interface MarkAppliedResult {
+  id: number;
+  /** @nullable */
+  appliedAt?: string | null;
+}
+
+export interface EmailFilterSettings {
+  subjectKeywords: string[];
+  fromAddresses: string[];
+  bodyKeywords: string[];
+  blockedBodyKeywords: string[];
+}
+
+export type CompanyFilterSettingsMode =
+  (typeof CompanyFilterSettingsMode)[keyof typeof CompanyFilterSettingsMode];
+
+export const CompanyFilterSettingsMode = {
+  off: "off",
+  include: "include",
+  exclude: "exclude",
+} as const;
+
+export interface CompanyFilterSettings {
+  mode: CompanyFilterSettingsMode;
+  companies: string[];
+}
+
+export interface TitleExcludeSettings {
+  keywords: string[];
+}
+
+export interface ImapStatus {
+  connected: boolean;
+  /** @nullable */
+  host?: string | null;
+  /** @nullable */
+  port?: number | null;
+  /** @nullable */
+  username?: string | null;
+  /** @nullable */
+  tls?: boolean | null;
+  /** @nullable */
+  lastSyncedAt?: string | null;
+  /** @nullable */
+  postingCount?: number | null;
+}
 
 export interface ConnectImapBody {
   host: string;
   port: number;
   username: string;
   password: string;
-  tls: boolean;
+  tls?: boolean;
 }
 
 export interface ImapConnected {
-  connected: true;
+  connected: boolean;
   host: string;
   port: number;
   username: string;
@@ -214,9 +261,25 @@ export type ListPostingsParams = {
    */
   source?: string;
   /**
-   * Filter by applied status (true = applied, false = not applied)
+   * Filter by applied status
    */
   applied?: boolean;
+};
+
+export type RestorePosting200 = {
+  id: number;
+};
+
+export type ReopenPosting200 = {
+  id: number;
+};
+
+export type ImportPostingsCsvBody = {
+  file: Blob;
+};
+
+export type ParseResume200 = {
+  experienceHistory: ExperienceEntry[];
 };
 
 export type GmailCallbackParams = {
@@ -224,7 +287,3 @@ export type GmailCallbackParams = {
   state?: string;
   error?: string;
 };
-
-export interface TitleExcludeSettings {
-  keywords: string[];
-}

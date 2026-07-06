@@ -17,6 +17,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  CompanyFilterSettings,
   ConnectImapBody,
   CreatePostingBody,
   DashboardSummary,
@@ -30,11 +31,16 @@ import type {
   ImapConnected,
   ImapStatus,
   ImapSyncResult,
+  ImportPostingsCsvBody,
+  ImportSummary,
   JobPosting,
   ListPostingsParams,
   MarkAppliedResult,
   MatchReport,
+  ParseResume200,
   PostingWithReport,
+  ReopenPosting200,
+  RestorePosting200,
   TitleExcludeSettings,
   UploadUrlRequest,
   UploadUrlResponse,
@@ -646,6 +652,81 @@ export const useCreatePosting = <
 };
 
 /**
+ * @summary List deleted job postings
+ */
+export const getListDeletedPostingsUrl = () => {
+  return `/api/postings/deleted`;
+};
+
+export const listDeletedPostings = async (
+  options?: RequestInit,
+): Promise<PostingWithReport[]> => {
+  return customFetch<PostingWithReport[]>(getListDeletedPostingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListDeletedPostingsQueryKey = () => {
+  return [`/api/postings/deleted`] as const;
+};
+
+export const getListDeletedPostingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listDeletedPostings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listDeletedPostings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListDeletedPostingsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listDeletedPostings>>
+  > = ({ signal }) => listDeletedPostings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listDeletedPostings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListDeletedPostingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listDeletedPostings>>
+>;
+export type ListDeletedPostingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List deleted job postings
+ */
+
+export function useListDeletedPostings<
+  TData = Awaited<ReturnType<typeof listDeletedPostings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listDeletedPostings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListDeletedPostingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary Get a job posting
  */
 export const getGetPostingUrl = (id: number) => {
@@ -816,6 +897,93 @@ export const useDeletePosting = <
   return useMutation(getDeletePostingMutationOptions(options));
 };
 
+/**
+ * @summary Restore a deleted job posting
+ */
+export const getRestorePostingUrl = (id: number) => {
+  return `/api/postings/${id}/restore`;
+};
+
+export const restorePosting = async (
+  id: number,
+  options?: RequestInit,
+): Promise<RestorePosting200> => {
+  return customFetch<RestorePosting200>(getRestorePostingUrl(id), {
+    ...options,
+    method: "PATCH",
+  });
+};
+
+export const getRestorePostingMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof restorePosting>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof restorePosting>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["restorePosting"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof restorePosting>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return restorePosting(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RestorePostingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof restorePosting>>
+>;
+
+export type RestorePostingMutationError = ErrorType<void>;
+
+/**
+ * @summary Restore a deleted job posting
+ */
+export const useRestorePosting = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof restorePosting>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof restorePosting>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getRestorePostingMutationOptions(options));
+};
+
+/**
+ * @summary Mark a posting as closed
+ */
 export const getClosePostingUrl = (id: number) => {
   return `/api/postings/${id}/close`;
 };
@@ -861,12 +1029,22 @@ export const getClosePostingMutationOptions = <
     { id: number }
   > = (props) => {
     const { id } = props ?? {};
+
     return closePosting(id, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
 };
 
+export type ClosePostingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof closePosting>>
+>;
+
+export type ClosePostingMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Mark a posting as closed
+ */
 export const useClosePosting = <
   TError = ErrorType<unknown>,
   TContext = unknown,
@@ -887,6 +1065,9 @@ export const useClosePosting = <
   return useMutation(getClosePostingMutationOptions(options));
 };
 
+/**
+ * @summary Reopen a closed posting
+ */
 export const getReopenPostingUrl = (id: number) => {
   return `/api/postings/${id}/reopen`;
 };
@@ -894,8 +1075,8 @@ export const getReopenPostingUrl = (id: number) => {
 export const reopenPosting = async (
   id: number,
   options?: RequestInit,
-): Promise<void> => {
-  return customFetch<void>(getReopenPostingUrl(id), {
+): Promise<ReopenPosting200> => {
+  return customFetch<ReopenPosting200>(getReopenPostingUrl(id), {
     ...options,
     method: "PATCH",
   });
@@ -932,12 +1113,22 @@ export const getReopenPostingMutationOptions = <
     { id: number }
   > = (props) => {
     const { id } = props ?? {};
+
     return reopenPosting(id, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
 };
 
+export type ReopenPostingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reopenPosting>>
+>;
+
+export type ReopenPostingMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Reopen a closed posting
+ */
 export const useReopenPosting = <
   TError = ErrorType<unknown>,
   TContext = unknown,
@@ -958,82 +1149,8 @@ export const useReopenPosting = <
   return useMutation(getReopenPostingMutationOptions(options));
 };
 
-export const getUpdatePostingLinkUrl = (id: number) => {
-  return `/api/postings/${id}/link`;
-};
-
-export const updatePostingLink = async (
-  id: number,
-  link: string | null,
-  options?: RequestInit,
-): Promise<{ id: number; link: string | null }> => {
-  return customFetch<{ id: number; link: string | null }>(getUpdatePostingLinkUrl(id), {
-    ...options,
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ link }),
-  });
-};
-
-export const getUpdatePostingLinkMutationOptions = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof updatePostingLink>>,
-    TError,
-    { id: number; link: string | null },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof updatePostingLink>>,
-  TError,
-  { id: number; link: string | null },
-  TContext
-> => {
-  const mutationKey = ["updatePostingLink"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof updatePostingLink>>,
-    { id: number; link: string | null }
-  > = (props) => {
-    const { id, link } = props ?? {};
-    return updatePostingLink(id, link, requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export const useUpdatePostingLink = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof updatePostingLink>>,
-    TError,
-    { id: number; link: string | null },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<
-  Awaited<ReturnType<typeof updatePostingLink>>,
-  TError,
-  { id: number; link: string | null },
-  TContext
-> => {
-  return useMutation(getUpdatePostingLinkMutationOptions(options));
-};
-
 /**
- * @summary Toggle applied status of a job posting
+ * @summary Toggle applied status on a posting
  */
 export const getMarkAppliedUrl = (id: number) => {
   return `/api/postings/${id}/applied`;
@@ -1050,7 +1167,7 @@ export const markApplied = async (
 };
 
 export const getMarkAppliedMutationOptions = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<void>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -1080,6 +1197,7 @@ export const getMarkAppliedMutationOptions = <
     { id: number }
   > = (props) => {
     const { id } = props ?? {};
+
     return markApplied(id, requestOptions);
   };
 
@@ -1090,10 +1208,13 @@ export type MarkAppliedMutationResult = NonNullable<
   Awaited<ReturnType<typeof markApplied>>
 >;
 
-export type MarkAppliedMutationError = ErrorType<unknown>;
+export type MarkAppliedMutationError = ErrorType<void>;
 
+/**
+ * @summary Toggle applied status on a posting
+ */
 export const useMarkApplied = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<void>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -1110,6 +1231,171 @@ export const useMarkApplied = <
   TContext
 > => {
   return useMutation(getMarkAppliedMutationOptions(options));
+};
+
+/**
+ * Downloads all active job postings for the current user as a CSV file
+ * @summary Export job postings as CSV
+ */
+export const getExportPostingsCsvUrl = () => {
+  return `/api/postings/export.csv`;
+};
+
+export const exportPostingsCsv = async (
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(getExportPostingsCsvUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getExportPostingsCsvQueryKey = () => {
+  return [`/api/postings/export.csv`] as const;
+};
+
+export const getExportPostingsCsvQueryOptions = <
+  TData = Awaited<ReturnType<typeof exportPostingsCsv>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof exportPostingsCsv>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getExportPostingsCsvQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof exportPostingsCsv>>
+  > = ({ signal }) => exportPostingsCsv({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof exportPostingsCsv>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ExportPostingsCsvQueryResult = NonNullable<
+  Awaited<ReturnType<typeof exportPostingsCsv>>
+>;
+export type ExportPostingsCsvQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Export job postings as CSV
+ */
+
+export function useExportPostingsCsv<
+  TData = Awaited<ReturnType<typeof exportPostingsCsv>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof exportPostingsCsv>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getExportPostingsCsvQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Parses a CSV file and inserts valid job postings, skipping duplicates and invalid rows
+ * @summary Import job postings from CSV
+ */
+export const getImportPostingsCsvUrl = () => {
+  return `/api/postings/import`;
+};
+
+export const importPostingsCsv = async (
+  importPostingsCsvBody: ImportPostingsCsvBody,
+  options?: RequestInit,
+): Promise<ImportSummary> => {
+  const formData = new FormData();
+  formData.append(`file`, importPostingsCsvBody.file);
+
+  return customFetch<ImportSummary>(getImportPostingsCsvUrl(), {
+    ...options,
+    method: "POST",
+    body: formData,
+  });
+};
+
+export const getImportPostingsCsvMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof importPostingsCsv>>,
+    TError,
+    { data: BodyType<ImportPostingsCsvBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof importPostingsCsv>>,
+  TError,
+  { data: BodyType<ImportPostingsCsvBody> },
+  TContext
+> => {
+  const mutationKey = ["importPostingsCsv"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof importPostingsCsv>>,
+    { data: BodyType<ImportPostingsCsvBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return importPostingsCsv(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ImportPostingsCsvMutationResult = NonNullable<
+  Awaited<ReturnType<typeof importPostingsCsv>>
+>;
+export type ImportPostingsCsvMutationBody = BodyType<ImportPostingsCsvBody>;
+export type ImportPostingsCsvMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Import job postings from CSV
+ */
+export const useImportPostingsCsv = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof importPostingsCsv>>,
+    TError,
+    { data: BodyType<ImportPostingsCsvBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof importPostingsCsv>>,
+  TError,
+  { data: BodyType<ImportPostingsCsvBody> },
+  TContext
+> => {
+  return useMutation(getImportPostingsCsvMutationOptions(options));
 };
 
 /**
@@ -1357,6 +1643,898 @@ export function useGetMatchReport<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Get email filter settings
+ */
+export const getGetFilterSettingsUrl = () => {
+  return `/api/filter-settings`;
+};
+
+export const getFilterSettings = async (
+  options?: RequestInit,
+): Promise<EmailFilterSettings> => {
+  return customFetch<EmailFilterSettings>(getGetFilterSettingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetFilterSettingsQueryKey = () => {
+  return [`/api/filter-settings`] as const;
+};
+
+export const getGetFilterSettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getFilterSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getFilterSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetFilterSettingsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getFilterSettings>>
+  > = ({ signal }) => getFilterSettings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getFilterSettings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetFilterSettingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getFilterSettings>>
+>;
+export type GetFilterSettingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get email filter settings
+ */
+
+export function useGetFilterSettings<
+  TData = Awaited<ReturnType<typeof getFilterSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getFilterSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetFilterSettingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update email filter settings
+ */
+export const getUpdateFilterSettingsUrl = () => {
+  return `/api/filter-settings`;
+};
+
+export const updateFilterSettings = async (
+  emailFilterSettings: EmailFilterSettings,
+  options?: RequestInit,
+): Promise<EmailFilterSettings> => {
+  return customFetch<EmailFilterSettings>(getUpdateFilterSettingsUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(emailFilterSettings),
+  });
+};
+
+export const getUpdateFilterSettingsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateFilterSettings>>,
+    TError,
+    { data: BodyType<EmailFilterSettings> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateFilterSettings>>,
+  TError,
+  { data: BodyType<EmailFilterSettings> },
+  TContext
+> => {
+  const mutationKey = ["updateFilterSettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateFilterSettings>>,
+    { data: BodyType<EmailFilterSettings> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateFilterSettings(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateFilterSettingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateFilterSettings>>
+>;
+export type UpdateFilterSettingsMutationBody = BodyType<EmailFilterSettings>;
+export type UpdateFilterSettingsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update email filter settings
+ */
+export const useUpdateFilterSettings = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateFilterSettings>>,
+    TError,
+    { data: BodyType<EmailFilterSettings> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateFilterSettings>>,
+  TError,
+  { data: BodyType<EmailFilterSettings> },
+  TContext
+> => {
+  return useMutation(getUpdateFilterSettingsMutationOptions(options));
+};
+
+/**
+ * @summary Get company filter settings
+ */
+export const getGetCompanyFilterSettingsUrl = () => {
+  return `/api/company-filter-settings`;
+};
+
+export const getCompanyFilterSettings = async (
+  options?: RequestInit,
+): Promise<CompanyFilterSettings> => {
+  return customFetch<CompanyFilterSettings>(getGetCompanyFilterSettingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetCompanyFilterSettingsQueryKey = () => {
+  return [`/api/company-filter-settings`] as const;
+};
+
+export const getGetCompanyFilterSettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCompanyFilterSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getCompanyFilterSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetCompanyFilterSettingsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getCompanyFilterSettings>>
+  > = ({ signal }) => getCompanyFilterSettings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCompanyFilterSettings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetCompanyFilterSettingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getCompanyFilterSettings>>
+>;
+export type GetCompanyFilterSettingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get company filter settings
+ */
+
+export function useGetCompanyFilterSettings<
+  TData = Awaited<ReturnType<typeof getCompanyFilterSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getCompanyFilterSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetCompanyFilterSettingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update company filter settings
+ */
+export const getUpdateCompanyFilterSettingsUrl = () => {
+  return `/api/company-filter-settings`;
+};
+
+export const updateCompanyFilterSettings = async (
+  companyFilterSettings: CompanyFilterSettings,
+  options?: RequestInit,
+): Promise<CompanyFilterSettings> => {
+  return customFetch<CompanyFilterSettings>(
+    getUpdateCompanyFilterSettingsUrl(),
+    {
+      ...options,
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(companyFilterSettings),
+    },
+  );
+};
+
+export const getUpdateCompanyFilterSettingsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateCompanyFilterSettings>>,
+    TError,
+    { data: BodyType<CompanyFilterSettings> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateCompanyFilterSettings>>,
+  TError,
+  { data: BodyType<CompanyFilterSettings> },
+  TContext
+> => {
+  const mutationKey = ["updateCompanyFilterSettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateCompanyFilterSettings>>,
+    { data: BodyType<CompanyFilterSettings> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateCompanyFilterSettings(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateCompanyFilterSettingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateCompanyFilterSettings>>
+>;
+export type UpdateCompanyFilterSettingsMutationBody =
+  BodyType<CompanyFilterSettings>;
+export type UpdateCompanyFilterSettingsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update company filter settings
+ */
+export const useUpdateCompanyFilterSettings = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateCompanyFilterSettings>>,
+    TError,
+    { data: BodyType<CompanyFilterSettings> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateCompanyFilterSettings>>,
+  TError,
+  { data: BodyType<CompanyFilterSettings> },
+  TContext
+> => {
+  return useMutation(getUpdateCompanyFilterSettingsMutationOptions(options));
+};
+
+/**
+ * @summary Get title exclude keyword settings
+ */
+export const getGetTitleExcludeSettingsUrl = () => {
+  return `/api/title-exclude-settings`;
+};
+
+export const getTitleExcludeSettings = async (
+  options?: RequestInit,
+): Promise<TitleExcludeSettings> => {
+  return customFetch<TitleExcludeSettings>(getGetTitleExcludeSettingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetTitleExcludeSettingsQueryKey = () => {
+  return [`/api/title-exclude-settings`] as const;
+};
+
+export const getGetTitleExcludeSettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTitleExcludeSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getTitleExcludeSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetTitleExcludeSettingsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getTitleExcludeSettings>>
+  > = ({ signal }) => getTitleExcludeSettings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTitleExcludeSettings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetTitleExcludeSettingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getTitleExcludeSettings>>
+>;
+export type GetTitleExcludeSettingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get title exclude keyword settings
+ */
+
+export function useGetTitleExcludeSettings<
+  TData = Awaited<ReturnType<typeof getTitleExcludeSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getTitleExcludeSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetTitleExcludeSettingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update title exclude keyword settings
+ */
+export const getUpdateTitleExcludeSettingsUrl = () => {
+  return `/api/title-exclude-settings`;
+};
+
+export const updateTitleExcludeSettings = async (
+  titleExcludeSettings: TitleExcludeSettings,
+  options?: RequestInit,
+): Promise<TitleExcludeSettings> => {
+  return customFetch<TitleExcludeSettings>(getUpdateTitleExcludeSettingsUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(titleExcludeSettings),
+  });
+};
+
+export const getUpdateTitleExcludeSettingsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateTitleExcludeSettings>>,
+    TError,
+    { data: BodyType<TitleExcludeSettings> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateTitleExcludeSettings>>,
+  TError,
+  { data: BodyType<TitleExcludeSettings> },
+  TContext
+> => {
+  const mutationKey = ["updateTitleExcludeSettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateTitleExcludeSettings>>,
+    { data: BodyType<TitleExcludeSettings> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateTitleExcludeSettings(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateTitleExcludeSettingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateTitleExcludeSettings>>
+>;
+export type UpdateTitleExcludeSettingsMutationBody =
+  BodyType<TitleExcludeSettings>;
+export type UpdateTitleExcludeSettingsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update title exclude keyword settings
+ */
+export const useUpdateTitleExcludeSettings = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateTitleExcludeSettings>>,
+    TError,
+    { data: BodyType<TitleExcludeSettings> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateTitleExcludeSettings>>,
+  TError,
+  { data: BodyType<TitleExcludeSettings> },
+  TContext
+> => {
+  return useMutation(getUpdateTitleExcludeSettingsMutationOptions(options));
+};
+
+/**
+ * @summary Parse resume and extract experience history
+ */
+export const getParseResumeUrl = () => {
+  return `/api/profile/parse-resume`;
+};
+
+export const parseResume = async (
+  options?: RequestInit,
+): Promise<ParseResume200> => {
+  return customFetch<ParseResume200>(getParseResumeUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getParseResumeMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof parseResume>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof parseResume>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["parseResume"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof parseResume>>,
+    void
+  > = () => {
+    return parseResume(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ParseResumeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof parseResume>>
+>;
+
+export type ParseResumeMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Parse resume and extract experience history
+ */
+export const useParseResume = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof parseResume>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof parseResume>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getParseResumeMutationOptions(options));
+};
+
+/**
+ * @summary Get IMAP connection status
+ */
+export const getGetImapStatusUrl = () => {
+  return `/api/imap/status`;
+};
+
+export const getImapStatus = async (
+  options?: RequestInit,
+): Promise<ImapStatus> => {
+  return customFetch<ImapStatus>(getGetImapStatusUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetImapStatusQueryKey = () => {
+  return [`/api/imap/status`] as const;
+};
+
+export const getGetImapStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getImapStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getImapStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetImapStatusQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getImapStatus>>> = ({
+    signal,
+  }) => getImapStatus({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getImapStatus>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetImapStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getImapStatus>>
+>;
+export type GetImapStatusQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get IMAP connection status
+ */
+
+export function useGetImapStatus<
+  TData = Awaited<ReturnType<typeof getImapStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getImapStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetImapStatusQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Connect an IMAP account
+ */
+export const getConnectImapUrl = () => {
+  return `/api/imap/connect`;
+};
+
+export const connectImap = async (
+  connectImapBody: ConnectImapBody,
+  options?: RequestInit,
+): Promise<ImapConnected> => {
+  return customFetch<ImapConnected>(getConnectImapUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(connectImapBody),
+  });
+};
+
+export const getConnectImapMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof connectImap>>,
+    TError,
+    { data: BodyType<ConnectImapBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof connectImap>>,
+  TError,
+  { data: BodyType<ConnectImapBody> },
+  TContext
+> => {
+  const mutationKey = ["connectImap"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof connectImap>>,
+    { data: BodyType<ConnectImapBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return connectImap(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ConnectImapMutationResult = NonNullable<
+  Awaited<ReturnType<typeof connectImap>>
+>;
+export type ConnectImapMutationBody = BodyType<ConnectImapBody>;
+export type ConnectImapMutationError = ErrorType<void>;
+
+/**
+ * @summary Connect an IMAP account
+ */
+export const useConnectImap = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof connectImap>>,
+    TError,
+    { data: BodyType<ConnectImapBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof connectImap>>,
+  TError,
+  { data: BodyType<ConnectImapBody> },
+  TContext
+> => {
+  return useMutation(getConnectImapMutationOptions(options));
+};
+
+/**
+ * @summary Disconnect IMAP account
+ */
+export const getDisconnectImapUrl = () => {
+  return `/api/imap/disconnect`;
+};
+
+export const disconnectImap = async (options?: RequestInit): Promise<void> => {
+  return customFetch<void>(getDisconnectImapUrl(), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDisconnectImapMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof disconnectImap>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof disconnectImap>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["disconnectImap"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof disconnectImap>>,
+    void
+  > = () => {
+    return disconnectImap(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DisconnectImapMutationResult = NonNullable<
+  Awaited<ReturnType<typeof disconnectImap>>
+>;
+
+export type DisconnectImapMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Disconnect IMAP account
+ */
+export const useDisconnectImap = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof disconnectImap>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof disconnectImap>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getDisconnectImapMutationOptions(options));
+};
+
+/**
+ * @summary Trigger a manual IMAP sync
+ */
+export const getSyncImapUrl = () => {
+  return `/api/imap/sync`;
+};
+
+export const syncImap = async (
+  options?: RequestInit,
+): Promise<ImapSyncResult> => {
+  return customFetch<ImapSyncResult>(getSyncImapUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getSyncImapMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof syncImap>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof syncImap>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["syncImap"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof syncImap>>,
+    void
+  > = () => {
+    return syncImap(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SyncImapMutationResult = NonNullable<
+  Awaited<ReturnType<typeof syncImap>>
+>;
+
+export type SyncImapMutationError = ErrorType<void>;
+
+/**
+ * @summary Trigger a manual IMAP sync
+ */
+export const useSyncImap = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof syncImap>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof syncImap>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getSyncImapMutationOptions(options));
+};
 
 /**
  * @summary Initiate Gmail OAuth flow (redirects to Google)
@@ -1834,421 +3012,3 @@ export function useGetDashboardSummary<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
-
-/**
- * @summary Get IMAP connection status
- */
-export const getGetImapStatusUrl = () => `/api/imap/status`;
-
-export const getImapStatus = async (options?: RequestInit): Promise<ImapStatus> =>
-  customFetch<ImapStatus>(getGetImapStatusUrl(), { ...options, method: "GET" });
-
-export const getGetImapStatusQueryKey = () => [`/api/imap/status`] as const;
-
-export const getGetImapStatusQueryOptions = <
-  TData = Awaited<ReturnType<typeof getImapStatus>>,
-  TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<Awaited<ReturnType<typeof getImapStatus>>, TError, TData>;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-  const queryKey = queryOptions?.queryKey ?? getGetImapStatusQueryKey();
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof getImapStatus>>> = ({ signal }) =>
-    getImapStatus({ signal, ...requestOptions });
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
-    Awaited<ReturnType<typeof getImapStatus>>, TError, TData
-  > & { queryKey: QueryKey };
-};
-
-export function useGetImapStatus<
-  TData = Awaited<ReturnType<typeof getImapStatus>>,
-  TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<Awaited<ReturnType<typeof getImapStatus>>, TError, TData>;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetImapStatusQueryOptions(options);
-  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
-  return { ...query, queryKey: queryOptions.queryKey };
-}
-
-/**
- * @summary Connect / update IMAP credentials
- */
-export const getConnectImapUrl = () => `/api/imap/connect`;
-
-export const connectImap = async (body: ConnectImapBody, options?: RequestInit): Promise<ImapConnected> =>
-  customFetch<ImapConnected>(getConnectImapUrl(), {
-    ...options,
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(body),
-  });
-
-export const getConnectImapMutationOptions = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<Awaited<ReturnType<typeof connectImap>>, TError, ConnectImapBody, TContext>;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<Awaited<ReturnType<typeof connectImap>>, TError, ConnectImapBody, TContext> => {
-  const mutationKey = ["connectImap"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-  const mutationFn: MutationFunction<Awaited<ReturnType<typeof connectImap>>, ConnectImapBody> = (body) =>
-    connectImap(body, requestOptions);
-  return { mutationFn, ...mutationOptions };
-};
-
-export const useConnectImap = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<Awaited<ReturnType<typeof connectImap>>, TError, ConnectImapBody, TContext>;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<Awaited<ReturnType<typeof connectImap>>, TError, ConnectImapBody, TContext> =>
-  useMutation(getConnectImapMutationOptions(options));
-
-/**
- * @summary Disconnect IMAP account
- */
-export const getDisconnectImapUrl = () => `/api/imap/disconnect`;
-
-export const disconnectImap = async (options?: RequestInit): Promise<void> =>
-  customFetch<void>(getDisconnectImapUrl(), { ...options, method: "DELETE" });
-
-export const getDisconnectImapMutationOptions = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<Awaited<ReturnType<typeof disconnectImap>>, TError, void, TContext>;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<Awaited<ReturnType<typeof disconnectImap>>, TError, void, TContext> => {
-  const mutationKey = ["disconnectImap"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-  const mutationFn: MutationFunction<Awaited<ReturnType<typeof disconnectImap>>, void> = () =>
-    disconnectImap(requestOptions);
-  return { mutationFn, ...mutationOptions };
-};
-
-export const useDisconnectImap = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<Awaited<ReturnType<typeof disconnectImap>>, TError, void, TContext>;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<Awaited<ReturnType<typeof disconnectImap>>, TError, void, TContext> =>
-  useMutation(getDisconnectImapMutationOptions(options));
-
-/**
- * @summary Trigger a manual IMAP sync
- */
-export const getSyncImapUrl = () => `/api/imap/sync`;
-
-export const syncImap = async (options?: RequestInit): Promise<ImapSyncResult> =>
-  customFetch<ImapSyncResult>(getSyncImapUrl(), { ...options, method: "POST" });
-
-export const getSyncImapMutationOptions = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<Awaited<ReturnType<typeof syncImap>>, TError, void, TContext>;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<Awaited<ReturnType<typeof syncImap>>, TError, void, TContext> => {
-  const mutationKey = ["syncImap"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-  const mutationFn: MutationFunction<Awaited<ReturnType<typeof syncImap>>, void> = () =>
-    syncImap(requestOptions);
-  return { mutationFn, ...mutationOptions };
-};
-
-export const useSyncImap = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<Awaited<ReturnType<typeof syncImap>>, TError, void, TContext>;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<Awaited<ReturnType<typeof syncImap>>, TError, void, TContext> =>
-  useMutation(getSyncImapMutationOptions(options));
-
-// ─── Company Filter Settings ──────────────────────────────────────────────────
-
-export const getGetCompanyFilterSettingsUrl = () => `/api/company-filter-settings`;
-
-export const getCompanyFilterSettings = async (options?: RequestInit): Promise<CompanyFilterSettings> =>
-  customFetch<CompanyFilterSettings>(getGetCompanyFilterSettingsUrl(), { ...options, method: "GET" });
-
-export const getGetCompanyFilterSettingsQueryKey = () => [`/api/company-filter-settings`] as const;
-
-export const getGetCompanyFilterSettingsQueryOptions = <
-  TData = Awaited<ReturnType<typeof getCompanyFilterSettings>>,
-  TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<Awaited<ReturnType<typeof getCompanyFilterSettings>>, TError, TData>;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-  const queryKey = queryOptions?.queryKey ?? getGetCompanyFilterSettingsQueryKey();
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof getCompanyFilterSettings>>> = () =>
-    getCompanyFilterSettings(requestOptions);
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
-    Awaited<ReturnType<typeof getCompanyFilterSettings>>, TError, TData
-  >;
-};
-
-export const useGetCompanyFilterSettings = <
-  TData = Awaited<ReturnType<typeof getCompanyFilterSettings>>,
-  TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<Awaited<ReturnType<typeof getCompanyFilterSettings>>, TError, TData>;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> => useQuery(getGetCompanyFilterSettingsQueryOptions(options));
-
-export const updateCompanyFilterSettings = async (
-  settings: CompanyFilterSettings,
-  options?: RequestInit,
-): Promise<CompanyFilterSettings> =>
-  customFetch<CompanyFilterSettings>(getGetCompanyFilterSettingsUrl(), {
-    ...options,
-    method: "PUT",
-    body: JSON.stringify(settings),
-  });
-
-export const getUpdateCompanyFilterSettingsMutationOptions = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateCompanyFilterSettings>>, TError, CompanyFilterSettings, TContext>;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
-  const mutationKey = ["updateCompanyFilterSettings"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-  const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCompanyFilterSettings>>, CompanyFilterSettings> = (
-    settings,
-  ) => updateCompanyFilterSettings(settings, requestOptions);
-  return { mutationFn, ...mutationOptions };
-};
-
-export const useUpdateCompanyFilterSettings = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateCompanyFilterSettings>>, TError, CompanyFilterSettings, TContext>;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<Awaited<ReturnType<typeof updateCompanyFilterSettings>>, TError, CompanyFilterSettings, TContext> =>
-  useMutation(getUpdateCompanyFilterSettingsMutationOptions(options));
-
-// ─── Email Filter Settings ───────────────────────────────────────────────────
-
-export const getGetFilterSettingsUrl = () => `/api/filter-settings`;
-
-export const getFilterSettings = async (options?: RequestInit): Promise<EmailFilterSettings> =>
-  customFetch<EmailFilterSettings>(getGetFilterSettingsUrl(), { ...options, method: "GET" });
-
-export const getGetFilterSettingsQueryKey = () => [`/api/filter-settings`] as const;
-
-export const getGetFilterSettingsQueryOptions = <
-  TData = Awaited<ReturnType<typeof getFilterSettings>>,
-  TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<Awaited<ReturnType<typeof getFilterSettings>>, TError, TData>;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-  const queryKey = queryOptions?.queryKey ?? getGetFilterSettingsQueryKey();
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof getFilterSettings>>> = () =>
-    getFilterSettings(requestOptions);
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
-    Awaited<ReturnType<typeof getFilterSettings>>, TError, TData
-  >;
-};
-
-export const useGetFilterSettings = <
-  TData = Awaited<ReturnType<typeof getFilterSettings>>,
-  TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<Awaited<ReturnType<typeof getFilterSettings>>, TError, TData>;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> => useQuery(getGetFilterSettingsQueryOptions(options));
-
-// ── Deleted postings ──────────────────────────────────────────────
-
-export const getListDeletedPostingsUrl = () => `/api/postings/deleted`;
-
-export const listDeletedPostings = async (options?: RequestInit): Promise<PostingWithReport[]> =>
-  customFetch<PostingWithReport[]>(getListDeletedPostingsUrl(), { ...options, method: "GET" });
-
-export const getListDeletedPostingsQueryKey = () => [`/api/postings/deleted`] as const;
-
-export const getListDeletedPostingsQueryOptions = <
-  TData = Awaited<ReturnType<typeof listDeletedPostings>>,
-  TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<Awaited<ReturnType<typeof listDeletedPostings>>, TError, TData>;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-  const queryKey = queryOptions?.queryKey ?? getListDeletedPostingsQueryKey();
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof listDeletedPostings>>> = () =>
-    listDeletedPostings(requestOptions);
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
-    Awaited<ReturnType<typeof listDeletedPostings>>, TError, TData
-  >;
-};
-
-export const useListDeletedPostings = <
-  TData = Awaited<ReturnType<typeof listDeletedPostings>>,
-  TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<Awaited<ReturnType<typeof listDeletedPostings>>, TError, TData>;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> => useQuery(getListDeletedPostingsQueryOptions(options));
-
-export const restorePosting = async (id: number, options?: RequestInit): Promise<{ id: number }> =>
-  customFetch<{ id: number }>(`/api/postings/${id}/restore`, { ...options, method: "PATCH" });
-
-export const getRestorePostingMutationOptions = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<Awaited<ReturnType<typeof restorePosting>>, TError, { id: number }, TContext>;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
-  const mutationKey = ["restorePosting"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-  const mutationFn: MutationFunction<Awaited<ReturnType<typeof restorePosting>>, { id: number }> = ({ id }) =>
-    restorePosting(id, requestOptions);
-  return { mutationFn, ...mutationOptions };
-};
-
-export const useRestorePosting = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<Awaited<ReturnType<typeof restorePosting>>, TError, { id: number }, TContext>;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<Awaited<ReturnType<typeof restorePosting>>, TError, { id: number }, TContext> =>
-  useMutation(getRestorePostingMutationOptions(options));
-
-export const updateFilterSettings = async (
-  settings: EmailFilterSettings,
-  options?: RequestInit,
-): Promise<EmailFilterSettings> =>
-  customFetch<EmailFilterSettings>(getGetFilterSettingsUrl(), {
-    ...options,
-    method: "PUT",
-    body: JSON.stringify(settings),
-  });
-
-export const getUpdateFilterSettingsMutationOptions = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateFilterSettings>>, TError, EmailFilterSettings, TContext>;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
-  const mutationKey = ["updateFilterSettings"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-  const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateFilterSettings>>, EmailFilterSettings> = (
-    settings,
-  ) => updateFilterSettings(settings, requestOptions);
-  return { mutationFn, ...mutationOptions };
-};
-
-export const useUpdateFilterSettings = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateFilterSettings>>, TError, EmailFilterSettings, TContext>;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<Awaited<ReturnType<typeof updateFilterSettings>>, TError, EmailFilterSettings, TContext> =>
-  useMutation(getUpdateFilterSettingsMutationOptions(options));
-
-export const getGetTitleExcludeSettingsUrl = () => `/api/title-exclude-settings`;
-
-export const getTitleExcludeSettings = async (options?: RequestInit): Promise<TitleExcludeSettings> =>
-  customFetch<TitleExcludeSettings>(getGetTitleExcludeSettingsUrl(), { ...options, method: "GET" });
-
-export const getGetTitleExcludeSettingsQueryKey = () => [`/api/title-exclude-settings`] as const;
-
-export const getGetTitleExcludeSettingsQueryOptions = <
-  TData = Awaited<ReturnType<typeof getTitleExcludeSettings>>,
-  TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<Awaited<ReturnType<typeof getTitleExcludeSettings>>, TError, TData>;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
-  const queryKey = options?.queryKey ?? getGetTitleExcludeSettingsQueryKey();
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof getTitleExcludeSettings>>> = () =>
-    getTitleExcludeSettings(options?.request);
-  return { queryKey, queryFn, ...options?.query } as UseQueryOptions<
-    Awaited<ReturnType<typeof getTitleExcludeSettings>>, TError, TData
-  >;
-};
-
-export const useGetTitleExcludeSettings = <
-  TData = Awaited<ReturnType<typeof getTitleExcludeSettings>>,
-  TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<Awaited<ReturnType<typeof getTitleExcludeSettings>>, TError, TData>;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> => useQuery(getGetTitleExcludeSettingsQueryOptions(options));
-
-export const updateTitleExcludeSettings = async (
-  settings: TitleExcludeSettings,
-  options?: RequestInit,
-): Promise<TitleExcludeSettings> =>
-  customFetch<TitleExcludeSettings>(getGetTitleExcludeSettingsUrl(), {
-    ...options,
-    method: "PUT",
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(settings),
-  });
-
-export const getUpdateTitleExcludeSettingsMutationOptions = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateTitleExcludeSettings>>, TError, TitleExcludeSettings, TContext>;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
-  const mutationKey = ["updateTitleExcludeSettings"];
-  const { mutation: mutationOptions, request: requestOptions } = options ?? {};
-  const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateTitleExcludeSettings>>, TitleExcludeSettings> = (
-    settings,
-  ) => updateTitleExcludeSettings(settings, requestOptions);
-  return { mutationKey, mutationFn, ...mutationOptions };
-};
-
-export const useUpdateTitleExcludeSettings = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<Awaited<ReturnType<typeof updateTitleExcludeSettings>>, TError, TitleExcludeSettings, TContext>;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<Awaited<ReturnType<typeof updateTitleExcludeSettings>>, TError, TitleExcludeSettings, TContext> =>
-  useMutation(getUpdateTitleExcludeSettingsMutationOptions(options));
