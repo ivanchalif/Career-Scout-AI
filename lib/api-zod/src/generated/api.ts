@@ -139,7 +139,10 @@ export const ListPostingsQueryParams = zod.object({
     .string()
     .optional()
     .describe("Filter by source (manual, gmail)"),
-  applied: zod.coerce.boolean().optional().describe("Filter by applied status"),
+  applied: zod.preprocess(
+    (v) => (v === "true" ? true : v === "false" ? false : undefined),
+    zod.boolean().optional()
+  ).describe("Filter by applied status"),
 });
 
 export const ListPostingsResponseItem = zod.object({
@@ -596,7 +599,7 @@ export const GetDashboardSummaryResponse = zod.object({
         zod.null(),
       ]),
     }),
-  ),
+  ).optional().default([]),
   strongMatches: zod.number().optional(),
   hasProfile: zod.boolean(),
   gmailConnected: zod.boolean(),
