@@ -346,6 +346,21 @@ export default function DashboardPage() {
   const rawPostings = postingsQ.data ?? [];
   const gmailStatus = gmailStatusQ.data;
 
+  const tabStats = useMemo(() => {
+    const items: Array<{ report?: { fitScore?: number | null } | null }> =
+      activeTab === "deleted"
+        ? (deletedQ.data ?? [])
+        : (postingsQ.data ?? []);
+    const total = items.length;
+    const scored = items.filter((item) => item.report?.fitScore != null);
+    const avgFit =
+      scored.length > 0
+        ? scored.reduce((s, item) => s + (item.report!.fitScore ?? 0), 0) / scored.length
+        : null;
+    const strong = scored.filter((item) => (item.report?.fitScore ?? 0) >= 85).length;
+    return { total, avgFit, strong };
+  }, [activeTab, postingsQ.data, deletedQ.data]);
+
   const allPostingsById = useMemo(() => {
     const map = new Map<number, { posting: { id: number; title: string; company: string }; report: { fitScore?: number | null } | null }>();
     for (const item of (activeCountQ.data ?? [])) map.set(item.posting.id, item);
@@ -960,21 +975,21 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           <StatCard
             icon={BriefcaseBusiness}
-            label="Total postings"
-            value={summary?.totalPostings ?? 0}
-            loading={dashboardQ.isLoading}
+            label={activeTab === "active" ? "Active postings" : activeTab === "applied" ? "Applied postings" : "Deleted postings"}
+            value={tabStats.total}
+            loading={activeTab === "deleted" ? deletedQ.isLoading : postingsQ.isLoading}
           />
           <StatCard
             icon={TrendingUp}
             label="Avg fit score"
-            value={summary?.avgFitScore != null ? `${Math.round(summary.avgFitScore)}` : "—"}
-            loading={dashboardQ.isLoading}
+            value={tabStats.avgFit != null ? `${Math.round(tabStats.avgFit)}` : "—"}
+            loading={activeTab === "deleted" ? deletedQ.isLoading : postingsQ.isLoading}
           />
           <StatCard
             icon={Star}
             label="Strong matches (85+)"
-            value={summary?.strongMatches ?? 0}
-            loading={dashboardQ.isLoading}
+            value={tabStats.strong}
+            loading={activeTab === "deleted" ? deletedQ.isLoading : postingsQ.isLoading}
           />
         </div>
 
