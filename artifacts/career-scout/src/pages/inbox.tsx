@@ -240,7 +240,7 @@ export default function InboxPage() {
             toast({
               title: "Sync schedule saved",
               description: hours
-                ? `Gmail will sync automatically every ${hours} hour${hours === 1 ? "" : "s"}.`
+                ? `Gmail will sync automatically ${hours === 0.5 ? "every 30 minutes" : `every ${hours} hour${hours === 1 ? "" : "s"}`}.`
                 : "Automatic sync disabled — use manual sync.",
             });
           },
@@ -372,6 +372,7 @@ export default function InboxPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="manual">Manual only</SelectItem>
+                      <SelectItem value="0.5">Every 30 minutes</SelectItem>
                       <SelectItem value="1">Every 1 hour</SelectItem>
                       <SelectItem value="6">Every 6 hours</SelectItem>
                       <SelectItem value="12">Every 12 hours</SelectItem>
@@ -380,7 +381,7 @@ export default function InboxPage() {
                   </Select>
                   <p className="text-xs text-muted-foreground">
                     {syncScheduleHours
-                      ? `Career Scout checks your inbox every ${syncScheduleHours} hour${syncScheduleHours === 1 ? "" : "s"} automatically.`
+                      ? `Career Scout checks your inbox ${syncScheduleHours === 0.5 ? "every 30 minutes" : `every ${syncScheduleHours} hour${syncScheduleHours === 1 ? "" : "s"}`} automatically.`
                       : 'Sync only runs when you click "Sync now".'}
                   </p>
                 </div>

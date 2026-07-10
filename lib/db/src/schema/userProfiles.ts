@@ -1,4 +1,4 @@
-import { pgTable, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, real, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -13,7 +13,7 @@ export const userProfilesTable = pgTable("user_profiles", {
   locationPreferences: text("location_preferences").array().notNull().default([]),
   resumeUrl: text("resume_url"),
   resumeText: text("resume_text"),
-  syncScheduleHours: integer("sync_schedule_hours"),
+  syncScheduleHours: real("sync_schedule_hours"),
   companyFilterSettings: jsonb("company_filter_settings").$type<{
     mode: "off" | "include" | "exclude";
     companies: string[];
