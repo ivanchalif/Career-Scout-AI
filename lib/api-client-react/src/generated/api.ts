@@ -24,6 +24,7 @@ import type {
   EmailFilterSettings,
   ErrorEnvelope,
   ErrorResponse,
+  FilterStats,
   GmailCallbackParams,
   GmailStatus,
   GmailSyncResult,
@@ -3010,5 +3011,69 @@ export function useGetDashboardSummary<
     queryKey: QueryKey;
   };
 
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getGetFilterStatsUrl = () => `/api/filter-stats`;
+
+export const getFilterStats = async (
+  options?: RequestInit,
+): Promise<FilterStats> => {
+  return customFetch<FilterStats>(getGetFilterStatsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetFilterStatsQueryKey = () => {
+  return [`/api/filter-stats`] as const;
+};
+
+export const getGetFilterStatsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getFilterStats>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getFilterStats>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getGetFilterStatsQueryKey();
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getFilterStats>>
+  > = ({ signal }) => getFilterStats({ signal, ...requestOptions });
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getFilterStats>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetFilterStatsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getFilterStats>>
+>;
+export type GetFilterStatsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get filter effectiveness statistics
+ */
+export function useGetFilterStats<
+  TData = Awaited<ReturnType<typeof getFilterStats>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getFilterStats>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetFilterStatsQueryOptions(options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
   return { ...query, queryKey: queryOptions.queryKey };
 }

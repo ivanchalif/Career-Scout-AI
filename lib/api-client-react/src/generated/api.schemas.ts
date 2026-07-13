@@ -287,3 +287,29 @@ export type GmailCallbackParams = {
   state?: string;
   error?: string;
 };
+
+export type FilterStats = {
+  profileFilters: {
+    rawActive: number;
+    shownOnDashboard: number;
+    hiddenByCompany: number;
+    hiddenByTitleKeywords: number;
+    companyFilterMode: "off" | "include" | "exclude";
+    companyFilterCount: number;
+    titleKeywordCount: number;
+  };
+  syncHistory: Array<{
+    id: number;
+    source: string;
+    syncedAt: string;
+    emailsFetched: number;
+    jobsExtracted: number;
+    jobsImported: number;
+    jobsSkippedDedup: number;
+  }>;
+  totalSyncs: number;
+  totalEmailsFetched: number;
+  totalJobsExtracted: number;
+  totalJobsImported: number;
+  totalJobsSkippedDedup: number;
+};

@@ -22,6 +22,7 @@ import {
   useGetTitleExcludeSettings,
   useUpdateTitleExcludeSettings,
   getGetTitleExcludeSettingsQueryKey,
+  useGetFilterStats,
   type EmailFilterSettings,
   type CompanyFilterSettings,
   type TitleExcludeSettings,
@@ -1053,7 +1054,149 @@ function FilterSettingsTab() {
           </Button>
         </div>
       </div>
+
+      <FilterEffectivenessPanel />
     </section>
+  );
+}
+
+function FilterEffectivenessPanel() {
+  const { data, isLoading } = useGetFilterStats();
+  const [showHistory, setShowHistory] = useState(false);
+
+  return (
+    <div className="pt-4 border-t-2 border-border space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <SlidersHorizontal className="w-4 h-4 text-indigo-400" />
+          <h2 className="font-semibold text-foreground">Filter Effectiveness</h2>
+        </div>
+        {isLoading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+      </div>
+      <p className="text-sm text-muted-foreground -mt-2">
+        How many jobs your current filters surface vs. suppress.
+      </p>
+
+      {data && (
+        <div className="space-y-5">
+          {/* Dashboard visibility breakdown */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <StatTile
+              label="Active emails"
+              value={data.profileFilters.rawActive}
+              sub="before filters"
+              color="text-foreground"
+            />
+            <StatTile
+              label="Shown on dashboard"
+              value={data.profileFilters.shownOnDashboard}
+              sub="after all filters"
+              color="text-emerald-400"
+            />
+            <StatTile
+              label="Hidden by company"
+              value={data.profileFilters.hiddenByCompany}
+              sub={
+                data.profileFilters.companyFilterMode === "off"
+                  ? "filter off"
+                  : `${data.profileFilters.companyFilterMode} list · ${data.profileFilters.companyFilterCount} co.`
+              }
+              color="text-amber-400"
+            />
+            <StatTile
+              label="Hidden by title kw"
+              value={data.profileFilters.hiddenByTitleKeywords}
+              sub={`${data.profileFilters.titleKeywordCount} keyword${data.profileFilters.titleKeywordCount === 1 ? "" : "s"}`}
+              color="text-rose-400"
+            />
+          </div>
+
+          {/* Visibility bar */}
+          {data.profileFilters.rawActive > 0 && (
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Visibility</span>
+                <span>{Math.round((data.profileFilters.shownOnDashboard / data.profileFilters.rawActive) * 100)}% shown</span>
+              </div>
+              <div className="h-2 rounded-full bg-muted overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-emerald-500 transition-all"
+                  style={{ width: `${(data.profileFilters.shownOnDashboard / data.profileFilters.rawActive) * 100}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Sync totals */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Sync history ({data.totalSyncs} syncs)</p>
+              {data.syncHistory.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowHistory((v) => !v)}
+                  className="text-xs text-indigo-400 hover:underline"
+                >
+                  {showHistory ? "Hide log" : "Show log"}
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <StatTile label="Emails fetched" value={data.totalEmailsFetched} sub="all time" color="text-foreground" />
+              <StatTile label="Jobs extracted" value={data.totalJobsExtracted} sub="by AI" color="text-indigo-400" />
+              <StatTile label="Jobs imported" value={data.totalJobsImported} sub="new to DB" color="text-emerald-400" />
+              <StatTile label="Dedup skipped" value={data.totalJobsSkippedDedup} sub="duplicates" color="text-muted-foreground" />
+            </div>
+          </div>
+
+          {/* Per-sync log */}
+          {showHistory && data.syncHistory.length > 0 && (
+            <div className="rounded-lg border border-border overflow-hidden">
+              <table className="w-full text-xs">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="text-left px-3 py-2 text-muted-foreground font-medium">Time</th>
+                    <th className="text-right px-3 py-2 text-muted-foreground font-medium">Fetched</th>
+                    <th className="text-right px-3 py-2 text-muted-foreground font-medium">Extracted</th>
+                    <th className="text-right px-3 py-2 text-muted-foreground font-medium">Imported</th>
+                    <th className="text-right px-3 py-2 text-muted-foreground font-medium">Skipped</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {data.syncHistory.map((ev) => (
+                    <tr key={ev.id} className="hover:bg-muted/20 transition-colors">
+                      <td className="px-3 py-2 text-muted-foreground">
+                        {new Date(ev.syncedAt).toLocaleString(undefined, {
+                          month: "short", day: "numeric",
+                          hour: "numeric", minute: "2-digit",
+                        })}
+                      </td>
+                      <td className="px-3 py-2 text-right">{ev.emailsFetched}</td>
+                      <td className="px-3 py-2 text-right text-indigo-400">{ev.jobsExtracted}</td>
+                      <td className="px-3 py-2 text-right text-emerald-400">{ev.jobsImported}</td>
+                      <td className="px-3 py-2 text-right text-muted-foreground">{ev.jobsSkippedDedup}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {data.syncHistory.length === 0 && (
+            <p className="text-xs text-muted-foreground/60 italic">No syncs recorded yet — run a sync to start tracking.</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatTile({ label, value, sub, color }: { label: string; value: number; sub: string; color: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-muted/20 px-3 py-2.5 space-y-0.5">
+      <p className={`text-lg font-semibold tabular-nums ${color}`}>{value.toLocaleString()}</p>
+      <p className="text-xs font-medium text-foreground leading-tight">{label}</p>
+      <p className="text-[11px] text-muted-foreground leading-tight">{sub}</p>
+    </div>
   );
 }
 

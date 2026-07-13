@@ -604,3 +604,34 @@ export const GetDashboardSummaryResponse = zod.object({
   hasProfile: zod.boolean(),
   gmailConnected: zod.boolean(),
 });
+
+/**
+ * @summary Get filter effectiveness statistics
+ */
+export const GetFilterStatsResponse = zod.object({
+  profileFilters: zod.object({
+    rawActive: zod.number(),
+    shownOnDashboard: zod.number(),
+    hiddenByCompany: zod.number(),
+    hiddenByTitleKeywords: zod.number(),
+    companyFilterMode: zod.enum(["off", "include", "exclude"]),
+    companyFilterCount: zod.number(),
+    titleKeywordCount: zod.number(),
+  }),
+  syncHistory: zod.array(
+    zod.object({
+      id: zod.number(),
+      source: zod.string(),
+      syncedAt: zod.coerce.date(),
+      emailsFetched: zod.number(),
+      jobsExtracted: zod.number(),
+      jobsImported: zod.number(),
+      jobsSkippedDedup: zod.number(),
+    }),
+  ),
+  totalSyncs: zod.number(),
+  totalEmailsFetched: zod.number(),
+  totalJobsExtracted: zod.number(),
+  totalJobsImported: zod.number(),
+  totalJobsSkippedDedup: zod.number(),
+});

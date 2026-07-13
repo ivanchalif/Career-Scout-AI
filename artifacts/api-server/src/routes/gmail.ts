@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { eq } from "drizzle-orm";
-import { db, gmailConnectionsTable, jobPostingsTable, gmailSeenKeysTable, userProfilesTable } from "@workspace/db";
+import { db, gmailConnectionsTable, jobPostingsTable, gmailSeenKeysTable, userProfilesTable, syncEventsTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
   getAuthUrl,
@@ -168,11 +168,14 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
 
   const newEmails = emails.filter((e) => !processedBaseIds.has(e.messageId));
   let synced = 0;
+  let jobsExtracted = 0;
+  let jobsSkippedDedup = 0;
 
   for (const email of newEmails) {
     if (!email.body.trim()) continue;
 
     const listings = await extractJobListings(email.body, email.subject, email.sender);
+    jobsExtracted += listings.length;
 
     for (let i = 0; i < listings.length; i++) {
       const listing = listings[i];
@@ -197,6 +200,7 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
             ? "gmail sync: skipping posting already applied to"
             : "gmail sync: skipping fuzzy duplicate posting",
         );
+        jobsSkippedDedup++;
         continue;
       }
 
@@ -253,6 +257,15 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
     .update(gmailConnectionsTable)
     .set({ lastSyncedAt, updatedAt: lastSyncedAt })
     .where(eq(gmailConnectionsTable.userId, userId));
+
+  await db.insert(syncEventsTable).values({
+    userId,
+    source: "gmail",
+    emailsFetched: emails.length,
+    jobsExtracted,
+    jobsImported: synced,
+    jobsSkippedDedup,
+  });
 
   sweepUnscoredPostings(userId).catch((err) => {
     logger.warn({ userId, err }, "gmail sync: sweep unscored postings failed");
