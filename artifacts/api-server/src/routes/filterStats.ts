@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, gte, lte, and } from "drizzle-orm";
 import { db, userProfilesTable, syncEventsTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 
@@ -76,13 +76,25 @@ router.get("/filter-stats", requireAuth, async (req, res): Promise<void> => {
   const hiddenByTitle   = Number(row.hidden_by_title ?? 0);
   const hiddenTotal     = Number(row.hidden_total ?? 0);
 
-  // Recent sync events
+  // Parse optional date range params
+  const fromStr = typeof req.query.from === "string" ? req.query.from : undefined;
+  const toStr   = typeof req.query.to   === "string" ? req.query.to   : undefined;
+  const fromDate = fromStr ? new Date(fromStr) : undefined;
+  const toDate   = toStr   ? new Date(toStr)   : undefined;
+
+  const dateConditions = [
+    eq(syncEventsTable.userId, userId),
+    ...(fromDate ? [gte(syncEventsTable.syncedAt, fromDate)] : []),
+    ...(toDate   ? [lte(syncEventsTable.syncedAt, toDate)]   : []),
+  ];
+
+  // Recent sync events (filtered by date range if provided)
   const syncHistory = await db
     .select()
     .from(syncEventsTable)
-    .where(eq(syncEventsTable.userId, userId))
+    .where(and(...dateConditions))
     .orderBy(desc(syncEventsTable.syncedAt))
-    .limit(20);
+    .limit(100);
 
   const totals = syncHistory.reduce(
     (acc, e) => ({

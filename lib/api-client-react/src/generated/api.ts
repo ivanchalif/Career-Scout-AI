@@ -3014,37 +3014,49 @@ export function useGetDashboardSummary<
   return { ...query, queryKey: queryOptions.queryKey };
 }
 
-export const getGetFilterStatsUrl = () => `/api/filter-stats`;
+export type FilterStatsParams = { from?: string; to?: string };
+
+export const getGetFilterStatsUrl = (params?: FilterStatsParams) => {
+  const qs = new URLSearchParams();
+  if (params?.from) qs.set("from", params.from);
+  if (params?.to)   qs.set("to",   params.to);
+  const search = qs.toString();
+  return search ? `/api/filter-stats?${search}` : `/api/filter-stats`;
+};
 
 export const getFilterStats = async (
+  params?: FilterStatsParams,
   options?: RequestInit,
 ): Promise<FilterStats> => {
-  return customFetch<FilterStats>(getGetFilterStatsUrl(), {
+  return customFetch<FilterStats>(getGetFilterStatsUrl(params), {
     ...options,
     method: "GET",
   });
 };
 
-export const getGetFilterStatsQueryKey = () => {
-  return [`/api/filter-stats`] as const;
+export const getGetFilterStatsQueryKey = (params?: FilterStatsParams) => {
+  return [`/api/filter-stats`, params] as const;
 };
 
 export const getGetFilterStatsQueryOptions = <
   TData = Awaited<ReturnType<typeof getFilterStats>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof getFilterStats>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
+>(
+  params?: FilterStatsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getFilterStats>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
-  const queryKey = queryOptions?.queryKey ?? getGetFilterStatsQueryKey();
+  const queryKey = queryOptions?.queryKey ?? getGetFilterStatsQueryKey(params);
   const queryFn: QueryFunction<
     Awaited<ReturnType<typeof getFilterStats>>
-  > = ({ signal }) => getFilterStats({ signal, ...requestOptions });
+  > = ({ signal }) => getFilterStats(params, { signal, ...requestOptions });
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof getFilterStats>>,
     TError,
@@ -3063,15 +3075,18 @@ export type GetFilterStatsQueryError = ErrorType<unknown>;
 export function useGetFilterStats<
   TData = Awaited<ReturnType<typeof getFilterStats>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof getFilterStats>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetFilterStatsQueryOptions(options);
+>(
+  params?: FilterStatsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getFilterStats>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetFilterStatsQueryOptions(params, options);
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
   };
