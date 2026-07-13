@@ -86,6 +86,7 @@ router.get("/filter-stats", requireAuth, async (req, res): Promise<void> => {
 
   const totals = syncHistory.reduce(
     (acc, e) => ({
+      totalEmailsPreFilter:      acc.totalEmailsPreFilter      + (e.emailsPreFilter       ?? 0),
       totalEmailsFetched:        acc.totalEmailsFetched        + e.emailsFetched,
       totalJobsExtracted:        acc.totalJobsExtracted        + e.jobsExtracted,
       totalJobsImported:         acc.totalJobsImported         + e.jobsImported,
@@ -95,8 +96,8 @@ router.get("/filter-stats", requireAuth, async (req, res): Promise<void> => {
       totalSkippedApplied:       acc.totalSkippedApplied       + (e.jobsSkippedApplied    ?? 0),
     }),
     {
-      totalEmailsFetched: 0, totalJobsExtracted: 0, totalJobsImported: 0,
-      totalJobsSkippedDedup: 0, totalSkippedActiveDup: 0,
+      totalEmailsPreFilter: 0, totalEmailsFetched: 0, totalJobsExtracted: 0,
+      totalJobsImported: 0, totalJobsSkippedDedup: 0, totalSkippedActiveDup: 0,
       totalSkippedUserDeleted: 0, totalSkippedApplied: 0,
     },
   );
@@ -115,10 +116,11 @@ router.get("/filter-stats", requireAuth, async (req, res): Promise<void> => {
       id: e.id,
       source: e.source,
       syncedAt: e.syncedAt.toISOString(),
-      emailsFetched: e.emailsFetched,
-      jobsExtracted: e.jobsExtracted,
-      jobsImported: e.jobsImported,
-      jobsSkippedDedup: e.jobsSkippedDedup,
+      emailsPreFilter:        e.emailsPreFilter       ?? 0,
+      emailsFetched:          e.emailsFetched,
+      jobsExtracted:          e.jobsExtracted,
+      jobsImported:           e.jobsImported,
+      jobsSkippedDedup:       e.jobsSkippedDedup,
       jobsSkippedActiveDup:   e.jobsSkippedActiveDup  ?? 0,
       jobsSkippedUserDeleted: e.jobsSkippedUserDeleted ?? 0,
       jobsSkippedApplied:     e.jobsSkippedApplied    ?? 0,

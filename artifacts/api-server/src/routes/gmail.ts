@@ -8,6 +8,7 @@ import {
   getGmailEmail,
   revokeTokens,
   fetchJobEmails,
+  estimateEmailCount,
   markEmailAsRead,
   signState,
   verifyState,
@@ -141,6 +142,8 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
   const [userProfile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, userId));
   const filterCriteria = userProfile?.emailFilterSettings ?? undefined;
 
+  const emailsPreFilter = await estimateEmailCount(conn.accessToken, conn.refreshToken, filterCriteria);
+
   let emails: Awaited<ReturnType<typeof fetchJobEmails>>;
   try {
     emails = await fetchJobEmails(conn.accessToken, conn.refreshToken, filterCriteria);
@@ -267,6 +270,7 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
   await db.insert(syncEventsTable).values({
     userId,
     source: "gmail",
+    emailsPreFilter,
     emailsFetched: emails.length,
     jobsExtracted,
     jobsImported: synced,

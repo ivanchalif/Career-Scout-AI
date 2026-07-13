@@ -302,6 +302,7 @@ export type FilterStats = {
     id: number;
     source: string;
     syncedAt: string;
+    emailsPreFilter: number;
     emailsFetched: number;
     jobsExtracted: number;
     jobsImported: number;
@@ -311,6 +312,7 @@ export type FilterStats = {
     jobsSkippedApplied: number;
   }>;
   totalSyncs: number;
+  totalEmailsPreFilter: number;
   totalEmailsFetched: number;
   totalJobsExtracted: number;
   totalJobsImported: number;

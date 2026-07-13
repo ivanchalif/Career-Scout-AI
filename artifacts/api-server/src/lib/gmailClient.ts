@@ -174,6 +174,33 @@ export async function fetchSingleEmail(
   }
 }
 
+/**
+ * Returns Gmail's resultSizeEstimate for the subject/from filter criteria only
+ * (body keywords excluded — not filterable at the list stage).
+ * Used to compute pre-filter suppression. Non-fatal on failure.
+ */
+export async function estimateEmailCount(
+  accessToken: string,
+  refreshToken: string,
+  criteria?: EmailFilterCriteria,
+): Promise<number> {
+  const client = createOAuth2Client();
+  client.setCredentials({ access_token: accessToken, refresh_token: refreshToken });
+  const effectiveCriteria = criteria ?? DEFAULT_EMAIL_FILTER_CRITERIA;
+  const baseQuery = buildGmailQuery({ ...effectiveCriteria, bodyKeywords: [] });
+  const gmail = google.gmail({ version: "v1", auth: client });
+  try {
+    const res = await gmail.users.messages.list({
+      userId: "me",
+      q: baseQuery,
+      maxResults: 1,
+    });
+    return res.data.resultSizeEstimate ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
 export async function fetchJobEmails(
   accessToken: string,
   refreshToken: string,

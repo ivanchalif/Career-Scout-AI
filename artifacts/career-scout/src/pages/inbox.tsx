@@ -1142,10 +1142,10 @@ function FilterEffectivenessPanel() {
               )}
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <StatTile label="Emails fetched" value={data.totalEmailsFetched} sub="all time" color="text-foreground" />
+              <StatTile label="~Pre-filter" value={data.totalEmailsPreFilter} sub="subj/sender match est." color="text-muted-foreground" />
+              <StatTile label="Body-filtered" value={data.totalEmailsFetched} sub="downloaded & parsed" color="text-foreground" />
               <StatTile label="Jobs extracted" value={data.totalJobsExtracted} sub="by AI" color="text-indigo-400" />
               <StatTile label="Jobs imported" value={data.totalJobsImported} sub="new to DB" color="text-emerald-400" />
-              <StatTile label="Dedup skipped" value={data.totalJobsSkippedDedup} sub="all sources" color="text-muted-foreground" />
             </div>
             {data.totalJobsSkippedDedup > 0 && (
               <div className="grid grid-cols-3 gap-2">
@@ -1163,6 +1163,7 @@ function FilterEffectivenessPanel() {
                 <thead className="bg-muted/50">
                   <tr>
                     <th className="text-left px-3 py-2 text-muted-foreground font-medium">Time</th>
+                    <th className="text-right px-3 py-2 text-muted-foreground font-medium" title="Subject/sender estimate (Gmail API)">~Pre</th>
                     <th className="text-right px-3 py-2 text-muted-foreground font-medium">Fetched</th>
                     <th className="text-right px-3 py-2 text-muted-foreground font-medium">Extracted</th>
                     <th className="text-right px-3 py-2 text-muted-foreground font-medium">Imported</th>
@@ -1181,6 +1182,7 @@ function FilterEffectivenessPanel() {
                           hour: "numeric", minute: "2-digit",
                         })}
                       </td>
+                      <td className="px-3 py-2 text-right text-muted-foreground">~{ev.emailsPreFilter}</td>
                       <td className="px-3 py-2 text-right">{ev.emailsFetched}</td>
                       <td className="px-3 py-2 text-right text-indigo-400">{ev.jobsExtracted}</td>
                       <td className="px-3 py-2 text-right text-emerald-400">{ev.jobsImported}</td>
