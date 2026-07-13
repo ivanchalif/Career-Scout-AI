@@ -9,4 +9,7 @@ export const syncEventsTable = pgTable("sync_events", {
   jobsExtracted: integer("jobs_extracted").notNull().default(0),
   jobsImported: integer("jobs_imported").notNull().default(0),
   jobsSkippedDedup: integer("jobs_skipped_dedup").notNull().default(0),
+  jobsSkippedActiveDup: integer("jobs_skipped_active_dup").notNull().default(0),
+  jobsSkippedUserDeleted: integer("jobs_skipped_user_deleted").notNull().default(0),
+  jobsSkippedApplied: integer("jobs_skipped_applied").notNull().default(0),
 });

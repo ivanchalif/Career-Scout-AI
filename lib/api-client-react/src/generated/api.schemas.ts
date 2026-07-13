@@ -306,10 +306,16 @@ export type FilterStats = {
     jobsExtracted: number;
     jobsImported: number;
     jobsSkippedDedup: number;
+    jobsSkippedActiveDup: number;
+    jobsSkippedUserDeleted: number;
+    jobsSkippedApplied: number;
   }>;
   totalSyncs: number;
   totalEmailsFetched: number;
   totalJobsExtracted: number;
   totalJobsImported: number;
   totalJobsSkippedDedup: number;
+  totalSkippedActiveDup: number;
+  totalSkippedUserDeleted: number;
+  totalSkippedApplied: number;
 };

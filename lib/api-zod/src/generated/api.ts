@@ -627,6 +627,9 @@ export const GetFilterStatsResponse = zod.object({
       jobsExtracted: zod.number(),
       jobsImported: zod.number(),
       jobsSkippedDedup: zod.number(),
+      jobsSkippedActiveDup: zod.number(),
+      jobsSkippedUserDeleted: zod.number(),
+      jobsSkippedApplied: zod.number(),
     }),
   ),
   totalSyncs: zod.number(),
@@ -634,4 +637,7 @@ export const GetFilterStatsResponse = zod.object({
   totalJobsExtracted: zod.number(),
   totalJobsImported: zod.number(),
   totalJobsSkippedDedup: zod.number(),
+  totalSkippedActiveDup: zod.number(),
+  totalSkippedUserDeleted: zod.number(),
+  totalSkippedApplied: zod.number(),
 });

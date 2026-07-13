@@ -170,6 +170,9 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
   let synced = 0;
   let jobsExtracted = 0;
   let jobsSkippedDedup = 0;
+  let jobsSkippedActiveDup = 0;
+  let jobsSkippedUserDeleted = 0;
+  let jobsSkippedApplied = 0;
 
   for (const email of newEmails) {
     if (!email.body.trim()) continue;
@@ -201,6 +204,9 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
             : "gmail sync: skipping fuzzy duplicate posting",
         );
         jobsSkippedDedup++;
+        if (wasDeleted) jobsSkippedUserDeleted++;
+        else if (wasApplied) jobsSkippedApplied++;
+        else jobsSkippedActiveDup++;
         continue;
       }
 
@@ -265,6 +271,9 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
     jobsExtracted,
     jobsImported: synced,
     jobsSkippedDedup,
+    jobsSkippedActiveDup,
+    jobsSkippedUserDeleted,
+    jobsSkippedApplied,
   });
 
   sweepUnscoredPostings(userId).catch((err) => {

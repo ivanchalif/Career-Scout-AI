@@ -86,12 +86,19 @@ router.get("/filter-stats", requireAuth, async (req, res): Promise<void> => {
 
   const totals = syncHistory.reduce(
     (acc, e) => ({
-      totalEmailsFetched:   acc.totalEmailsFetched   + e.emailsFetched,
-      totalJobsExtracted:   acc.totalJobsExtracted   + e.jobsExtracted,
-      totalJobsImported:    acc.totalJobsImported    + e.jobsImported,
-      totalJobsSkippedDedup: acc.totalJobsSkippedDedup + e.jobsSkippedDedup,
+      totalEmailsFetched:        acc.totalEmailsFetched        + e.emailsFetched,
+      totalJobsExtracted:        acc.totalJobsExtracted        + e.jobsExtracted,
+      totalJobsImported:         acc.totalJobsImported         + e.jobsImported,
+      totalJobsSkippedDedup:     acc.totalJobsSkippedDedup     + e.jobsSkippedDedup,
+      totalSkippedActiveDup:     acc.totalSkippedActiveDup     + (e.jobsSkippedActiveDup  ?? 0),
+      totalSkippedUserDeleted:   acc.totalSkippedUserDeleted   + (e.jobsSkippedUserDeleted ?? 0),
+      totalSkippedApplied:       acc.totalSkippedApplied       + (e.jobsSkippedApplied    ?? 0),
     }),
-    { totalEmailsFetched: 0, totalJobsExtracted: 0, totalJobsImported: 0, totalJobsSkippedDedup: 0 },
+    {
+      totalEmailsFetched: 0, totalJobsExtracted: 0, totalJobsImported: 0,
+      totalJobsSkippedDedup: 0, totalSkippedActiveDup: 0,
+      totalSkippedUserDeleted: 0, totalSkippedApplied: 0,
+    },
   );
 
   res.json({
@@ -112,6 +119,9 @@ router.get("/filter-stats", requireAuth, async (req, res): Promise<void> => {
       jobsExtracted: e.jobsExtracted,
       jobsImported: e.jobsImported,
       jobsSkippedDedup: e.jobsSkippedDedup,
+      jobsSkippedActiveDup:   e.jobsSkippedActiveDup  ?? 0,
+      jobsSkippedUserDeleted: e.jobsSkippedUserDeleted ?? 0,
+      jobsSkippedApplied:     e.jobsSkippedApplied    ?? 0,
     })),
     totalSyncs: syncHistory.length,
     ...totals,

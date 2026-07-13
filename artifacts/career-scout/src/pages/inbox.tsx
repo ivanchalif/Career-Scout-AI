@@ -1145,8 +1145,15 @@ function FilterEffectivenessPanel() {
               <StatTile label="Emails fetched" value={data.totalEmailsFetched} sub="all time" color="text-foreground" />
               <StatTile label="Jobs extracted" value={data.totalJobsExtracted} sub="by AI" color="text-indigo-400" />
               <StatTile label="Jobs imported" value={data.totalJobsImported} sub="new to DB" color="text-emerald-400" />
-              <StatTile label="Dedup skipped" value={data.totalJobsSkippedDedup} sub="duplicates" color="text-muted-foreground" />
+              <StatTile label="Dedup skipped" value={data.totalJobsSkippedDedup} sub="all sources" color="text-muted-foreground" />
             </div>
+            {data.totalJobsSkippedDedup > 0 && (
+              <div className="grid grid-cols-3 gap-2">
+                <StatTile label="Active dups" value={data.totalSkippedActiveDup} sub="already in dashboard" color="text-sky-400" />
+                <StatTile label="You dismissed" value={data.totalSkippedUserDeleted} sub="previously deleted" color="text-amber-400" />
+                <StatTile label="Applied role" value={data.totalSkippedApplied} sub="already applied" color="text-violet-400" />
+              </div>
+            )}
           </div>
 
           {/* Per-sync log */}
@@ -1160,6 +1167,9 @@ function FilterEffectivenessPanel() {
                     <th className="text-right px-3 py-2 text-muted-foreground font-medium">Extracted</th>
                     <th className="text-right px-3 py-2 text-muted-foreground font-medium">Imported</th>
                     <th className="text-right px-3 py-2 text-muted-foreground font-medium">Skipped</th>
+                    <th className="text-right px-3 py-2 text-muted-foreground font-medium" title="Active duplicate">Dup</th>
+                    <th className="text-right px-3 py-2 text-muted-foreground font-medium" title="Previously dismissed by you">Del</th>
+                    <th className="text-right px-3 py-2 text-muted-foreground font-medium" title="Already applied">App</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -1175,6 +1185,9 @@ function FilterEffectivenessPanel() {
                       <td className="px-3 py-2 text-right text-indigo-400">{ev.jobsExtracted}</td>
                       <td className="px-3 py-2 text-right text-emerald-400">{ev.jobsImported}</td>
                       <td className="px-3 py-2 text-right text-muted-foreground">{ev.jobsSkippedDedup}</td>
+                      <td className="px-3 py-2 text-right text-sky-400">{ev.jobsSkippedActiveDup}</td>
+                      <td className="px-3 py-2 text-right text-amber-400">{ev.jobsSkippedUserDeleted}</td>
+                      <td className="px-3 py-2 text-right text-violet-400">{ev.jobsSkippedApplied}</td>
                     </tr>
                   ))}
                 </tbody>
