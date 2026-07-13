@@ -24,13 +24,19 @@ router.get("/filter-stats", requireAuth, async (req, res): Promise<void> => {
 
   const titleKeywords: string[] = (profile?.titleExcludeKeywords as string[] | null) ?? [];
 
-  // Build SQL fragments for filters (mirrors frontend filter logic)
+  // Build SQL fragments mirroring the real postings filter:
+  // company.includes(entry) || entry.includes(company) → bidirectional LIKE
   const buildCompanyMatchSql = (companies: string[]): string => {
     if (companies.length === 0) return "FALSE";
     const escaped = companies.map((c) =>
       `'${c.toLowerCase().replace(/'/g, "''")}'`
     );
-    return `lower(company) = ANY(ARRAY[${escaped.join(",")}])`;
+    const arrayLiteral = `ARRAY[${escaped.join(",")}]`;
+    return `EXISTS (
+      SELECT 1 FROM unnest(${arrayLiteral}) AS entry
+      WHERE lower(company) LIKE '%' || entry || '%'
+         OR entry LIKE '%' || lower(company) || '%'
+    )`;
   };
 
   const buildTitleMatchSql = (keywords: string[]): string => {
