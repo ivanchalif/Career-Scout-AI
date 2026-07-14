@@ -31,7 +31,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useSearch } from "wouter";
 import {
   Mail, CheckCircle2, RefreshCw, Unlink, Loader2, Server, Eye, EyeOff,
-  SlidersHorizontal, Plus, X,
+  SlidersHorizontal, Plus, X, BarChart2,
 } from "lucide-react";
 import {
   Select,
@@ -47,7 +47,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import Layout from "@/components/layout";
 
-type Tab = "google" | "imap" | "filters";
+type Tab = "google" | "imap" | "filters" | "metrics";
 
 export default function InboxPage() {
   const { toast } = useToast();
@@ -320,6 +320,18 @@ export default function InboxPage() {
             <SlidersHorizontal className="w-4 h-4" />
             Filter Criteria
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("metrics")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === "metrics"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <BarChart2 className="w-4 h-4" />
+            Metrics
+          </button>
         </div>
 
         {/* Google (Gmail) tab */}
@@ -439,6 +451,9 @@ export default function InboxPage() {
 
         {/* Filter Criteria tab */}
         {activeTab === "filters" && <FilterSettingsTab />}
+
+        {/* Metrics tab */}
+        {activeTab === "metrics" && <FilterEffectivenessPanel />}
 
         {/* IMAP tab */}
         {activeTab === "imap" && (
@@ -1055,7 +1070,6 @@ function FilterSettingsTab() {
         </div>
       </div>
 
-      <FilterEffectivenessPanel />
     </section>
   );
 }
