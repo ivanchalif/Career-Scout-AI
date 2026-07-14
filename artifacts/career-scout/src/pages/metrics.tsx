@@ -15,15 +15,17 @@ function pct(num: number, denom: number): number | null {
   return Math.round((num / denom) * 100);
 }
 
-function StatTile({ label, value, sub, color, pct: pctVal }: {
-  label: string; value: number; sub: string; color: string; pct?: number | null;
+function StatTile({ label, value, sub, color, pct: pctVal, pctLabel }: {
+  label: string; value: number; sub: string; color: string; pct?: number | null; pctLabel?: string;
 }) {
   return (
     <div className="rounded-lg border border-border bg-muted/20 px-3 py-2.5 space-y-0.5">
       <div className="flex items-baseline gap-1.5">
         <p className={`text-lg font-semibold tabular-nums ${color}`}>{value.toLocaleString()}</p>
         {pctVal != null && (
-          <span className="text-xs font-medium text-muted-foreground tabular-nums">{pctVal}%</span>
+          <span className="text-xs font-medium text-muted-foreground tabular-nums">
+            {pctVal}%{pctLabel ? <span className="text-[10px] ml-0.5 opacity-70">{pctLabel}</span> : null}
+          </span>
         )}
       </div>
       <p className="text-xs font-medium text-foreground leading-tight">{label}</p>
@@ -148,13 +150,13 @@ export default function MetricsPage() {
                   sub="downloaded & parsed"
                   color="text-foreground"
                   pct={pct(totalFetched, data.totalEmailsPreFilter)}
+                  pctLabel="of est."
                 />
                 <StatTile
                   label="Jobs extracted"
                   value={totalExtracted}
-                  sub="by AI"
+                  sub="by AI (one email → many jobs)"
                   color="text-indigo-400"
-                  pct={pct(totalExtracted, totalFetched)}
                 />
                 <StatTile
                   label="Jobs imported"
@@ -216,10 +218,7 @@ export default function MetricsPage() {
                               {new Date(ev.syncedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                             </td>
                             <td className="px-3 py-2 text-right text-muted-foreground">~{ev.emailsPreFilter}</td>
-                            <td className="px-3 py-2 text-right">
-                              {ev.emailsFetched}
-                              {ev.emailsPreFilter > 0 && <span className="ml-1 text-muted-foreground/60">{pct(ev.emailsFetched, ev.emailsPreFilter)}%</span>}
-                            </td>
+                            <td className="px-3 py-2 text-right">{ev.emailsFetched}</td>
                             <td className="px-3 py-2 text-right text-indigo-400">{ev.jobsExtracted}</td>
                             <td className="px-3 py-2 text-right text-emerald-400">
                               {ev.jobsImported}
