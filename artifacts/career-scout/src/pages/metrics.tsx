@@ -1,18 +1,26 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useGetFilterStats } from "@workspace/api-client-react";
-import { SlidersHorizontal, Loader2, BarChart2 } from "lucide-react";
+import { Loader2, BarChart2, Calendar } from "lucide-react";
 import Layout from "@/components/layout";
 
-const DATE_PRESETS = [
-  { label: "All time", days: null },
-  { label: "90d", days: 90 },
-  { label: "30d", days: 30 },
-  { label: "7d", days: 7 },
-] as const;
+type DateMode = "all" | "90d" | "30d" | "7d" | "custom";
+
+const PRESETS: { label: string; mode: Exclude<DateMode, "custom"> }[] = [
+  { label: "All time", mode: "all" },
+  { label: "90d",      mode: "90d" },
+  { label: "30d",      mode: "30d" },
+  { label: "7d",       mode: "7d" },
+];
+
+const PRESET_DAYS: Record<string, number> = { "90d": 90, "30d": 30, "7d": 7 };
 
 function pct(num: number, denom: number): number | null {
   if (!denom) return null;
   return Math.round((num / denom) * 100);
+}
+
+function fmtDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
 function StatTile({ label, value, sub, color, pct: pctVal, pctLabel }: {
@@ -35,113 +43,182 @@ function StatTile({ label, value, sub, color, pct: pctVal, pctLabel }: {
 }
 
 export default function MetricsPage() {
-  const [preset, setPreset] = useState<number | null>(null);
+  const [dateMode, setDateMode] = useState<DateMode>("all");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo]   = useState("");
   const [showHistory, setShowHistory] = useState(false);
 
-  const params = preset == null ? undefined : {
-    from: new Date(Date.now() - preset * 86400_000).toISOString(),
-  };
+  const params = useMemo<{ from?: string; to?: string } | undefined>(() => {
+    if (dateMode === "all") return undefined;
+
+    if (dateMode === "custom") {
+      const result: { from?: string; to?: string } = {};
+      if (customFrom) result.from = new Date(customFrom).toISOString();
+      if (customTo) {
+        const end = new Date(customTo);
+        end.setDate(end.getDate() + 1);
+        result.to = end.toISOString();
+      }
+      return Object.keys(result).length ? result : undefined;
+    }
+
+    const days = PRESET_DAYS[dateMode];
+    return { from: new Date(Date.now() - days * 86_400_000).toISOString() };
+  }, [dateMode, customFrom, customTo]);
+
   const { data, isLoading } = useGetFilterStats(params);
 
   const pf = data?.profileFilters;
-  const rawActive = pf?.rawActive ?? 0;
-  const totalFetched = data?.totalEmailsFetched ?? 0;
-  const totalExtracted = data?.totalJobsExtracted ?? 0;
-  const totalSkipped = data?.totalJobsSkippedDedup ?? 0;
+  const rawActive      = pf?.rawActive ?? 0;
+  const totalFetched   = data?.totalEmailsFetched   ?? 0;
+  const totalExtracted = data?.totalJobsExtracted    ?? 0;
+  const totalSkipped   = data?.totalJobsSkippedDedup ?? 0;
+
+  const syncRangeLabel = useMemo(() => {
+    if (dateMode === "all") return "all time";
+    if (dateMode === "custom") {
+      const parts: string[] = [];
+      if (customFrom) parts.push(`from ${fmtDate(new Date(customFrom).toISOString())}`);
+      if (customTo)   parts.push(`to ${fmtDate(new Date(customTo).toISOString())}`);
+      return parts.length ? parts.join(" ") : "custom range";
+    }
+    return `last ${PRESET_DAYS[dateMode]}d`;
+  }, [dateMode, customFrom, customTo]);
 
   return (
     <Layout>
       <div className="px-6 py-8 max-w-3xl mx-auto" data-testid="metrics-page">
+
         {/* Page header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-center gap-2">
-            <BarChart2 className="w-5 h-5 text-indigo-400" />
+            <BarChart2 className="w-5 h-5 text-indigo-400 shrink-0" />
             <div>
               <h1 className="text-xl font-semibold text-foreground">Metrics</h1>
-              <p className="text-sm text-muted-foreground">How many jobs your current filters surface vs. suppress.</p>
+              <p className="text-sm text-muted-foreground">Sync pipeline stats — date-filterable. Dashboard visibility is always the live snapshot.</p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5">
-            {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
-            <div className="flex rounded-md overflow-hidden border border-border text-xs">
-              {DATE_PRESETS.map((p) => (
+
+          {/* Date range controls */}
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            <div className="flex items-center gap-1.5">
+              {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
+              <div className="flex rounded-md overflow-hidden border border-border text-xs">
+                {PRESETS.map((p) => (
+                  <button
+                    key={p.mode}
+                    type="button"
+                    onClick={() => setDateMode(p.mode)}
+                    className={`px-2.5 py-1 transition-colors ${
+                      dateMode === p.mode
+                        ? "bg-indigo-600 text-white"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
                 <button
-                  key={p.label}
                   type="button"
-                  onClick={() => setPreset(p.days)}
-                  className={`px-2.5 py-1 transition-colors ${
-                    preset === p.days
+                  onClick={() => setDateMode("custom")}
+                  className={`flex items-center gap-1 px-2.5 py-1 transition-colors ${
+                    dateMode === "custom"
                       ? "bg-indigo-600 text-white"
                       : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
                   }`}
                 >
-                  {p.label}
+                  <Calendar className="w-3 h-3" />
+                  Custom
                 </button>
-              ))}
+              </div>
             </div>
+
+            {dateMode === "custom" && (
+              <div className="flex items-center gap-1.5 text-xs">
+                <input
+                  type="date"
+                  value={customFrom}
+                  onChange={(e) => setCustomFrom(e.target.value)}
+                  className="rounded border border-border bg-background text-foreground px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  placeholder="From"
+                />
+                <span className="text-muted-foreground">→</span>
+                <input
+                  type="date"
+                  value={customTo}
+                  onChange={(e) => setCustomTo(e.target.value)}
+                  className="rounded border border-border bg-background text-foreground px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  placeholder="To"
+                />
+              </div>
+            )}
           </div>
         </div>
 
         {data && (
           <div className="space-y-6">
-            {/* Dashboard visibility breakdown */}
+
+            {/* Dashboard visibility — always live, not date-filtered */}
             <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Dashboard visibility (live)</p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <StatTile label="Active emails" value={rawActive} sub="before filters" color="text-foreground" />
-                  <StatTile
-                    label="Shown on dashboard"
-                    value={pf!.shownOnDashboard}
-                    sub="after all filters"
-                    color="text-emerald-400"
-                    pct={pct(pf!.shownOnDashboard, rawActive)}
-                  />
-                  <StatTile
-                    label="Hidden by company"
-                    value={pf!.hiddenByCompany}
-                    sub={pf!.companyFilterMode === "off" ? "filter off" : `${pf!.companyFilterMode} · ${pf!.companyFilterCount} co.`}
-                    color="text-amber-400"
-                    pct={pct(pf!.hiddenByCompany, rawActive)}
-                  />
-                  <StatTile
-                    label="Hidden by title kw"
-                    value={pf!.hiddenByTitleKeywords}
-                    sub={`${pf!.titleKeywordCount} keyword${pf!.titleKeywordCount === 1 ? "" : "s"}`}
-                    color="text-rose-400"
-                    pct={pct(pf!.hiddenByTitleKeywords, rawActive)}
-                  />
-                </div>
-                {rawActive > 0 && (
-                  <div className="mt-3 space-y-1">
-                    <div className="h-2 rounded-full bg-muted overflow-hidden flex">
-                      <div className="h-full bg-emerald-500 transition-all" style={{ width: `${pct(pf!.shownOnDashboard, rawActive)}%` }} />
-                      <div className="h-full bg-amber-500/60 transition-all" style={{ width: `${pct(pf!.hiddenByCompany, rawActive)}%` }} />
-                      <div className="h-full bg-rose-500/60 transition-all" style={{ width: `${pct(pf!.hiddenByTitleKeywords, rawActive)}%` }} />
-                    </div>
-                    <div className="flex gap-3 text-[11px] text-muted-foreground">
-                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />Shown</span>
-                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500/60 inline-block" />Company filter</span>
-                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500/60 inline-block" />Title kw</span>
-                    </div>
-                  </div>
-                )}
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Dashboard visibility <span className="normal-case font-normal">(live snapshot — not date-filtered)</span>
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <StatTile label="Active postings" value={rawActive} sub="before filters" color="text-foreground" />
+                <StatTile
+                  label="Shown on dashboard"
+                  value={pf!.shownOnDashboard}
+                  sub="after all filters"
+                  color="text-emerald-400"
+                  pct={pct(pf!.shownOnDashboard, rawActive)}
+                />
+                <StatTile
+                  label="Hidden by company"
+                  value={pf!.hiddenByCompany}
+                  sub={pf!.companyFilterMode === "off" ? "filter off" : `${pf!.companyFilterMode} · ${pf!.companyFilterCount} co.`}
+                  color="text-amber-400"
+                  pct={pct(pf!.hiddenByCompany, rawActive)}
+                />
+                <StatTile
+                  label="Hidden by title kw"
+                  value={pf!.hiddenByTitleKeywords}
+                  sub={`${pf!.titleKeywordCount} keyword${pf!.titleKeywordCount === 1 ? "" : "s"}`}
+                  color="text-rose-400"
+                  pct={pct(pf!.hiddenByTitleKeywords, rawActive)}
+                />
               </div>
+              {rawActive > 0 && (
+                <div className="space-y-1">
+                  <div className="h-2 rounded-full bg-muted overflow-hidden flex">
+                    <div className="h-full bg-emerald-500 transition-all" style={{ width: `${pct(pf!.shownOnDashboard, rawActive)}%` }} />
+                    <div className="h-full bg-amber-500/60 transition-all" style={{ width: `${pct(pf!.hiddenByCompany, rawActive)}%` }} />
+                    <div className="h-full bg-rose-500/60 transition-all" style={{ width: `${pct(pf!.hiddenByTitleKeywords, rawActive)}%` }} />
+                  </div>
+                  <div className="flex gap-3 text-[11px] text-muted-foreground">
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />Shown</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500/60 inline-block" />Company filter</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500/60 inline-block" />Title kw</span>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Sync pipeline */}
+            {/* Sync pipeline — date-filtered */}
             <div className="bg-card border border-border rounded-xl p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Sync pipeline — {data.totalSyncs} sync{data.totalSyncs === 1 ? "" : "s"}
-                  {preset != null ? ` (last ${preset}d)` : ""}
+                  Sync pipeline —{" "}
+                  <span className="normal-case font-normal">
+                    {data.totalSyncs} sync{data.totalSyncs === 1 ? "" : "s"}, {syncRangeLabel}
+                  </span>
                 </p>
                 {data.syncHistory.length > 0 && (
-                  <button type="button" onClick={() => setShowHistory((v) => !v)} className="text-xs text-indigo-400 hover:underline">
+                  <button type="button" onClick={() => setShowHistory((v) => !v)} className="text-xs text-indigo-400 hover:underline shrink-0">
                     {showHistory ? "Hide log" : "Show log"}
                   </button>
                 )}
               </div>
+
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <StatTile label="~Pre-filter" value={data.totalEmailsPreFilter} sub="subj/sender est." color="text-muted-foreground" />
                 <StatTile
@@ -166,6 +243,7 @@ export default function MetricsPage() {
                   pct={pct(data.totalJobsImported, totalExtracted)}
                 />
               </div>
+
               {totalSkipped > 0 && (
                 <div className="grid grid-cols-3 gap-2">
                   <StatTile
