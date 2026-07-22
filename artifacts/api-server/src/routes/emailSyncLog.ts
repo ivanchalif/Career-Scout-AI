@@ -5,7 +5,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 
 const router = Router();
 
-router.get("/api/email-sync-log", requireAuth, async (req, res) => {
+router.get("/email-sync-log", requireAuth, async (req, res) => {
   const userId = req.auth.userId;
   const { startDate, endDate, sender, outcome } = req.query as Record<string, string | undefined>;
 
