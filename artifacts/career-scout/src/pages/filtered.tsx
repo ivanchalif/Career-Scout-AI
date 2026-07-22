@@ -48,7 +48,7 @@ export default function FilteredPage() {
   const { data: titleExcludeData } = useGetTitleExcludeSettings();
 
   const companyFilter = companyFilterData ?? null;
-  const titleKeywords: string[] = titleExcludeData?.titleExcludeKeywords ?? [];
+  const titleKeywords: string[] = titleExcludeData?.keywords ?? [];
 
   const annotated = useMemo(() => {
     if (!postings) return [];
