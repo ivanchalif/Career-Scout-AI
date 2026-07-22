@@ -1,5 +1,6 @@
 import { eq, and, isNotNull } from "drizzle-orm";
-import { db, gmailConnectionsTable, jobPostingsTable, userProfilesTable, gmailSeenKeysTable, filteredEmailsTable } from "@workspace/db";
+import { db, gmailConnectionsTable, jobPostingsTable, userProfilesTable, gmailSeenKeysTable, filteredEmailsTable, emailSyncLogTable } from "@workspace/db";
+import type { EmailSyncOutcome } from "@workspace/db";
 import { fetchJobEmails, markEmailAsRead, DEFAULT_EMAIL_FILTER_CRITERIA } from "./gmailClient";
 import { extractJobListings } from "./scoringService";
 import { scorePostingBackground, sweepUnscoredPostings } from "./scoringService";
@@ -123,18 +124,20 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
   for (const email of newEmails) {
     if (!email.body.trim()) continue;
 
+    const _emailMeta = {
+      userId: conn.userId,
+      gmailMessageId: email.messageId,
+      subject: email.subject ?? "",
+      senderEmail: extractSenderEmail(email.sender),
+      senderName: parseSenderName(email.sender) || null,
+    };
+
     if (isBlockedSender(email.sender)) {
       logger.info({ messageId: email.messageId, sender: email.sender }, "gmailScheduler: skipping email from blocked sender domain");
       // Mark seen so we don't re-process it on every cycle
       await db.insert(gmailSeenKeysTable).values({ userId: conn.userId, gmailKey: `${email.messageId}:blocked` }).onConflictDoNothing();
-      await db.insert(filteredEmailsTable).values({
-        userId: conn.userId,
-        gmailMessageId: email.messageId,
-        subject: email.subject ?? "",
-        senderEmail: extractSenderEmail(email.sender),
-        senderName: parseSenderName(email.sender) || null,
-        reason: "blocked_sender",
-      }).onConflictDoNothing();
+      await db.insert(filteredEmailsTable).values({ ..._emailMeta, reason: "blocked_sender" }).onConflictDoNothing();
+      await db.insert(emailSyncLogTable).values({ ..._emailMeta, outcome: "skipped_blocked_sender" });
       continue;
     }
 
@@ -142,24 +145,21 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
       logger.info({ messageId: email.messageId, subject: email.subject }, "gmailScheduler: skipping application response email");
       // Mark seen so we don't re-process it on every sync cycle
       await db.insert(gmailSeenKeysTable).values({ userId: conn.userId, gmailKey: `${email.messageId}:appresponse` }).onConflictDoNothing();
-      await db.insert(filteredEmailsTable).values({
-        userId: conn.userId,
-        gmailMessageId: email.messageId,
-        subject: email.subject ?? "",
-        senderEmail: extractSenderEmail(email.sender),
-        senderName: parseSenderName(email.sender) || null,
-        reason: "application_response",
-      }).onConflictDoNothing();
+      await db.insert(filteredEmailsTable).values({ ..._emailMeta, reason: "application_response" }).onConflictDoNothing();
+      await db.insert(emailSyncLogTable).values({ ..._emailMeta, outcome: "skipped_application_response" });
       continue;
     }
 
     const listings = await extractJobListings(email.body, email.subject, email.sender);
 
     const blockedKeywords = filterCriteria.blockedBodyKeywords ?? [];
+    let emailImported = 0;
+    let emailSkipped = 0;
+    const emailSkipReasons = new Set<string>();
 
     for (let i = 0; i < listings.length; i++) {
       const listing = listings[i];
-      if (!listing.description.trim()) continue;
+      if (!listing.description.trim()) { emailSkipped++; continue; }
 
       // Enrich description by fetching the actual job posting page when a URL
       // is available. Fall back to the email excerpt if the fetch fails.
@@ -205,16 +205,14 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
             "gmailScheduler: skipping individual listing — description contains blocked keyword",
           );
           await db.insert(filteredEmailsTable).values({
-            userId: conn.userId,
-            gmailMessageId: email.messageId,
-            subject: email.subject ?? "",
-            senderEmail: extractSenderEmail(email.sender),
-            senderName: parseSenderName(email.sender) || null,
+            ..._emailMeta,
             reason: "body_keyword",
             blockedKeyword: hit,
             listingTitle: listing.title || null,
             listingCompany: listing.company || null,
           });
+          emailSkipped++;
+          emailSkipReasons.add("body_keyword");
           continue;
         }
       }
@@ -238,16 +236,15 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
             ? "gmailScheduler: skipping posting already applied to"
             : "gmailScheduler: skipping fuzzy duplicate posting",
         );
+        const dupReason = wasDeleted ? "duplicate_dismissed" : wasApplied ? "duplicate_applied" : "duplicate";
         await db.insert(filteredEmailsTable).values({
-          userId: conn.userId,
-          gmailMessageId: email.messageId,
-          subject: email.subject ?? "",
-          senderEmail: extractSenderEmail(email.sender),
-          senderName: parseSenderName(email.sender) || null,
-          reason: wasDeleted ? "duplicate_dismissed" : wasApplied ? "duplicate_applied" : "duplicate",
+          ..._emailMeta,
+          reason: dupReason,
           listingTitle: title,
           listingCompany: company,
         });
+        emailSkipped++;
+        emailSkipReasons.add(dupReason);
         continue;
       }
 
@@ -269,9 +266,28 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
 
       if (newPosting) {
         scorePostingBackground(newPosting.id, conn.userId);
+        emailImported++;
         synced++;
       }
     }
+
+    // Write per-email sync log record
+    const emailOutcome: EmailSyncOutcome = listings.length === 0
+      ? "no_listings"
+      : emailImported > 0 && emailSkipped === 0
+      ? "imported"
+      : emailImported > 0
+      ? "partial"
+      : "all_skipped";
+
+    await db.insert(emailSyncLogTable).values({
+      ..._emailMeta,
+      outcome: emailOutcome,
+      listingsExtracted: listings.length,
+      listingsImported: emailImported,
+      listingsSkipped: emailSkipped,
+      skipReasons: [...emailSkipReasons],
+    });
 
     // Mark the email as read in Gmail now that it has been fully processed
     await markEmailAsRead(conn.accessToken, conn.refreshToken, email.messageId);

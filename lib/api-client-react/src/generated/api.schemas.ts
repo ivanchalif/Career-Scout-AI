@@ -117,6 +117,37 @@ export interface MatchReport {
   updatedAt: string;
 }
 
+export type EmailSyncOutcome =
+  | "imported"
+  | "partial"
+  | "no_listings"
+  | "all_skipped"
+  | "skipped_blocked_sender"
+  | "skipped_application_response"
+  | "empty_body";
+
+export interface EmailSyncLogItem {
+  id: number;
+  gmailMessageId: string;
+  subject: string;
+  senderEmail: string;
+  /** @nullable */
+  senderName?: string | null;
+  processedAt: string;
+  outcome: EmailSyncOutcome;
+  listingsExtracted: number;
+  listingsImported: number;
+  listingsSkipped: number;
+  skipReasons: string[];
+}
+
+export interface ListEmailSyncLogParams {
+  startDate?: string;
+  endDate?: string;
+  sender?: string;
+  outcome?: string;
+}
+
 export type FilteredEmailReason =
   | "blocked_sender"
   | "application_response"

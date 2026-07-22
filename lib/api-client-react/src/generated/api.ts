@@ -22,10 +22,12 @@ import type {
   CreatePostingBody,
   DashboardSummary,
   EmailFilterSettings,
+  EmailSyncLogItem,
   ErrorEnvelope,
   ErrorResponse,
   FilterStats,
   FilteredEmail,
+  ListEmailSyncLogParams,
   GmailCallbackParams,
   GmailStatus,
   GmailSyncResult,
@@ -3137,6 +3139,65 @@ export function useListFilteredEmails<
   const queryFn: QueryFunction<
     Awaited<ReturnType<typeof listFilteredEmails>>
   > = ({ signal }) => listFilteredEmails({ signal });
+
+  return {
+    ...useQuery({ queryKey, queryFn, ...queryOptions }),
+    queryKey,
+  } as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+}
+
+/**
+ * @summary List email sync log entries
+ */
+export const getListEmailSyncLogUrl = (params?: ListEmailSyncLogParams) => {
+  const query = new URLSearchParams();
+  if (params?.startDate) query.set("startDate", params.startDate);
+  if (params?.endDate) query.set("endDate", params.endDate);
+  if (params?.sender) query.set("sender", params.sender);
+  if (params?.outcome) query.set("outcome", params.outcome);
+  const qs = query.toString();
+  return `/api/email-sync-log${qs ? `?${qs}` : ""}`;
+};
+
+export const listEmailSyncLog = async (
+  params?: ListEmailSyncLogParams,
+  options?: RequestInit,
+): Promise<EmailSyncLogItem[]> => {
+  return customFetch<EmailSyncLogItem[]>(getListEmailSyncLogUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListEmailSyncLogQueryKey = (params?: ListEmailSyncLogParams) =>
+  [`/api/email-sync-log`, params] as const;
+
+export type GetListEmailSyncLogQueryKey = ReturnType<typeof getListEmailSyncLogQueryKey>;
+
+export type GetListEmailSyncLogQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listEmailSyncLog>>
+>;
+export type GetListEmailSyncLogQueryError = ErrorType<ErrorEnvelope>;
+
+export function useListEmailSyncLog<
+  TData = Awaited<ReturnType<typeof listEmailSyncLog>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  params?: ListEmailSyncLogParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listEmailSyncLog>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const { query: queryOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getListEmailSyncLogQueryKey(params);
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listEmailSyncLog>>
+  > = ({ signal }) => listEmailSyncLog(params, { signal });
 
   return {
     ...useQuery({ queryKey, queryFn, ...queryOptions }),

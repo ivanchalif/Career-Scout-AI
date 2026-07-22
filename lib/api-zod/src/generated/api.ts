@@ -619,6 +619,32 @@ export const GetDashboardSummaryResponse = zod.object({
  * @summary Get filter effectiveness statistics
  */
 /**
+ * @summary List email sync log entries
+ */
+export const ListEmailSyncLogQueryParams = zod.object({
+  startDate: zod.coerce.string().optional(),
+  endDate: zod.coerce.string().optional(),
+  sender: zod.coerce.string().optional(),
+  outcome: zod.coerce.string().optional(),
+});
+
+export const EmailSyncLogItem = zod.object({
+  id: zod.number(),
+  gmailMessageId: zod.string(),
+  subject: zod.string(),
+  senderEmail: zod.string(),
+  senderName: zod.string().nullish(),
+  processedAt: zod.coerce.date(),
+  outcome: zod.enum(["imported", "partial", "no_listings", "all_skipped", "skipped_blocked_sender", "skipped_application_response", "empty_body"]),
+  listingsExtracted: zod.number(),
+  listingsImported: zod.number(),
+  listingsSkipped: zod.number(),
+  skipReasons: zod.array(zod.string()),
+});
+
+export const ListEmailSyncLogResponse = zod.array(EmailSyncLogItem);
+
+/**
  * @summary List emails skipped during Gmail sync
  */
 export const ListFilteredEmailsResponseItem = zod.object({

@@ -9,6 +9,7 @@ import gmailRouter from "./gmail";
 import imapRouter from "./imap";
 import filterStatsRouter from "./filterStats";
 import filteredEmailsRouter from "./filteredEmails";
+import emailSyncLogRouter from "./emailSyncLog";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(gmailRouter);
 router.use(imapRouter);
 router.use(filterStatsRouter);
 router.use(filteredEmailsRouter);
+router.use(emailSyncLogRouter);
 
 export default router;
