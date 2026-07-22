@@ -117,9 +117,18 @@ export interface MatchReport {
   updatedAt: string;
 }
 
+export interface PostingFilterReason {
+  byCompany: boolean;
+  /** @nullable */
+  companyReason: string | null;
+  byTitle: boolean;
+  titleReasons: string[];
+}
+
 export interface PostingWithReport {
   posting: JobPosting;
   report: MatchReport | null;
+  filterReason?: PostingFilterReason;
 }
 
 export interface CreatePostingBody {

@@ -82,33 +82,52 @@ router.get("/postings", requireAuth, async (req, res): Promise<void> => {
     .where(and(...conditions))
     .orderBy(jobPostingsTable.createdAt);
 
-  const isHiddenByProfile = (p: typeof postings[number]): boolean => {
+  type FilterReason = {
+    byCompany: boolean;
+    companyReason: string | null;
+    byTitle: boolean;
+    titleReasons: string[];
+  };
+
+  const getFilterReason = (p: typeof postings[number]): FilterReason | null => {
+    let byCompany = false;
+    let companyReason: string | null = null;
+
     if (companyFilter.mode !== "off" && (companyFilter as { mode: string; companies: string[] }).companies.length > 0) {
       const company = p.company.toLowerCase();
       const companies = (companyFilter as { mode: string; companies: string[] }).companies;
-      const matches = companies.some((c: string) => {
+      const matched = companies.find((c: string) => {
         const entry = c.toLowerCase();
         return company.includes(entry) || entry.includes(company);
       });
-      if (companyFilter.mode === "include" && !matches) return true;
-      if (companyFilter.mode === "exclude" && matches) return true;
+      if (companyFilter.mode === "include" && !matched) {
+        byCompany = true;
+        companyReason = "Not in allowlist";
+      } else if (companyFilter.mode === "exclude" && matched) {
+        byCompany = true;
+        companyReason = `Excluded: "${matched}"`;
+      }
     }
-    if (titleExcludeKeywords.length > 0) {
-      const title = p.title.toLowerCase();
-      if (titleExcludeKeywords.some((kw: string) => title.includes(kw.toLowerCase()))) return true;
-    }
-    return false;
+
+    const title = p.title.toLowerCase();
+    const titleReasons: string[] = titleExcludeKeywords.length > 0
+      ? titleExcludeKeywords.filter((kw: string) => title.includes(kw.toLowerCase()))
+      : [];
+    const byTitle = titleReasons.length > 0;
+
+    if (!byCompany && !byTitle) return null;
+    return { byCompany, companyReason, byTitle, titleReasons };
   };
 
   const filtered = postings.filter((p) => {
     if (hidden) {
-      if (!isHiddenByProfile(p)) return false;
+      if (!getFilterReason(p)) return false;
     } else {
       if (search) {
         const q = search.toLowerCase();
         if (!p.title.toLowerCase().includes(q) && !p.company.toLowerCase().includes(q)) return false;
       }
-      if (isHiddenByProfile(p)) return false;
+      if (getFilterReason(p)) return false;
     }
     return true;
   });
@@ -119,7 +138,8 @@ router.get("/postings", requireAuth, async (req, res): Promise<void> => {
         .select()
         .from(matchReportsTable)
         .where(and(eq(matchReportsTable.jobPostingId, posting.id), eq(matchReportsTable.userId, userId)));
-      return { posting, report: report ?? null };
+      const filterReason = hidden ? (getFilterReason(posting) ?? undefined) : undefined;
+      return { posting, report: report ?? null, ...(filterReason !== undefined ? { filterReason } : {}) };
     }),
   );
 

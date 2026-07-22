@@ -185,6 +185,12 @@ export const ListPostingsResponseItem = zod.object({
     }),
     zod.null(),
   ]),
+  filterReason: zod.object({
+    byCompany: zod.boolean(),
+    companyReason: zod.string().nullable(),
+    byTitle: zod.boolean(),
+    titleReasons: zod.array(zod.string()),
+  }).optional(),
 });
 export const ListPostingsResponse = zod.array(ListPostingsResponseItem);
 

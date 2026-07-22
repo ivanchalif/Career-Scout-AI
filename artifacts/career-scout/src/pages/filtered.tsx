@@ -1,71 +1,22 @@
 import { useMemo } from "react";
 import { Link } from "wouter";
 import { EyeOff, ExternalLink, Building2, Tag, Loader2 } from "lucide-react";
-import { useListPostings, useGetCompanyFilterSettings, useGetTitleExcludeSettings } from "@workspace/api-client-react";
+import { useListPostings } from "@workspace/api-client-react";
 import Layout from "@/components/layout";
-
-type FilterReasons = {
-  byCompany: boolean;
-  companyReason: string | null;
-  byTitle: boolean;
-  titleReasons: string[];
-};
-
-function getFilterReasons(
-  company: string,
-  title: string,
-  companyFilter: { mode: string; companies: string[] } | null | undefined,
-  titleKeywords: string[],
-): FilterReasons {
-  let byCompany = false;
-  let companyReason: string | null = null;
-
-  if (companyFilter && companyFilter.mode !== "off" && companyFilter.companies.length > 0) {
-    const co = company.toLowerCase();
-    const matched = companyFilter.companies.find((c) => {
-      const e = c.toLowerCase();
-      return co.includes(e) || e.includes(co);
-    });
-    if (companyFilter.mode === "exclude" && matched) {
-      byCompany = true;
-      companyReason = `Excluded: "${matched}"`;
-    } else if (companyFilter.mode === "include" && !matched) {
-      byCompany = true;
-      companyReason = "Not in allowlist";
-    }
-  }
-
-  const tl = title.toLowerCase();
-  const titleReasons = titleKeywords.filter((kw) => tl.includes(kw.toLowerCase()));
-  const byTitle = titleReasons.length > 0;
-
-  return { byCompany, companyReason, byTitle, titleReasons };
-}
 
 export default function FilteredPage() {
   const { data: postings, isLoading } = useListPostings({ hidden: true });
-  const { data: companyFilterData } = useGetCompanyFilterSettings();
-  const { data: titleExcludeData } = useGetTitleExcludeSettings();
-
-  const companyFilter = companyFilterData ?? null;
-  const titleKeywords: string[] = titleExcludeData?.keywords ?? [];
-
-  const annotated = useMemo(() => {
-    if (!postings) return [];
-    return postings.map((item) => {
-      const reasons = getFilterReasons(
-        item.posting.company,
-        item.posting.title,
-        companyFilter as { mode: string; companies: string[] } | null,
-        titleKeywords,
-      );
-      return { ...item, ...reasons };
-    });
-  }, [postings, companyFilter, titleKeywords]);
 
   const sorted = useMemo(
-    () => [...annotated].sort((a, b) => new Date(b.posting.createdAt).getTime() - new Date(a.posting.createdAt).getTime()),
-    [annotated],
+    () =>
+      postings
+        ? [...postings].sort(
+            (a, b) =>
+              new Date(b.posting.createdAt).getTime() -
+              new Date(a.posting.createdAt).getTime(),
+          )
+        : [],
+    [postings],
   );
 
   return (
@@ -101,7 +52,7 @@ export default function FilteredPage() {
               </Link>
             </div>
             <ul className="divide-y divide-border">
-              {sorted.map(({ posting, report, byCompany, companyReason, byTitle, titleReasons }) => (
+              {sorted.map(({ posting, report, filterReason }) => (
                 <li key={posting.id} className="flex items-start gap-3 px-4 py-3 hover:bg-muted/20 transition-colors">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start gap-2 flex-wrap">
@@ -129,20 +80,29 @@ export default function FilteredPage() {
                         {new Date(posting.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                      {byCompany && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-950/40 text-amber-400 border border-amber-800/30" title={companyReason ?? undefined}>
-                          <Building2 className="w-2.5 h-2.5 shrink-0" />
-                          {companyReason ?? "Company filter"}
-                        </span>
-                      )}
-                      {byTitle && titleReasons.map((kw) => (
-                        <span key={kw} className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-rose-950/40 text-rose-400 border border-rose-800/30">
-                          <Tag className="w-2.5 h-2.5 shrink-0" />
-                          "{kw}"
-                        </span>
-                      ))}
-                    </div>
+                    {filterReason && (
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                        {filterReason.byCompany && (
+                          <span
+                            className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-950/40 text-amber-400 border border-amber-800/30"
+                            title={filterReason.companyReason ?? undefined}
+                          >
+                            <Building2 className="w-2.5 h-2.5 shrink-0" />
+                            {filterReason.companyReason ?? "Company filter"}
+                          </span>
+                        )}
+                        {filterReason.byTitle &&
+                          filterReason.titleReasons.map((kw) => (
+                            <span
+                              key={kw}
+                              className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-rose-950/40 text-rose-400 border border-rose-800/30"
+                            >
+                              <Tag className="w-2.5 h-2.5 shrink-0" />
+                              "{kw}"
+                            </span>
+                          ))}
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0 pt-0.5">
                     {posting.link && (
