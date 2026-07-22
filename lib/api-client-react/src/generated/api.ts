@@ -25,6 +25,7 @@ import type {
   ErrorEnvelope,
   ErrorResponse,
   FilterStats,
+  FilteredEmail,
   GmailCallbackParams,
   GmailStatus,
   GmailSyncResult,
@@ -3091,4 +3092,54 @@ export function useGetFilterStats<
     queryKey: QueryKey;
   };
   return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List emails skipped during Gmail sync
+ */
+export const getListFilteredEmailsUrl = () => `/api/filtered-emails`;
+
+export const listFilteredEmails = async (
+  options?: RequestInit,
+): Promise<FilteredEmail[]> => {
+  return customFetch<FilteredEmail[]>(getListFilteredEmailsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListFilteredEmailsQueryKey = () =>
+  [`/api/filtered-emails`] as const;
+
+export type GetListFilteredEmailsQueryKey = ReturnType<
+  typeof getListFilteredEmailsQueryKey
+>;
+
+export type GetListFilteredEmailsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listFilteredEmails>>
+>;
+export type GetListFilteredEmailsQueryError = ErrorType<ErrorEnvelope>;
+
+export function useListFilteredEmails<
+  TData = Awaited<ReturnType<typeof listFilteredEmails>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listFilteredEmails>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const { query: queryOptions } = options ?? {};
+  const queryKey =
+    queryOptions?.queryKey ?? getListFilteredEmailsQueryKey();
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listFilteredEmails>>
+  > = ({ signal }) => listFilteredEmails({ signal });
+
+  return {
+    ...useQuery({ queryKey, queryFn, ...queryOptions }),
+    queryKey,
+  } as UseQueryResult<TData, TError> & { queryKey: QueryKey };
 }

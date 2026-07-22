@@ -117,6 +117,31 @@ export interface MatchReport {
   updatedAt: string;
 }
 
+export type FilteredEmailReason =
+  | "blocked_sender"
+  | "application_response"
+  | "body_keyword"
+  | "duplicate"
+  | "duplicate_dismissed"
+  | "duplicate_applied";
+
+export interface FilteredEmail {
+  id: number;
+  gmailMessageId: string;
+  subject: string;
+  senderEmail: string;
+  /** @nullable */
+  senderName?: string | null;
+  reason: FilteredEmailReason;
+  /** @nullable */
+  blockedKeyword?: string | null;
+  /** @nullable */
+  listingTitle?: string | null;
+  /** @nullable */
+  listingCompany?: string | null;
+  filteredAt: string;
+}
+
 export interface PostingFilterReason {
   byCompany: boolean;
   /** @nullable */

@@ -1,5 +1,5 @@
 import { eq, and, isNotNull } from "drizzle-orm";
-import { db, gmailConnectionsTable, jobPostingsTable, userProfilesTable, gmailSeenKeysTable } from "@workspace/db";
+import { db, gmailConnectionsTable, jobPostingsTable, userProfilesTable, gmailSeenKeysTable, filteredEmailsTable } from "@workspace/db";
 import { fetchJobEmails, markEmailAsRead, DEFAULT_EMAIL_FILTER_CRITERIA } from "./gmailClient";
 import { extractJobListings } from "./scoringService";
 import { scorePostingBackground, sweepUnscoredPostings } from "./scoringService";
@@ -57,6 +57,12 @@ function extractSender(from: string): string {
   if (name && name.length > 0 && name.length <= 100) return name;
   const domainMatch = from.match(/@([^>@\s]+)/);
   return domainMatch?.[1] ?? from.slice(0, 100);
+}
+
+function extractSenderEmail(from: string): string {
+  const match = from.match(/<([^>]+)>/);
+  if (match) return match[1].trim().toLowerCase();
+  return from.trim().toLowerCase();
 }
 
 const APPLICATION_RESPONSE_PHRASES = [
@@ -121,11 +127,29 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
       logger.info({ messageId: email.messageId, sender: email.sender }, "gmailScheduler: skipping email from blocked sender domain");
       // Mark seen so we don't re-process it on every cycle
       await db.insert(gmailSeenKeysTable).values({ userId: conn.userId, gmailKey: `${email.messageId}:blocked` }).onConflictDoNothing();
+      await db.insert(filteredEmailsTable).values({
+        userId: conn.userId,
+        gmailMessageId: email.messageId,
+        subject: email.subject ?? "",
+        senderEmail: extractSenderEmail(email.sender),
+        senderName: parseSenderName(email.sender) || null,
+        reason: "blocked_sender",
+      }).onConflictDoNothing();
       continue;
     }
 
     if (isApplicationResponseEmail(email.subject, email.body)) {
       logger.info({ messageId: email.messageId, subject: email.subject }, "gmailScheduler: skipping application response email");
+      // Mark seen so we don't re-process it on every sync cycle
+      await db.insert(gmailSeenKeysTable).values({ userId: conn.userId, gmailKey: `${email.messageId}:appresponse` }).onConflictDoNothing();
+      await db.insert(filteredEmailsTable).values({
+        userId: conn.userId,
+        gmailMessageId: email.messageId,
+        subject: email.subject ?? "",
+        senderEmail: extractSenderEmail(email.sender),
+        senderName: parseSenderName(email.sender) || null,
+        reason: "application_response",
+      }).onConflictDoNothing();
       continue;
     }
 
@@ -180,6 +204,17 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
             { messageId: email.messageId, title: listing.title, blockedKeyword: hit, descriptionSource },
             "gmailScheduler: skipping individual listing — description contains blocked keyword",
           );
+          await db.insert(filteredEmailsTable).values({
+            userId: conn.userId,
+            gmailMessageId: email.messageId,
+            subject: email.subject ?? "",
+            senderEmail: extractSenderEmail(email.sender),
+            senderName: parseSenderName(email.sender) || null,
+            reason: "body_keyword",
+            blockedKeyword: hit,
+            listingTitle: listing.title || null,
+            listingCompany: listing.company || null,
+          });
           continue;
         }
       }
@@ -203,6 +238,16 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
             ? "gmailScheduler: skipping posting already applied to"
             : "gmailScheduler: skipping fuzzy duplicate posting",
         );
+        await db.insert(filteredEmailsTable).values({
+          userId: conn.userId,
+          gmailMessageId: email.messageId,
+          subject: email.subject ?? "",
+          senderEmail: extractSenderEmail(email.sender),
+          senderName: parseSenderName(email.sender) || null,
+          reason: wasDeleted ? "duplicate_dismissed" : wasApplied ? "duplicate_applied" : "duplicate",
+          listingTitle: title,
+          listingCompany: company,
+        });
         continue;
       }
 

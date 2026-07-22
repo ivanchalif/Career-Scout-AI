@@ -8,6 +8,7 @@ import storageRouter from "./storage";
 import gmailRouter from "./gmail";
 import imapRouter from "./imap";
 import filterStatsRouter from "./filterStats";
+import filteredEmailsRouter from "./filteredEmails";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(dashboardRouter);
 router.use(gmailRouter);
 router.use(imapRouter);
 router.use(filterStatsRouter);
+router.use(filteredEmailsRouter);
 
 export default router;

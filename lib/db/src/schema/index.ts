@@ -5,3 +5,4 @@ export * from "./gmailConnections";
 export * from "./gmailSeenKeys";
 export * from "./imapConnections";
 export * from "./syncEvents";
+export * from "./filteredEmails";

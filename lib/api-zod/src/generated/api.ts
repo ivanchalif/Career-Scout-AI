@@ -618,6 +618,24 @@ export const GetDashboardSummaryResponse = zod.object({
 /**
  * @summary Get filter effectiveness statistics
  */
+/**
+ * @summary List emails skipped during Gmail sync
+ */
+export const ListFilteredEmailsResponseItem = zod.object({
+  id: zod.number(),
+  gmailMessageId: zod.string(),
+  subject: zod.string(),
+  senderEmail: zod.string(),
+  senderName: zod.string().nullish(),
+  reason: zod.enum(["blocked_sender", "application_response", "body_keyword", "duplicate", "duplicate_dismissed", "duplicate_applied"]),
+  blockedKeyword: zod.string().nullish(),
+  listingTitle: zod.string().nullish(),
+  listingCompany: zod.string().nullish(),
+  filteredAt: zod.coerce.date(),
+});
+
+export const ListFilteredEmailsResponse = zod.array(ListFilteredEmailsResponseItem);
+
 export const GetFilterStatsResponse = zod.object({
   profileFilters: zod.object({
     rawActive: zod.number(),
