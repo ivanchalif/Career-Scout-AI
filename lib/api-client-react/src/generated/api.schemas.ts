@@ -264,6 +264,10 @@ export type ListPostingsParams = {
    * Filter by applied status
    */
   applied?: boolean;
+  /**
+   * When true, return jobs suppressed by active profile filters instead of visible ones
+   */
+  hidden?: boolean;
 };
 
 export type RestorePosting200 = {

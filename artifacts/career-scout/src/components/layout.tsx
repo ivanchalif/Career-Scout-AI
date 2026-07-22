@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useUser, useClerk } from "@clerk/react";
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, User, LogOut, Radar, Mail, BarChart2 } from "lucide-react";
+import { LayoutDashboard, User, LogOut, Radar, Mail, BarChart2, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -14,6 +14,7 @@ import {
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/inbox", icon: Mail, label: "Email" },
+  { href: "/filtered", icon: EyeOff, label: "Filtered" },
   { href: "/metrics", icon: BarChart2, label: "Metrics" },
   { href: "/profile", icon: User, label: "Profile" },
 ];

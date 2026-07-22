@@ -47,7 +47,7 @@ router.get("/postings", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const { search, minFitScore, source, applied } = queryParsed.data;
+  const { search, minFitScore, source, applied, hidden } = queryParsed.data;
 
   const [userProfile] = await db
     .select({
@@ -82,23 +82,33 @@ router.get("/postings", requireAuth, async (req, res): Promise<void> => {
     .where(and(...conditions))
     .orderBy(jobPostingsTable.createdAt);
 
-  const filtered = postings.filter((p) => {
-    if (search) {
-      const q = search.toLowerCase();
-      if (!p.title.toLowerCase().includes(q) && !p.company.toLowerCase().includes(q)) return false;
-    }
-    if (companyFilter.mode !== "off" && companyFilter.companies.length > 0) {
+  const isHiddenByProfile = (p: typeof postings[number]): boolean => {
+    if (companyFilter.mode !== "off" && (companyFilter as { mode: string; companies: string[] }).companies.length > 0) {
       const company = p.company.toLowerCase();
-      const matches = companyFilter.companies.some((c: string) => {
+      const companies = (companyFilter as { mode: string; companies: string[] }).companies;
+      const matches = companies.some((c: string) => {
         const entry = c.toLowerCase();
         return company.includes(entry) || entry.includes(company);
       });
-      if (companyFilter.mode === "include" && !matches) return false;
-      if (companyFilter.mode === "exclude" && matches) return false;
+      if (companyFilter.mode === "include" && !matches) return true;
+      if (companyFilter.mode === "exclude" && matches) return true;
     }
     if (titleExcludeKeywords.length > 0) {
       const title = p.title.toLowerCase();
-      if (titleExcludeKeywords.some((kw: string) => title.includes(kw.toLowerCase()))) return false;
+      if (titleExcludeKeywords.some((kw: string) => title.includes(kw.toLowerCase()))) return true;
+    }
+    return false;
+  };
+
+  const filtered = postings.filter((p) => {
+    if (hidden) {
+      if (!isHiddenByProfile(p)) return false;
+    } else {
+      if (search) {
+        const q = search.toLowerCase();
+        if (!p.title.toLowerCase().includes(q) && !p.company.toLowerCase().includes(q)) return false;
+      }
+      if (isHiddenByProfile(p)) return false;
     }
     return true;
   });

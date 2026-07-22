@@ -143,6 +143,10 @@ export const ListPostingsQueryParams = zod.object({
     (v) => (v === "true" ? true : v === "false" ? false : undefined),
     zod.boolean().optional()
   ).describe("Filter by applied status"),
+  hidden: zod.preprocess(
+    (v) => (v === "true" ? true : v === "false" ? false : undefined),
+    zod.boolean().optional()
+  ).describe("When true, return jobs suppressed by active profile filters instead of visible ones"),
 });
 
 export const ListPostingsResponseItem = zod.object({
