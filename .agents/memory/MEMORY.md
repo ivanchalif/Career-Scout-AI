@@ -1,0 +1,1 @@
+- [Express ETag 304 in Replit proxy](express-etag-304-replit.md) — 304 responses pass through Replit proxy without cached body; customFetch returns null; always disable("etag") on API server.
