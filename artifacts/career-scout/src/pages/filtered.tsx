@@ -308,6 +308,12 @@ export default function FilteredPage() {
               ]}
             />
 
+            {postingsLoading && (
+              <div className="py-16 flex justify-center">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground/50" />
+              </div>
+            )}
+
             {!postingsLoading && filteredPostings.length === 0 && (
               <EmptyState
                 icon={EyeOff}
@@ -423,6 +429,12 @@ export default function FilteredPage() {
               ]}
             />
 
+            {skippedLoading && (
+              <div className="py-16 flex justify-center">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground/50" />
+              </div>
+            )}
+
             {!skippedLoading && filteredSkipped.length === 0 && (
               <EmptyState
                 icon={MailX}
@@ -491,6 +503,12 @@ export default function FilteredPage() {
                 { value: "empty_body", label: "Empty body" },
               ]}
             />
+
+            {syncLogLoading && (
+              <div className="py-16 flex justify-center">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground/50" />
+              </div>
+            )}
 
             {!syncLogLoading && (!syncLog || syncLog.length === 0) && (
               <EmptyState
