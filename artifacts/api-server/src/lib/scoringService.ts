@@ -50,7 +50,7 @@ export async function extractJobListings(
   emailBody: string,
   subject: string,
   sender: string,
-): Promise<ExtractedJobListing[]> {
+): Promise<{ listings: ExtractedJobListing[]; hadError: boolean }> {
   const prompt = `You are an email parser that extracts individual job listings from emails.
 
 An email may contain:
@@ -99,15 +99,15 @@ Rules:
 
     if (result.success) {
       const listings = result.data.filter((j) => j.description.trim().length > 0).slice(0, 10);
-      if (listings.length > 0) return listings;
+      return { listings, hadError: false };
     } else {
       logger.warn({ issues: result.error.issues }, "scoringService: extractJobListings schema validation failed");
+      return { listings: [], hadError: true };
     }
   } catch (err) {
-    logger.warn({ err }, "scoringService: extractJobListings failed, returning empty — will not create a posting from unparseable email");
+    logger.warn({ err }, "scoringService: extractJobListings LLM call failed — email will stay unread for retry");
+    return { listings: [], hadError: true };
   }
-
-  return [];
 }
 
 const fitScoreResultSchema = z.object({

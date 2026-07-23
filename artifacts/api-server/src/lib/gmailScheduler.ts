@@ -150,7 +150,7 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
       continue;
     }
 
-    const listings = await extractJobListings(email.body, email.subject, email.sender);
+    const { listings, hadError } = await extractJobListings(email.body, email.subject, email.sender);
 
     const blockedKeywords = filterCriteria.blockedBodyKeywords ?? [];
     let emailImported = 0;
@@ -289,9 +289,14 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
       skipReasons: [...emailSkipReasons],
     });
 
-    // Mark the email as read in Gmail now that it has been fully processed
-    await markEmailAsRead(conn.accessToken, conn.refreshToken, email.messageId);
-    logger.debug({ messageId: email.messageId }, "gmailScheduler: marked email as read");
+    // Only mark as read when extraction succeeded — if the LLM call errored,
+    // leave the email unread so the next sync automatically retries it.
+    if (!hadError) {
+      await markEmailAsRead(conn.accessToken, conn.refreshToken, email.messageId);
+      logger.debug({ messageId: email.messageId }, "gmailScheduler: marked email as read");
+    } else {
+      logger.warn({ messageId: email.messageId }, "gmailScheduler: extraction errored — leaving email unread for retry");
+    }
   }
 
   const lastSyncedAt = new Date();

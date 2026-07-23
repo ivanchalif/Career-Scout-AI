@@ -8,6 +8,7 @@ import {
   getGmailEmail,
   revokeTokens,
   fetchJobEmails,
+  fetchSingleEmail,
   estimateEmailCount,
   markEmailAsRead,
   signState,
@@ -180,7 +181,7 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
   for (const email of newEmails) {
     if (!email.body.trim()) continue;
 
-    const listings = await extractJobListings(email.body, email.subject, email.sender);
+    const { listings, hadError } = await extractJobListings(email.body, email.subject, email.sender);
     jobsExtracted += listings.length;
 
     for (let i = 0; i < listings.length; i++) {
@@ -257,8 +258,13 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
       }
     }
 
-    // Mark the email as read in Gmail now that all its listings have been processed
-    await markEmailAsRead(conn.accessToken, conn.refreshToken, email.messageId);
+    // Only mark as read when extraction succeeded — if the LLM call errored,
+    // leave the email unread so the next sync automatically retries it.
+    if (!hadError) {
+      await markEmailAsRead(conn.accessToken, conn.refreshToken, email.messageId);
+    } else {
+      logger.warn({ messageId: email.messageId }, "gmail sync: extraction errored — leaving email unread for retry");
+    }
   }
 
   const lastSyncedAt = new Date();
@@ -288,6 +294,128 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
     synced,
     lastSyncedAt: lastSyncedAt.toISOString(),
   });
+});
+
+/**
+ * POST /api/gmail/reprocess
+ * Re-fetch specific Gmail messages by ID and run them through the full
+ * extraction pipeline. Designed for emails that were previously marked
+ * read during a failed sync (e.g. LLM error) and are no longer returned
+ * by the normal is:unread query.
+ */
+router.post("/gmail/reprocess", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const userId = req.userId;
+  const { messageIds } = req.body as { messageIds?: string[] };
+
+  if (!Array.isArray(messageIds) || messageIds.length === 0) {
+    res.status(400).json({ error: "messageIds must be a non-empty array of Gmail message IDs" });
+    return;
+  }
+
+  const [conn] = await db
+    .select()
+    .from(gmailConnectionsTable)
+    .where(eq(gmailConnectionsTable.userId, userId));
+
+  if (!conn) {
+    res.status(400).json({ error: "Gmail account not connected" });
+    return;
+  }
+
+  const [userProfile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, userId));
+  const filterCriteria = userProfile?.emailFilterSettings ?? undefined;
+  const blockedKeywords = filterCriteria?.blockedBodyKeywords ?? [];
+
+  const seenKeys = await db
+    .select({ gmailKey: gmailSeenKeysTable.gmailKey })
+    .from(gmailSeenKeysTable)
+    .where(eq(gmailSeenKeysTable.userId, userId));
+  const processedBaseIds = new Set(seenKeys.map((r) => r.gmailKey.split(":")[0]));
+
+  const results: Array<{ messageId: string; status: string; imported: number }> = [];
+
+  for (const messageId of messageIds.slice(0, 20)) {
+    if (processedBaseIds.has(messageId)) {
+      results.push({ messageId, status: "already_processed", imported: 0 });
+      continue;
+    }
+
+    const email = await fetchSingleEmail(conn.accessToken, conn.refreshToken, messageId);
+    if (!email || !email.body.trim()) {
+      results.push({ messageId, status: "not_found_or_empty", imported: 0 });
+      continue;
+    }
+
+    const { listings, hadError } = await extractJobListings(email.body, email.subject, email.sender);
+    if (hadError) {
+      results.push({ messageId, status: "extraction_error", imported: 0 });
+      continue;
+    }
+    if (listings.length === 0) {
+      await markEmailAsRead(conn.accessToken, conn.refreshToken, messageId);
+      results.push({ messageId, status: "no_listings", imported: 0 });
+      continue;
+    }
+
+    let imported = 0;
+    for (let i = 0; i < listings.length; i++) {
+      const listing = listings[i];
+      if (!listing.description.trim()) continue;
+
+      const gmailKey = `${messageId}:${i}`;
+      const title = listing.title || email.subject.slice(0, 200) || "Job Opportunity";
+      const company = listing.company || extractSender(email.sender);
+
+      await db.insert(gmailSeenKeysTable).values({ userId, gmailKey }).onConflictDoNothing();
+
+      const { isDuplicate } = await isFuzzyDuplicate(userId, title, company);
+      if (isDuplicate) continue;
+
+      let fullDescription = listing.description;
+      let resolvedUrl = listing.url;
+      if (listing.url) {
+        const pageResult = await fetchJobPageContent(listing.url);
+        if (pageResult) {
+          resolvedUrl = pageResult.finalUrl;
+          if (pageResult.contentUsable && pageResult.content.length > fullDescription.length) {
+            fullDescription = pageResult.content;
+          }
+        }
+      }
+
+      // Check blocked body keywords
+      if (blockedKeywords.length > 0) {
+        const hit = blockedKeywords.find((kw) => fullDescription.toLowerCase().includes(kw.toLowerCase()));
+        if (hit) continue;
+      }
+
+      const [newPosting] = await db
+        .insert(jobPostingsTable)
+        .values({
+          userId,
+          title,
+          company,
+          fullDescription: fullDescription.slice(0, 10_000),
+          link: resolvedUrl ?? null,
+          source: "gmail",
+          senderName: parseSenderName(email.sender),
+          gmailMessageId: gmailKey,
+          extractedSkills: [],
+        })
+        .onConflictDoNothing()
+        .returning();
+
+      if (newPosting) {
+        scorePostingBackground(newPosting.id, userId);
+        imported++;
+      }
+    }
+
+    await markEmailAsRead(conn.accessToken, conn.refreshToken, messageId);
+    results.push({ messageId, status: imported > 0 ? "imported" : "all_skipped", imported });
+  }
+
+  res.json({ results });
 });
 
 function extractSender(from: string): string {
