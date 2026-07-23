@@ -6,7 +6,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 const router = Router();
 
 router.get("/filtered-emails", requireAuth, async (req, res) => {
-  const userId = req.auth.userId;
+  const userId = req.userId;
 
   const rows = await db
     .select()

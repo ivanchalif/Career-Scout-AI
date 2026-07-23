@@ -1,2 +1,3 @@
 - [Express ETag 304 in Replit proxy](express-etag-304-replit.md) — 304 responses pass through Replit proxy without cached body; customFetch returns null; always disable("etag") on API server.
 - [api-client-react dist rebuild](api-client-react-dist.md) — composite TS project; must run tsc in lib/api-client-react after editing src/ or hooks go missing from IDE.
+- [req.userId vs req.auth.userId](clerk-req-userId.md) — always use req.userId (set by requireAuth) not req.auth.userId; the latter can be undefined in Clerk Express v2.

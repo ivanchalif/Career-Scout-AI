@@ -6,7 +6,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 const router = Router();
 
 router.get("/email-sync-log", requireAuth, async (req, res) => {
-  const userId = req.auth.userId;
+  const userId = req.userId;
   const { startDate, endDate, sender, outcome } = req.query as Record<string, string | undefined>;
 
   const conditions = [eq(emailSyncLogTable.userId, userId)];
