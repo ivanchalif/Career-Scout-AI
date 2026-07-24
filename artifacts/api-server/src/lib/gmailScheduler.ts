@@ -287,6 +287,7 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
       listingsImported: emailImported,
       listingsSkipped: emailSkipped,
       skipReasons: [...emailSkipReasons],
+      hadError,
     });
 
     // Only mark as read when extraction succeeded — if the LLM call errored,

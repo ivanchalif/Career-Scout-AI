@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 
 export type EmailSyncOutcome =
   | "imported"
@@ -22,6 +22,7 @@ export const emailSyncLogTable = pgTable("email_sync_log", {
   listingsImported: integer("listings_imported").notNull().default(0),
   listingsSkipped: integer("listings_skipped").notNull().default(0),
   skipReasons: text("skip_reasons").array().notNull().default([]),
+  hadError: boolean("had_error").notNull().default(false),
 });
 
 export type EmailSyncLog = typeof emailSyncLogTable.$inferSelect;

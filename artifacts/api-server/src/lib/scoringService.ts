@@ -59,6 +59,12 @@ An email may contain:
 - A jobs digest / roundup with multiple distinct roles → return each as its own item
 - No actual job listings (company news, newsletter articles, etc.) → return []
 
+IMPORTANT — job alert and job digest emails ALWAYS contain real listings:
+- Subjects like "New VP Product jobs for you", "Ivan, have you seen these new VP Product jobs?", "Recommended Jobs With Workato, Kardigan and Pholio", or "X new jobs matching your search" are job digests — extract every role listed, even if the email shows only a job title + company + location per listing
+- Job alert services (Lensa, Indeed, LinkedIn, Jobgether, recruiting agencies, etc.) send digest emails with minimal text per role — that is normal and expected; each title+company+location entry is a valid listing
+- A listing with only job title + company + location is valid; description can be brief
+- Only return [] when the email is genuinely non-job content: company news, a promotional newsletter, HR articles, or marketing with no specific job roles listed
+
 Email Subject: ${subject}
 Email Sender: ${sender}
 Email Body (links appear as "link text [URL]"):
@@ -70,7 +76,7 @@ Return a JSON array of job listings (max 10). Each entry must have:
 {
   "title": "job title (infer from context if not explicit)",
   "company": "company name",
-  "description": "ONLY the text from the email that describes THIS specific job — role, requirements, and details for this role only (100-1500 chars)",
+  "description": "ONLY the text from the email that describes THIS specific job — role, requirements, and details for this role only (100-1500 chars). For sparse digest entries, include whatever details are available: title, company, location, any snippet text.",
   "url": "the direct URL to THIS specific job posting (from the [URL] markers in the email body) — omit if not found"
 }
 

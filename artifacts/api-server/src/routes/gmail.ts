@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { eq } from "drizzle-orm";
-import { db, gmailConnectionsTable, jobPostingsTable, gmailSeenKeysTable, userProfilesTable, syncEventsTable } from "@workspace/db";
+import { db, gmailConnectionsTable, jobPostingsTable, gmailSeenKeysTable, userProfilesTable, syncEventsTable, emailSyncLogTable, type EmailSyncOutcome } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
   getAuthUrl,
@@ -184,6 +184,9 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
     const { listings, hadError } = await extractJobListings(email.body, email.subject, email.sender);
     jobsExtracted += listings.length;
 
+    let emailImported = 0;
+    let emailSkipped = 0;
+
     for (let i = 0; i < listings.length; i++) {
       const listing = listings[i];
       if (!listing.description.trim()) continue;
@@ -211,6 +214,7 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
         if (wasDeleted) jobsSkippedUserDeleted++;
         else if (wasApplied) jobsSkippedApplied++;
         else jobsSkippedActiveDup++;
+        emailSkipped++;
         continue;
       }
 
@@ -255,8 +259,35 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
       if (newPosting) {
         scorePostingBackground(newPosting.id, userId);
         synced++;
+        emailImported++;
+      } else {
+        emailSkipped++;
       }
     }
+
+    const senderEmailMatch = email.sender.match(/<([^>]+)>/);
+    const senderEmail = senderEmailMatch?.[1] ?? email.sender.trim();
+    const emailOutcome: EmailSyncOutcome = listings.length === 0
+      ? "no_listings"
+      : emailImported > 0 && emailSkipped === 0
+      ? "imported"
+      : emailImported > 0
+      ? "partial"
+      : "all_skipped";
+
+    await db.insert(emailSyncLogTable).values({
+      userId,
+      gmailMessageId: email.messageId,
+      subject: email.subject,
+      senderEmail,
+      senderName: parseSenderName(email.sender) || null,
+      outcome: emailOutcome,
+      listingsExtracted: listings.length,
+      listingsImported: emailImported,
+      listingsSkipped: emailSkipped,
+      skipReasons: [],
+      hadError,
+    });
 
     // Only mark as read when extraction succeeded — if the LLM call errored,
     // leave the email unread so the next sync automatically retries it.
