@@ -1,7 +1,7 @@
 import { eq, and, isNotNull } from "drizzle-orm";
-import { db, gmailConnectionsTable, jobPostingsTable, userProfilesTable, gmailSeenKeysTable, filteredEmailsTable, emailSyncLogTable } from "@workspace/db";
+import { db, gmailConnectionsTable, jobPostingsTable, userProfilesTable, gmailSeenKeysTable, filteredEmailsTable, emailSyncLogTable, syncEventsTable } from "@workspace/db";
 import type { EmailSyncOutcome } from "@workspace/db";
-import { fetchJobEmails, markEmailAsRead, DEFAULT_EMAIL_FILTER_CRITERIA } from "./gmailClient";
+import { fetchJobEmails, markEmailAsRead, estimateEmailCount, DEFAULT_EMAIL_FILTER_CRITERIA } from "./gmailClient";
 import { extractJobListings } from "./scoringService";
 import { scorePostingBackground, sweepUnscoredPostings } from "./scoringService";
 import { isFuzzyDuplicate, runDedupSweep } from "./dedup";
@@ -96,7 +96,43 @@ function isApplicationResponseEmail(subject: string, body: string): boolean {
   return APPLICATION_RESPONSE_PHRASES.some((phrase) => combined.includes(phrase));
 }
 
-async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promise<number> {
+export interface SyncUserResult {
+  synced: number;
+  lastSyncedAt: Date;
+}
+
+/** Per-user lock: prevents concurrent syncUser calls for the same userId. */
+const activeSyncs = new Set<string>();
+
+/**
+ * Sync a single user's Gmail inbox.
+ * @param conn             The user's Gmail connection row.
+ * @param emailsPreFilter  Pre-computed estimate of matching emails before fetch
+ *                         (pass 0 when calling from the scheduler).
+ */
+export async function syncUser(
+  conn: typeof gmailConnectionsTable.$inferSelect,
+  emailsPreFilter = 0,
+): Promise<SyncUserResult> {
+  // Guard: skip if a sync is already in progress for this user.
+  if (activeSyncs.has(conn.userId)) {
+    logger.warn({ userId: conn.userId }, "gmailScheduler: sync already in progress for user — skipping concurrent call");
+    const lastSyncedAt = conn.lastSyncedAt ? new Date(conn.lastSyncedAt) : new Date();
+    return { synced: 0, lastSyncedAt };
+  }
+  activeSyncs.add(conn.userId);
+
+  try {
+    return await _syncUserInner(conn, emailsPreFilter);
+  } finally {
+    activeSyncs.delete(conn.userId);
+  }
+}
+
+async function _syncUserInner(
+  conn: typeof gmailConnectionsTable.$inferSelect,
+  emailsPreFilter: number,
+): Promise<SyncUserResult> {
   const [userProfile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, conn.userId));
   const filterCriteria = userProfile?.emailFilterSettings ?? DEFAULT_EMAIL_FILTER_CRITERIA;
 
@@ -107,7 +143,7 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
     if ((err as Error)?.message?.includes("invalid_grant")) {
       logger.warn({ userId: conn.userId }, "gmailScheduler: invalid_grant — removing stale connection");
       await db.delete(gmailConnectionsTable).where(eq(gmailConnectionsTable.userId, conn.userId));
-      return 0;
+      return { synced: 0, lastSyncedAt: new Date() };
     }
     throw err;
   }
@@ -118,8 +154,21 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
     .where(eq(gmailSeenKeysTable.userId, conn.userId));
 
   const processedBaseIds = new Set(seenKeys.map((r) => r.gmailKey.split(":")[0]));
-  const newEmails = emails.filter((e) => !processedBaseIds.has(e.messageId));
+  // Also deduplicate within the fetched batch itself (Gmail API can return the
+  // same message ID twice when a message matches multiple query conditions).
+  const seenInBatch = new Set<string>();
+  const newEmails = emails.filter((e) => {
+    if (processedBaseIds.has(e.messageId) || seenInBatch.has(e.messageId)) return false;
+    seenInBatch.add(e.messageId);
+    return true;
+  });
+
   let synced = 0;
+  let jobsExtracted = 0;
+  let jobsSkippedDedup = 0;
+  let jobsSkippedActiveDup = 0;
+  let jobsSkippedUserDeleted = 0;
+  let jobsSkippedApplied = 0;
 
   for (const email of newEmails) {
     if (!email.body.trim()) continue;
@@ -151,6 +200,7 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
     }
 
     const { listings, hadError } = await extractJobListings(email.body, email.subject, email.sender);
+    jobsExtracted += listings.length;
 
     const blockedKeywords = filterCriteria.blockedBodyKeywords ?? [];
     let emailImported = 0;
@@ -245,6 +295,10 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
         });
         emailSkipped++;
         emailSkipReasons.add(dupReason);
+        jobsSkippedDedup++;
+        if (wasDeleted) jobsSkippedUserDeleted++;
+        else if (wasApplied) jobsSkippedApplied++;
+        else jobsSkippedActiveDup++;
         continue;
       }
 
@@ -306,6 +360,19 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
     .set({ lastSyncedAt, updatedAt: lastSyncedAt })
     .where(eq(gmailConnectionsTable.userId, conn.userId));
 
+  await db.insert(syncEventsTable).values({
+    userId: conn.userId,
+    source: "gmail",
+    emailsPreFilter,
+    emailsFetched: emails.length,
+    jobsExtracted,
+    jobsImported: synced,
+    jobsSkippedDedup,
+    jobsSkippedActiveDup,
+    jobsSkippedUserDeleted,
+    jobsSkippedApplied,
+  });
+
   sweepUnscoredPostings(conn.userId).catch((err) => {
     logger.warn({ userId: conn.userId, err }, "Gmail scheduler: sweep unscored postings failed");
   });
@@ -318,7 +385,7 @@ async function syncUser(conn: typeof gmailConnectionsTable.$inferSelect): Promis
     logger.warn({ userId: conn.userId, err }, "Gmail scheduler: dedup sweep failed");
   });
 
-  return synced;
+  return { synced, lastSyncedAt };
 }
 
 async function checkAndSyncUsers(): Promise<void> {
@@ -359,7 +426,7 @@ async function checkAndSyncUsers(): Promise<void> {
         "Gmail scheduler: running scheduled sync for user",
       );
 
-      const synced = await syncUser(conn);
+      const { synced } = await syncUser(conn);
       logger.info({ userId: conn.userId, synced }, "Gmail scheduler: scheduled sync complete");
     } catch (err) {
       logger.error({ userId: conn.userId, err }, "Gmail scheduler: failed to sync user");

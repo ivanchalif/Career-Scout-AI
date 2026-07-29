@@ -18,6 +18,7 @@ import { scorePostingBackground, sweepUnscoredPostings, extractJobListings } fro
 import { isFuzzyDuplicate } from "../lib/dedup";
 import { fetchJobPageContent } from "../lib/pageScraper";
 import { logger } from "../lib/logger";
+import { syncUser } from "../lib/gmailScheduler";
 
 /** Extracts the display name from a raw "From" header value. */
 function parseSenderName(sender: string): string {
@@ -143,11 +144,16 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
   const [userProfile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, userId));
   const filterCriteria = userProfile?.emailFilterSettings ?? undefined;
 
+  // Estimate matching email count before fetch (for sync event logging).
   const emailsPreFilter = await estimateEmailCount(conn.accessToken, conn.refreshToken, filterCriteria);
 
-  let emails: Awaited<ReturnType<typeof fetchJobEmails>>;
+  // Delegate to the shared syncUser function — this ensures the manual sync
+  // and the background scheduler use exactly the same processing logic, and
+  // that only one sync can run at a time for a given user.
+  let synced: number;
+  let lastSyncedAt: Date;
   try {
-    emails = await fetchJobEmails(conn.accessToken, conn.refreshToken, filterCriteria);
+    ({ synced, lastSyncedAt } = await syncUser(conn, emailsPreFilter));
   } catch (err) {
     if ((err as Error)?.message?.includes("invalid_grant")) {
       logger.warn({ userId }, "gmail sync: invalid_grant — removing stale connection");
@@ -160,166 +166,6 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
     }
     throw err;
   }
-
-  const seenKeys = await db
-    .select({ gmailKey: gmailSeenKeysTable.gmailKey })
-    .from(gmailSeenKeysTable)
-    .where(eq(gmailSeenKeysTable.userId, userId));
-
-  const processedBaseIds = new Set(
-    seenKeys.map((r) => r.gmailKey.split(":")[0]),
-  );
-
-  const newEmails = emails.filter((e) => !processedBaseIds.has(e.messageId));
-  let synced = 0;
-  let jobsExtracted = 0;
-  let jobsSkippedDedup = 0;
-  let jobsSkippedActiveDup = 0;
-  let jobsSkippedUserDeleted = 0;
-  let jobsSkippedApplied = 0;
-
-  for (const email of newEmails) {
-    if (!email.body.trim()) continue;
-
-    const { listings, hadError } = await extractJobListings(email.body, email.subject, email.sender);
-    jobsExtracted += listings.length;
-
-    let emailImported = 0;
-    let emailSkipped = 0;
-
-    for (let i = 0; i < listings.length; i++) {
-      const listing = listings[i];
-      if (!listing.description.trim()) continue;
-
-      const gmailKey = `${email.messageId}:${i}`;
-      const title = listing.title || email.subject.slice(0, 200) || "Job Opportunity";
-      const company = listing.company || extractSender(email.sender);
-
-      await db
-        .insert(gmailSeenKeysTable)
-        .values({ userId, gmailKey })
-        .onConflictDoNothing();
-
-      const { isDuplicate, matchedTitle, matchedCompany, wasDeleted, wasApplied } = await isFuzzyDuplicate(userId, title, company);
-      if (isDuplicate) {
-        logger.info(
-          { userId, title, company, matchedTitle, matchedCompany, wasDeleted, wasApplied },
-          wasDeleted
-            ? "gmail sync: skipping posting previously dismissed by user"
-            : wasApplied
-            ? "gmail sync: skipping posting already applied to"
-            : "gmail sync: skipping fuzzy duplicate posting",
-        );
-        jobsSkippedDedup++;
-        if (wasDeleted) jobsSkippedUserDeleted++;
-        else if (wasApplied) jobsSkippedApplied++;
-        else jobsSkippedActiveDup++;
-        emailSkipped++;
-        continue;
-      }
-
-      // Always fetch the job page when a URL is available:
-      //  - Resolves tracking redirects (Lensa, Jobgether, etc.) → real job URL
-      //  - Enriches description when the email excerpt is short
-      let fullDescription = listing.description;
-      const jobUrl = listing.url;
-      let resolvedUrl = jobUrl;
-
-      if (jobUrl) {
-        const pageResult = await fetchJobPageContent(jobUrl);
-        if (pageResult) {
-          // Always capture finalUrl — real job URL after following tracking redirects.
-          resolvedUrl = pageResult.finalUrl;
-          if (pageResult.contentUsable && pageResult.content.length > fullDescription.length) {
-            logger.info({ title, company, finalUrl: pageResult.finalUrl, chars: pageResult.content.length }, "gmail sync: using fetched page content");
-            fullDescription = pageResult.content;
-          } else if (pageResult.contentUsable) {
-            logger.info({ title, company, finalUrl: pageResult.finalUrl }, "gmail sync: resolved URL, keeping email description");
-          } else {
-            logger.info({ title, company, jobUrl, finalUrl: pageResult.finalUrl }, "gmail sync: page content unusable, stored finalUrl, using email excerpt");
-          }
-        }
-      }
-
-      const [newPosting] = await db
-        .insert(jobPostingsTable)
-        .values({
-          userId,
-          title,
-          company,
-          fullDescription: fullDescription.slice(0, 10_000),
-          link: resolvedUrl ?? null,
-          source: "gmail",
-          senderName: parseSenderName(email.sender),
-          gmailMessageId: gmailKey,
-          extractedSkills: [],
-        })
-        .onConflictDoNothing()
-        .returning();
-      if (newPosting) {
-        scorePostingBackground(newPosting.id, userId);
-        synced++;
-        emailImported++;
-      } else {
-        emailSkipped++;
-      }
-    }
-
-    const senderEmailMatch = email.sender.match(/<([^>]+)>/);
-    const senderEmail = senderEmailMatch?.[1] ?? email.sender.trim();
-    const emailOutcome: EmailSyncOutcome = listings.length === 0
-      ? "no_listings"
-      : emailImported > 0 && emailSkipped === 0
-      ? "imported"
-      : emailImported > 0
-      ? "partial"
-      : "all_skipped";
-
-    await db.insert(emailSyncLogTable).values({
-      userId,
-      gmailMessageId: email.messageId,
-      subject: email.subject,
-      senderEmail,
-      senderName: parseSenderName(email.sender) || null,
-      outcome: emailOutcome,
-      listingsExtracted: listings.length,
-      listingsImported: emailImported,
-      listingsSkipped: emailSkipped,
-      skipReasons: [],
-      hadError,
-    });
-
-    // Only mark as read when extraction succeeded — if the LLM call errored,
-    // leave the email unread so the next sync automatically retries it.
-    if (!hadError) {
-      await markEmailAsRead(conn.accessToken, conn.refreshToken, email.messageId);
-    } else {
-      logger.warn({ messageId: email.messageId }, "gmail sync: extraction errored — leaving email unread for retry");
-    }
-  }
-
-  const lastSyncedAt = new Date();
-  await db
-    .update(gmailConnectionsTable)
-    .set({ lastSyncedAt, updatedAt: lastSyncedAt })
-    .where(eq(gmailConnectionsTable.userId, userId));
-
-  await db.insert(syncEventsTable).values({
-    userId,
-    source: "gmail",
-    emailsPreFilter,
-    emailsFetched: emails.length,
-    jobsExtracted,
-    jobsImported: synced,
-    jobsSkippedDedup,
-    jobsSkippedActiveDup,
-    jobsSkippedUserDeleted,
-    jobsSkippedApplied,
-  });
-
-  sweepUnscoredPostings(userId).catch((err) => {
-    logger.warn({ userId, err }, "gmail sync: sweep unscored postings failed");
-  });
 
   res.json({
     synced,
