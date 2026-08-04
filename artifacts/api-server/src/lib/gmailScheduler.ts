@@ -15,7 +15,7 @@ function parseSenderName(sender: string): string {
   return sender.trim();
 }
 
-const CHECK_INTERVAL_MS = 5 * 60 * 1000; // check every 5 minutes
+const CHECK_INTERVAL_MS = 1 * 60 * 1000; // check every 1 minute
 const DEFAULT_SYNC_HOURS = 1; // used when user has Gmail connected but no schedule set
 
 // Sender domains that never send job postings — used to short-circuit processing
@@ -438,7 +438,7 @@ export function startGmailScheduler(): void {
   const checkIntervalMinutes = CHECK_INTERVAL_MS / 60_000;
   logger.info(
     { checkIntervalMinutes, defaultSyncHours: DEFAULT_SYNC_HOURS },
-    "Gmail scheduler: starting (checks every 5 min, respects per-user schedule)",
+    "Gmail scheduler: starting",
   );
 
   // Run immediately on startup so the first sync is not delayed by the full
