@@ -165,19 +165,29 @@ export async function isFuzzyDuplicate(
 }
 
 /**
+ * How long (in milliseconds) a freshly-imported posting is protected from the
+ * auto-dedup sweep. Jobs created within this window are exempt so that users
+ * always get a chance to see newly-arrived roles before any sweep removes them.
+ */
+const SWEEP_GRACE_PERIOD_MS = 4 * 60 * 60 * 1000; // 4 hours
+
+/**
  * Sweeps all active postings for `userId` and soft-deletes any that fuzzy-match
  * a posting the user has already deleted or applied to.
  *
- * Uses tiered thresholds so that same-company near-duplicates are caught even
- * when the wording differs slightly:
- *   Standard path  — title > 0.70 AND company > 0.60 (original behaviour)
- *   Same-co path   — title > 0.50 AND company > 0.85 (catches role variants at
- *                    the same company, e.g. "Director PM" vs "Director PM – AI"
- *                    when the company name is essentially identical)
+ * Uses a single threshold:
+ *   Standard path  — title > 0.70 AND company > 0.60
  *
- * Both conditions only match against applied or deleted rows so that active
- * duplicates of *other* active postings are never silently removed here
- * (that is handled by sweepDuplicatesOf).
+ * The former second-tier (title > 0.50 AND company > 0.85) has been removed
+ * because it was too aggressive: generic VP/Director titles at the same company
+ * caused legitimate new roles to be deleted within minutes of import.
+ *
+ * Grace period: postings created within SWEEP_GRACE_PERIOD_MS (4 hours) are
+ * excluded from deletion so users always see freshly-imported jobs first.
+ *
+ * Only matches against applied or deleted rows so that active duplicates of
+ * *other* active postings are never silently removed here (that is handled by
+ * sweepDuplicatesOf).
  *
  * Runs as a single SQL query instead of N+1 isFuzzyDuplicate calls.
  *
@@ -192,6 +202,7 @@ export async function runDedupSweep(userId: string): Promise<number> {
   //      abbreviation expansion is still used by isFuzzyDuplicate at import time)
   const simpleNorm = "btrim(regexp_replace(regexp_replace(lower(title), '[^a-z0-9 ]', ' ', 'g'), ' +', ' ', 'g'))";
   const simpleNormCo = "btrim(regexp_replace(regexp_replace(lower(company), '[^a-z0-9 ]', ' ', 'g'), ' +', ' ', 'g'))";
+  const graceCutoff = new Date(Date.now() - SWEEP_GRACE_PERIOD_MS);
 
   const rows = await db.execute(sql`
     WITH active AS (
@@ -201,6 +212,7 @@ export async function runDedupSweep(userId: string): Promise<number> {
       FROM job_postings
       WHERE user_id = ${userId}
         AND deleted_at IS NULL AND closed_at IS NULL AND applied_at IS NULL
+        AND created_at < ${graceCutoff}
     ),
     already_actioned AS (
       SELECT id,
@@ -213,11 +225,8 @@ export async function runDedupSweep(userId: string): Promise<number> {
     )
     SELECT DISTINCT a.id
     FROM active a, already_actioned p
-    WHERE (
-      (similarity(a.ntitle, p.ntitle) > 0.70 AND similarity(a.ncompany, p.ncompany) > 0.60)
-      OR
-      (similarity(a.ntitle, p.ntitle) > 0.50 AND similarity(a.ncompany, p.ncompany) > 0.85)
-    )
+    WHERE similarity(a.ntitle, p.ntitle) > 0.70
+      AND similarity(a.ncompany, p.ncompany) > 0.60
   `);
 
   const toDelete = (rows.rows as { id: number }[]).map((r) => r.id);
@@ -225,7 +234,7 @@ export async function runDedupSweep(userId: string): Promise<number> {
   if (toDelete.length > 0) {
     await db
       .update(jobPostingsTable)
-      .set({ deletedAt: new Date(), fullDescription: "" })
+      .set({ deletedAt: new Date(), deletedBy: "sweep", fullDescription: "" })
       .where(and(eq(jobPostingsTable.userId, userId), inArray(jobPostingsTable.id, toDelete)));
   }
 
@@ -237,9 +246,15 @@ export async function runDedupSweep(userId: string): Promise<number> {
  * fuzzy-match `title` + `company`, excludes the posting that was just actioned
  * (`excludeId`), and soft-deletes them in bulk.
  *
- * Uses the same tiered thresholds as runDedupSweep:
- *   Standard  — title > 0.70 AND company > 0.60
- *   Same-co   — title > 0.50 AND company > 0.85
+ * Threshold: title > 0.70 AND company > 0.60 (same as runDedupSweep).
+ * The former second-tier (title > 0.50 AND company > 0.85) has been removed
+ * for the same reason as in runDedupSweep — it caused false positives on
+ * generic VP/Director roles at the same company.
+ *
+ * Grace period: postings created within SWEEP_GRACE_PERIOD_MS are excluded so
+ * that freshly imported jobs are always visible to the user before any
+ * automatic sweep removes them. This mirrors the protection in runDedupSweep
+ * and guarantees the 4-hour window across both automatic deletion paths.
  *
  * Intended to be called in the background after a posting is deleted or marked
  * applied so that near-duplicate active cards disappear automatically.
@@ -257,6 +272,8 @@ export async function sweepDuplicatesOf(
 
   if (!normTitle || !normCompany) return 0;
 
+  const graceCutoff = new Date(Date.now() - SWEEP_GRACE_PERIOD_MS);
+
   const rows = await db.execute(sql`
     SELECT id
     FROM job_postings
@@ -265,27 +282,15 @@ export async function sweepDuplicatesOf(
       AND deleted_at IS NULL
       AND closed_at IS NULL
       AND applied_at IS NULL
-      AND (
-        (
-          similarity(
-            btrim(regexp_replace(regexp_replace(lower(title), '[^a-z0-9 ]', ' ', 'g'), ' +', ' ', 'g')),
-            ${normTitle}
-          ) > 0.70
-          AND similarity(
-            btrim(regexp_replace(regexp_replace(lower(company), '[^a-z0-9 ]', ' ', 'g'), ' +', ' ', 'g')),
-            ${normCompany}
-          ) > 0.60
-        ) OR (
-          similarity(
-            btrim(regexp_replace(regexp_replace(lower(title), '[^a-z0-9 ]', ' ', 'g'), ' +', ' ', 'g')),
-            ${normTitle}
-          ) > 0.50
-          AND similarity(
-            btrim(regexp_replace(regexp_replace(lower(company), '[^a-z0-9 ]', ' ', 'g'), ' +', ' ', 'g')),
-            ${normCompany}
-          ) > 0.85
-        )
-      )
+      AND created_at < ${graceCutoff}
+      AND similarity(
+        btrim(regexp_replace(regexp_replace(lower(title), '[^a-z0-9 ]', ' ', 'g'), ' +', ' ', 'g')),
+        ${normTitle}
+      ) > 0.70
+      AND similarity(
+        btrim(regexp_replace(regexp_replace(lower(company), '[^a-z0-9 ]', ' ', 'g'), ' +', ' ', 'g')),
+        ${normCompany}
+      ) > 0.60
   `);
 
   if (rows.rows.length === 0) return 0;
@@ -294,7 +299,7 @@ export async function sweepDuplicatesOf(
 
   await db
     .update(jobPostingsTable)
-    .set({ deletedAt: new Date(), fullDescription: "" })
+    .set({ deletedAt: new Date(), deletedBy: "sweep", fullDescription: "" })
     .where(and(eq(jobPostingsTable.userId, userId), inArray(jobPostingsTable.id, ids)));
 
   return ids.length;

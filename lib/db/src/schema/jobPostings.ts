@@ -23,6 +23,8 @@ export const jobPostingsTable = pgTable("job_postings", {
   appliedAt: timestamp("applied_at", { withTimezone: true }),
   closedAt: timestamp("closed_at", { withTimezone: true }),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  /** Who triggered the soft-delete: "user" = explicit user action, "sweep" = auto-dedup sweep. */
+  deletedBy: text("deleted_by"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   unique("job_postings_user_gmail_key").on(table.userId, table.gmailMessageId),

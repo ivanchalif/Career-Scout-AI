@@ -573,7 +573,7 @@ router.delete("/postings/:id", requireAuth, async (req, res): Promise<void> => {
 
   const [posting] = await db
     .update(jobPostingsTable)
-    .set({ deletedAt: new Date(), fullDescription: "" })
+    .set({ deletedAt: new Date(), deletedBy: "user", fullDescription: "" })
     .where(and(eq(jobPostingsTable.id, params.data.id), eq(jobPostingsTable.userId, userId), isNull(jobPostingsTable.deletedAt)))
     .returning();
 
@@ -868,7 +868,7 @@ router.post("/postings/:id/flag-duplicate", requireAuth, async (req, res): Promi
 
   await db
     .update(jobPostingsTable)
-    .set({ deletedAt: new Date(), fullDescription: "" })
+    .set({ deletedAt: new Date(), deletedBy: "user", fullDescription: "" })
     .where(and(eq(jobPostingsTable.id, id), eq(jobPostingsTable.userId, userId)));
 
   logger.info(
