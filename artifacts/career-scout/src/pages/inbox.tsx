@@ -345,10 +345,32 @@ export default function InboxPage() {
                 </div>
 
                 {gmailStatus.lastSyncedAt ? (
-                  <p className="text-xs text-muted-foreground">
-                    Last synced: {new Date(gmailStatus.lastSyncedAt).toLocaleString()} &middot;{" "}
-                    {gmailStatus.postingCount} job email{gmailStatus.postingCount === 1 ? "" : "s"} found
-                  </p>
+                  <div className="space-y-0.5">
+                    <p className="text-xs text-muted-foreground">
+                      Last synced: {new Date(gmailStatus.lastSyncedAt).toLocaleString()} &middot;{" "}
+                      {gmailStatus.postingCount} job email{gmailStatus.postingCount === 1 ? "" : "s"} found
+                    </p>
+                    {syncScheduleHours && (() => {
+                      const nextAt = new Date(new Date(gmailStatus.lastSyncedAt!).getTime() + syncScheduleHours * 3_600_000);
+                      const diffMs = nextAt.getTime() - Date.now();
+                      let label: string;
+                      if (diffMs <= 0) {
+                        label = "syncing soon";
+                      } else {
+                        const mins = Math.round(diffMs / 60_000);
+                        if (mins < 60) {
+                          label = `~${mins} minute${mins === 1 ? "" : "s"}`;
+                        } else {
+                          label = `at ${nextAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+                        }
+                      }
+                      return (
+                        <p className="text-xs text-muted-foreground">
+                          Next sync{diffMs > 0 && diffMs < 3_600_000 ? " in " : " "}{label}
+                        </p>
+                      );
+                    })()}
+                  </div>
                 ) : (
                   <p className="text-xs text-muted-foreground">
                     Never synced yet — click Sync now to start.
