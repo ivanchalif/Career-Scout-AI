@@ -97,6 +97,8 @@ export interface JobPosting {
   /** @nullable */
   deletedAt?: string | null;
   /** @nullable */
+  deletedBy?: string | null;
+  /** @nullable */
   closedAt?: string | null;
   createdAt: string;
 }

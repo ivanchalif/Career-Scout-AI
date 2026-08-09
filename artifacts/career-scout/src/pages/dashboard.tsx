@@ -160,6 +160,7 @@ export default function DashboardPage() {
   const [nearDupMap, setNearDupMap] = useState<Map<number, NearDupPair & { isId1: boolean }>>(new Map());
   const [dismissedNearDups, setDismissedNearDups] = useState<Set<number>>(new Set());
   const [reviewingNearDups, setReviewingNearDups] = useState<Set<number>>(new Set());
+  const [autoSweepCount, setAutoSweepCount] = useState<number | null>(null);
 
   useEffect(() => {
     const SESSION_KEY = "dedup-sweep-done";
@@ -171,9 +172,11 @@ export default function DashboardPage() {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-    }).then((res) => {
+    }).then(async (res) => {
       if (res.ok) {
         sessionStorage.setItem(SESSION_KEY, "1");
+        const { removed } = await res.json() as { removed: number };
+        if (removed > 0) setAutoSweepCount(removed);
         qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
         qc.invalidateQueries({ queryKey: getListDeletedPostingsQueryKey() });
         qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
@@ -993,6 +996,29 @@ export default function DashboardPage() {
           />
         </div>
 
+        {/* Auto-sweep banner */}
+        {autoSweepCount != null && (
+          <div className="flex items-center gap-3 mb-4 px-4 py-2.5 bg-amber-950/40 border border-amber-800/50 rounded-lg text-sm text-amber-300">
+            <Layers className="w-4 h-4 shrink-0" />
+            <span className="flex-1">
+              <strong>{autoSweepCount}</strong> duplicate job{autoSweepCount === 1 ? " was" : "s were"} automatically removed this session.{" "}
+              <button
+                className="underline underline-offset-2 hover:text-amber-200 transition-colors"
+                onClick={() => { setActiveTab("deleted"); setAutoSweepCount(null); }}
+              >
+                View in Deleted tab
+              </button>
+            </span>
+            <button
+              className="text-amber-400/60 hover:text-amber-300 transition-colors shrink-0"
+              onClick={() => setAutoSweepCount(null)}
+              aria-label="Dismiss"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
         {/* View tabs + Filters — single row */}
         <div className="flex items-center border-b border-border mb-5">
           {/* Filters on left — icon-only on mobile */}
@@ -1216,6 +1242,12 @@ export default function DashboardPage() {
                         <ScoreBadge score={score} />
                         <span className="font-semibold text-foreground line-through">{posting.title}</span>
                         <Badge variant="secondary" className="text-xs">{posting.senderName ?? posting.source}</Badge>
+                        {posting.deletedBy === "sweep" && (
+                          <Badge variant="outline" className="text-xs text-amber-400 border-amber-800/50 gap-1">
+                            <Layers className="w-3 h-3" />
+                            Removed automatically
+                          </Badge>
+                        )}
                         {isClosed && (
                           <Badge variant="outline" className="text-xs text-orange-400 border-orange-800/50 gap-1">
                             <Archive className="w-3 h-3" />
