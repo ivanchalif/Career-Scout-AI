@@ -1,5 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { htmlToPlainText, parseArbeitnowPayload } from "../sources/arbeitnow";
+import { blockedKeywordForCandidate, isUsOrCanadaCandidate, rankCandidate } from "../onlineDiscovery";
+
+const candidate = (overrides: Partial<{
+  location: string | null;
+  remote: boolean;
+  description: string;
+}> = {}) => ({
+  provider: "arbeitnow" as const,
+  sourceJobId: "role-1",
+  title: "Senior Product Manager",
+  company: "Example Co",
+  description: "Own product strategy and roadmaps.",
+  url: "https://example.com/jobs/role-1",
+  location: "New York, NY",
+  remote: false,
+  tags: ["Product Management"],
+  postedAt: null,
+  ...overrides,
+});
 
 describe("Arbeitnow source adapter", () => {
   it("normalizes valid feed records and ignores unusable entries", () => {
@@ -35,5 +54,31 @@ describe("Arbeitnow source adapter", () => {
   it("converts job HTML into readable plain text", () => {
     expect(htmlToPlainText("<script>ignore()</script><p>Hello&nbsp;world</p><ul><li>One</li></ul>"))
       .toBe("Hello world\nOne");
+  });
+
+  it("limits online discovery to US and Canadian jobs", () => {
+    expect(isUsOrCanadaCandidate(candidate())).toBe(true);
+    expect(isUsOrCanadaCandidate(candidate({ location: "Toronto, Canada" }))).toBe(true);
+    expect(isUsOrCanadaCandidate(candidate({ location: "Remote - United States", remote: true }))).toBe(true);
+    expect(isUsOrCanadaCandidate(candidate({ location: "Berlin, Germany" }))).toBe(false);
+    expect(isUsOrCanadaCandidate(candidate({ location: "Remote", remote: true, description: "Remote worldwide role." }))).toBe(false);
+  });
+
+  it("uses the same profile exclusions and blocked-description screening", () => {
+    const usCandidate = candidate();
+    expect(rankCandidate(usCandidate, {
+      roleTitles: ["Senior Product Manager"],
+      skills: ["Product Management"],
+      locations: [],
+      remotePreferences: [],
+    }, { titleExcludeKeywords: ["contract"], companyFilterSettings: { mode: "off", companies: [] } })).toBeGreaterThan(0);
+    expect(rankCandidate(candidate({ location: "London, UK" }), {
+      roleTitles: ["Senior Product Manager"],
+      skills: ["Product Management"],
+      locations: [],
+      remotePreferences: [],
+    }, { titleExcludeKeywords: [], companyFilterSettings: { mode: "off", companies: [] } })).toBeNull();
+    expect(blockedKeywordForCandidate(candidate({ description: "This is a contract-to-hire opportunity." }), ["contract-to-hire"]))
+      .toBe("contract-to-hire");
   });
 });

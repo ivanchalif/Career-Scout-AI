@@ -2,12 +2,15 @@ import { and, eq } from "drizzle-orm";
 import { db, jobPostingsTable, jobPostingSourcesTable, userProfilesTable } from "@workspace/db";
 import { canonicalizeJobUrl, isFuzzyDuplicate, normalizeFuzzy } from "./dedup";
 import { logger } from "./logger";
+import { fetchJobPageContent } from "./pageScraper";
 import { scorePostingBackground } from "./scoringService";
 import { fetchArbeitnowJobs, type OnlineJobCandidate } from "./sources/arbeitnow";
 
 const SOURCE = "arbeitnow";
 const MAX_CANDIDATES_PER_RUN = 12;
 const activeDiscoveryRuns = new Set<string>();
+const NORTH_AMERICA_LOCATION_PATTERN = /\b(?:united states|u\.?\s*s\.?\s*a?\.?|usa|canada|north america|alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming|ontario|quebec|nova scotia|new brunswick|manitoba|british columbia|prince edward island|saskatchewan|alberta|newfoundland and labrador|toronto|vancouver|montreal|calgary|ottawa|edmonton|winnipeg|quebec city)\b/i;
+const NORTH_AMERICA_STATE_CODE_PATTERN = /\b(?:al|ak|az|ar|ca|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy)\b/i;
 
 type Experience = { title?: string; description?: string };
 type CompanyFilter = { mode?: "off" | "include" | "exclude"; companies?: string[] };
@@ -38,6 +41,26 @@ export function buildDiscoveryCriteria(profile: {
   };
 }
 
+/**
+ * Arbeitnow is a worldwide feed. Keep online discovery focused on the user's
+ * requested market instead of importing a remote job with no geographic scope.
+ * The feed's location field is the source of truth; for generic remote labels,
+ * inspect only the beginning of the description where eligibility is usually
+ * stated.
+ */
+export function isUsOrCanadaCandidate(candidate: OnlineJobCandidate): boolean {
+  const location = candidate.location?.trim() ?? "";
+  const locationText = location || (candidate.remote ? candidate.description.slice(0, 800) : "");
+  if (!locationText) return false;
+  return NORTH_AMERICA_LOCATION_PATTERN.test(locationText)
+    || NORTH_AMERICA_STATE_CODE_PATTERN.test(locationText);
+}
+
+export function blockedKeywordForCandidate(candidate: OnlineJobCandidate, blockedKeywords: string[]): string | null {
+  const description = candidate.description.toLowerCase();
+  return blockedKeywords.find((keyword) => keyword.trim() && description.includes(keyword.toLowerCase())) ?? null;
+}
+
 function normalWords(value: string): Set<string> {
   return new Set(normalizeFuzzy(value).split(" ").filter((word) => word.length > 2));
 }
@@ -46,6 +69,8 @@ export function rankCandidate(candidate: OnlineJobCandidate, criteria: Discovery
   titleExcludeKeywords?: string[] | null;
   companyFilterSettings?: unknown;
 }): number | null {
+  if (!isUsOrCanadaCandidate(candidate)) return null;
+
   const title = candidate.title.toLowerCase();
   const company = candidate.company.toLowerCase();
   const excluded = profile.titleExcludeKeywords ?? [];
@@ -133,6 +158,7 @@ export async function runOnlineDiscovery(userId: string) {
       db.select({ id: jobPostingsTable.id, link: jobPostingsTable.link }).from(jobPostingsTable).where(eq(jobPostingsTable.userId, userId)),
     ]);
     const minimum = profile?.onlineDiscoveryMinMatchScore ?? 12;
+    const blockedKeywords = profile?.emailFilterSettings?.blockedBodyKeywords ?? [];
     const candidates = feed
       .map((candidate) => ({ candidate, score: rankCandidate(candidate, criteria, profile ?? {}) }))
       .filter((entry): entry is { candidate: OnlineJobCandidate; score: number } => entry.score !== null && entry.score >= minimum)
@@ -147,14 +173,33 @@ export async function runOnlineDiscovery(userId: string) {
     let matchedExisting = 0;
 
     for (const { candidate } of candidates) {
-      const canonicalUrl = canonicalizeJobUrl(candidate.url);
+      let screenedCandidate = candidate;
+      const pageResult = await fetchJobPageContent(candidate.url);
+      if (pageResult) {
+        screenedCandidate = {
+          ...candidate,
+          url: pageResult.finalUrl,
+          description: pageResult.contentUsable ? pageResult.content : candidate.description,
+        };
+      }
+
+      const blockedKeyword = blockedKeywordForCandidate(screenedCandidate, blockedKeywords);
+      if (blockedKeyword) {
+        logger.info(
+          { userId, title: candidate.title, company: candidate.company, blockedKeyword },
+          "online discovery skipped listing with blocked keyword",
+        );
+        continue;
+      }
+
+      const canonicalUrl = canonicalizeJobUrl(screenedCandidate.url);
       let existingId = sourceByUrl.get(canonicalUrl) ?? postingByUrl.get(canonicalUrl) ?? (candidate.sourceJobId ? sourceById.get(`${candidate.provider}:${candidate.sourceJobId}`) : undefined);
       if (!existingId) {
-        const fuzzy = await isFuzzyDuplicate(userId, candidate.title, candidate.company);
+        const fuzzy = await isFuzzyDuplicate(userId, screenedCandidate.title, screenedCandidate.company);
         existingId = fuzzy.matchedId;
       }
       if (existingId) {
-        await attachSource(userId, existingId, candidate);
+        await attachSource(userId, existingId, screenedCandidate);
         duplicates++;
         matchedExisting++;
         continue;
@@ -165,22 +210,22 @@ export async function runOnlineDiscovery(userId: string) {
         posting = await db.transaction(async (tx) => {
           const [created] = await tx.insert(jobPostingsTable).values({
             userId,
-            title: candidate.title,
-            company: candidate.company,
-            link: candidate.url,
-            fullDescription: candidate.description || `${candidate.title} at ${candidate.company}`,
-            extractedSkills: candidate.tags,
+              title: screenedCandidate.title,
+              company: screenedCandidate.company,
+              link: screenedCandidate.url,
+              fullDescription: screenedCandidate.description || `${screenedCandidate.title} at ${screenedCandidate.company}`,
+              extractedSkills: screenedCandidate.tags,
             source: SOURCE,
-            sourcePostedAt: candidate.postedAt,
-            location: candidate.location,
-            remoteType: candidate.remote ? "remote" : "unknown",
+              sourcePostedAt: screenedCandidate.postedAt,
+              location: screenedCandidate.location,
+              remoteType: screenedCandidate.remote ? "remote" : "unknown",
           }).returning();
           const claimed = await tx.insert(jobPostingSourcesTable).values({
             userId,
             jobPostingId: created.id,
-            provider: candidate.provider,
-            sourceJobId: candidate.sourceJobId,
-            url: candidate.url,
+              provider: screenedCandidate.provider,
+              sourceJobId: screenedCandidate.sourceJobId,
+              url: screenedCandidate.url,
             canonicalUrl,
             isPrimary: true,
           }).onConflictDoNothing().returning({ id: jobPostingSourcesTable.id });
@@ -194,14 +239,14 @@ export async function runOnlineDiscovery(userId: string) {
           .where(and(eq(jobPostingSourcesTable.userId, userId), eq(jobPostingSourcesTable.canonicalUrl, canonicalUrl)));
         if (!winner) throw error;
         sourceByUrl.set(canonicalUrl, winner.jobPostingId);
-        if (candidate.sourceJobId) sourceById.set(`${candidate.provider}:${candidate.sourceJobId}`, winner.jobPostingId);
+        if (screenedCandidate.sourceJobId) sourceById.set(`${screenedCandidate.provider}:${screenedCandidate.sourceJobId}`, winner.jobPostingId);
         duplicates++;
         matchedExisting++;
         continue;
       }
       scorePostingBackground(posting.id, userId);
       sourceByUrl.set(canonicalUrl, posting.id);
-      if (candidate.sourceJobId) sourceById.set(`${candidate.provider}:${candidate.sourceJobId}`, posting.id);
+      if (screenedCandidate.sourceJobId) sourceById.set(`${screenedCandidate.provider}:${screenedCandidate.sourceJobId}`, posting.id);
       imported++;
     }
 

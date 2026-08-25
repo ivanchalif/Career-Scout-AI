@@ -958,11 +958,11 @@ export default function DashboardPage() {
           <div className="flex items-start gap-3">
             <SearchCode className="w-5 h-5 text-violet-300 shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-violet-200">Discover jobs online</p>
+              <p className="text-sm font-medium text-violet-200">Discover US & Canada jobs online</p>
               <p className="text-xs text-violet-300/70 mt-0.5">
                 {discoveryStatus?.criteria.roleTitles.length || discoveryStatus?.criteria.skills.length
                   ? `Matching ${[...discoveryStatus.criteria.roleTitles, ...discoveryStatus.criteria.skills].slice(0, 4).join(", ")}${(discoveryStatus.criteria.roleTitles.length + discoveryStatus.criteria.skills.length) > 4 ? "…" : ""}`
-                  : "Add experience or skills to your profile to start matching."}
+                : "Add experience or skills to your profile to start matching in the US and Canada."}
               </p>
             </div>
             <Button
@@ -1004,7 +1004,7 @@ export default function DashboardPage() {
             <span className="text-xs text-violet-300/60">
               {discoveryStatus?.lastRunAt
                 ? `Last search ${formatAdded(discoveryStatus.lastRunAt)} · ${discoveryStatus.lastImported} added`
-                : "Uses your profile, location, and filters"}
+                : "Uses your profile, US/Canada location, and the same screening as email listings"}
             </span>
           </div>
           {discoveryStatus?.lastError && <p className="text-xs text-destructive">{discoveryStatus.lastError}</p>}
