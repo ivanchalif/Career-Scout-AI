@@ -5,6 +5,7 @@ import { logger } from "./logger";
 import { fetchJobPageContent } from "./pageScraper";
 import { scorePostingBackground } from "./scoringService";
 import { fetchArbeitnowJobs, type OnlineJobCandidate } from "./sources/arbeitnow";
+import { DEFAULT_EMAIL_FILTER_CRITERIA, matchesEmailFilterCriteria, type EmailFilterCriteria } from "./gmailClient";
 
 const SOURCE = "arbeitnow";
 const MAX_CANDIDATES_PER_RUN = 12;
@@ -61,6 +62,24 @@ export function blockedKeywordForCandidate(candidate: OnlineJobCandidate, blocke
   return blockedKeywords.find((keyword) => keyword.trim() && description.includes(keyword.toLowerCase())) ?? null;
 }
 
+function onlineSenderText(candidate: OnlineJobCandidate): string {
+  // Online listings have no email sender. Include the company, provider, and
+  // URL so existing sender/domain filters still work for source domains.
+  return `${candidate.company} ${candidate.provider} ${candidate.url}`;
+}
+
+export function matchesOnlineEmailCriteria(
+  candidate: OnlineJobCandidate,
+  criteria: EmailFilterCriteria,
+): boolean {
+  return matchesEmailFilterCriteria(
+    candidate.title,
+    onlineSenderText(candidate),
+    candidate.description,
+    criteria,
+  );
+}
+
 function normalWords(value: string): Set<string> {
   return new Set(normalizeFuzzy(value).split(" ").filter((word) => word.length > 2));
 }
@@ -68,8 +87,10 @@ function normalWords(value: string): Set<string> {
 export function rankCandidate(candidate: OnlineJobCandidate, criteria: DiscoveryCriteria, profile: {
   titleExcludeKeywords?: string[] | null;
   companyFilterSettings?: unknown;
+  emailFilterSettings?: EmailFilterCriteria | null;
 }): number | null {
   if (!isUsOrCanadaCandidate(candidate)) return null;
+  if (profile.emailFilterSettings && !matchesOnlineEmailCriteria(candidate, profile.emailFilterSettings)) return null;
 
   const title = candidate.title.toLowerCase();
   const company = candidate.company.toLowerCase();
@@ -158,9 +179,12 @@ export async function runOnlineDiscovery(userId: string) {
       db.select({ id: jobPostingsTable.id, link: jobPostingsTable.link }).from(jobPostingsTable).where(eq(jobPostingsTable.userId, userId)),
     ]);
     const minimum = profile?.onlineDiscoveryMinMatchScore ?? 12;
-    const blockedKeywords = profile?.emailFilterSettings?.blockedBodyKeywords ?? [];
+    const emailFilterSettings = profile?.emailFilterSettings ?? DEFAULT_EMAIL_FILTER_CRITERIA;
     const candidates = feed
-      .map((candidate) => ({ candidate, score: rankCandidate(candidate, criteria, profile ?? {}) }))
+      .map((candidate) => ({
+        candidate,
+        score: rankCandidate(candidate, criteria, { ...(profile ?? {}), emailFilterSettings }),
+      }))
       .filter((entry): entry is { candidate: OnlineJobCandidate; score: number } => entry.score !== null && entry.score >= minimum)
       .sort((a, b) => b.score - a.score)
       .slice(0, MAX_CANDIDATES_PER_RUN);
@@ -183,11 +207,18 @@ export async function runOnlineDiscovery(userId: string) {
         };
       }
 
-      const blockedKeyword = blockedKeywordForCandidate(screenedCandidate, blockedKeywords);
+      const blockedKeyword = blockedKeywordForCandidate(screenedCandidate, emailFilterSettings.blockedBodyKeywords ?? []);
       if (blockedKeyword) {
         logger.info(
           { userId, title: candidate.title, company: candidate.company, blockedKeyword },
           "online discovery skipped listing with blocked keyword",
+        );
+        continue;
+      }
+      if (!matchesOnlineEmailCriteria(screenedCandidate, emailFilterSettings)) {
+        logger.info(
+          { userId, title: candidate.title, company: candidate.company },
+          "online discovery skipped listing that did not match email filter criteria",
         );
         continue;
       }

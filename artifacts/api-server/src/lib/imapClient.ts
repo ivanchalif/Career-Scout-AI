@@ -1,7 +1,7 @@
 import { ImapFlow } from "imapflow";
 import { logger } from "./logger";
 import type { JobEmail, EmailFilterCriteria } from "./gmailClient";
-import { DEFAULT_EMAIL_FILTER_CRITERIA } from "./gmailClient";
+import { DEFAULT_EMAIL_FILTER_CRITERIA, matchesEmailFilterCriteria } from "./gmailClient";
 
 export interface ImapCredentials {
   host: string;
@@ -38,31 +38,7 @@ export async function testImapConnection(creds: ImapCredentials): Promise<void> 
 }
 
 function isJobEmail(subject: string, sender: string, body: string, criteria: EmailFilterCriteria): boolean {
-  const allEmpty = criteria.subjectKeywords.length === 0
-    && criteria.fromAddresses.length === 0
-    && criteria.bodyKeywords.length === 0;
-  if (allEmpty) return true;
-
-  const subjectLower = subject.toLowerCase();
-  const senderLower = sender.toLowerCase();
-  const bodyLower = body.toLowerCase();
-
-  const subjectMatch = criteria.subjectKeywords.length > 0
-    && criteria.subjectKeywords.some((kw) => subjectLower.includes(kw.toLowerCase()));
-  const fromMatch = criteria.fromAddresses.length > 0
-    && criteria.fromAddresses.some((addr) => senderLower.includes(addr.toLowerCase()));
-  const bodyMatch = criteria.bodyKeywords.length > 0
-    && criteria.bodyKeywords.some((kw) => bodyLower.includes(kw.toLowerCase()));
-
-  if (!(subjectMatch || fromMatch || bodyMatch)) return false;
-
-  if (criteria.blockedBodyKeywords?.length) {
-    if (criteria.blockedBodyKeywords.some((kw) => bodyLower.includes(kw.toLowerCase()))) {
-      return false;
-    }
-  }
-
-  return true;
+  return matchesEmailFilterCriteria(subject, sender, body, criteria);
 }
 
 function decodeHref(raw: string): string {

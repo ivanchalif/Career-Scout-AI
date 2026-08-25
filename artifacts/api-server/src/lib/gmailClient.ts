@@ -21,6 +21,33 @@ export interface EmailFilterCriteria {
   blockedBodyKeywords?: string[];
 }
 
+/**
+ * Apply the same OR-based include criteria used by Gmail/IMAP filtering.
+ * Blocked body keywords are always exclusions and are checked independently
+ * of whether any include criteria are configured.
+ */
+export function matchesEmailFilterCriteria(
+  subject: string,
+  sender: string,
+  body: string,
+  criteria: EmailFilterCriteria,
+): boolean {
+  const subjectLower = subject.toLowerCase();
+  const senderLower = sender.toLowerCase();
+  const bodyLower = body.toLowerCase();
+  const includeCriteriaEmpty = criteria.subjectKeywords.length === 0
+    && criteria.fromAddresses.length === 0
+    && criteria.bodyKeywords.length === 0;
+
+  const included = includeCriteriaEmpty
+    || criteria.subjectKeywords.some((keyword) => subjectLower.includes(keyword.toLowerCase()))
+    || criteria.fromAddresses.some((address) => senderLower.includes(address.toLowerCase()))
+    || criteria.bodyKeywords.some((keyword) => bodyLower.includes(keyword.toLowerCase()));
+
+  if (!included) return false;
+  return !(criteria.blockedBodyKeywords ?? []).some((keyword) => keyword.trim() && bodyLower.includes(keyword.toLowerCase()));
+}
+
 export const DEFAULT_EMAIL_FILTER_CRITERIA: EmailFilterCriteria = {
   subjectKeywords: DEFAULT_SUBJECT_KEYWORDS,
   fromAddresses: [],

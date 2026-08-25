@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { htmlToPlainText, parseArbeitnowPayload } from "../sources/arbeitnow";
-import { blockedKeywordForCandidate, isUsOrCanadaCandidate, rankCandidate } from "../onlineDiscovery";
+import { blockedKeywordForCandidate, isUsOrCanadaCandidate, matchesOnlineEmailCriteria, rankCandidate } from "../onlineDiscovery";
 
 const candidate = (overrides: Partial<{
   location: string | null;
@@ -80,5 +80,39 @@ describe("Arbeitnow source adapter", () => {
     }, { titleExcludeKeywords: [], companyFilterSettings: { mode: "off", companies: [] } })).toBeNull();
     expect(blockedKeywordForCandidate(candidate({ description: "This is a contract-to-hire opportunity." }), ["contract-to-hire"]))
       .toBe("contract-to-hire");
+  });
+
+  it("applies email include criteria to online title, source, and description", () => {
+    const usCandidate = candidate({ description: "Build product roadmaps and lead discovery." });
+    expect(matchesOnlineEmailCriteria(usCandidate, {
+      subjectKeywords: ["product manager"],
+      fromAddresses: [],
+      bodyKeywords: [],
+      blockedBodyKeywords: [],
+    })).toBe(true);
+    expect(matchesOnlineEmailCriteria(usCandidate, {
+      subjectKeywords: [],
+      fromAddresses: ["example.com"],
+      bodyKeywords: [],
+      blockedBodyKeywords: [],
+    })).toBe(true);
+    expect(matchesOnlineEmailCriteria(usCandidate, {
+      subjectKeywords: [],
+      fromAddresses: [],
+      bodyKeywords: ["roadmaps"],
+      blockedBodyKeywords: [],
+    })).toBe(true);
+    expect(matchesOnlineEmailCriteria(usCandidate, {
+      subjectKeywords: ["sales"],
+      fromAddresses: [],
+      bodyKeywords: [],
+      blockedBodyKeywords: [],
+    })).toBe(false);
+    expect(matchesOnlineEmailCriteria(usCandidate, {
+      subjectKeywords: [],
+      fromAddresses: [],
+      bodyKeywords: [],
+      blockedBodyKeywords: ["roadmaps"],
+    })).toBe(false);
   });
 });
