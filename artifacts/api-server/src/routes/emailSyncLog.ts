@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { and, desc, eq, gte, ilike, lte, or } from "drizzle-orm";
-import { db, emailSyncLogTable } from "@workspace/db";
+import { db, emailSyncLogTable, type EmailSyncOutcome } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router = Router();
@@ -20,15 +20,14 @@ router.get("/email-sync-log", requireAuth, async (req, res) => {
     if (!isNaN(d.getTime())) conditions.push(lte(emailSyncLogTable.processedAt, d));
   }
   if (sender) {
-    conditions.push(
-      or(
+    const senderCondition = or(
         ilike(emailSyncLogTable.senderEmail, `%${sender}%`),
         ilike(emailSyncLogTable.senderName, `%${sender}%`),
-      ),
     );
+    if (senderCondition) conditions.push(senderCondition);
   }
   if (outcome) {
-    conditions.push(eq(emailSyncLogTable.outcome, outcome));
+    conditions.push(eq(emailSyncLogTable.outcome, outcome as EmailSyncOutcome));
   }
 
   const rows = await db

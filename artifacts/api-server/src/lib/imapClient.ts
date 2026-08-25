@@ -130,7 +130,7 @@ export async function fetchImapJobEmails(creds: ImapCredentials, criteria?: Emai
 
       const uids = await client.search({ since, seen: false });
 
-      for (const uid of uids.slice(0, 50)) {
+      for (const uid of (uids || []).slice(0, 50)) {
         try {
           const msg = await client.fetchOne(String(uid), {
             uid: true,
@@ -139,6 +139,7 @@ export async function fetchImapJobEmails(creds: ImapCredentials, criteria?: Emai
             source: true,
           });
 
+          if (!msg) continue;
           const subject = msg.envelope?.subject ?? "(no subject)";
           const sender = msg.envelope?.from?.[0]
             ? `${msg.envelope.from[0].name ?? ""} <${msg.envelope.from[0].address ?? ""}>`.trim()

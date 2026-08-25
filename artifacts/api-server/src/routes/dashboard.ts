@@ -68,11 +68,20 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
 
   // Strong matches: active jobs scoring >= 85
   const strongMatches = activeReports.filter((r) => (r.fitScore ?? 0) >= 85).length;
+  const activePostingById = new Map(activeOnly.map((posting) => [posting.id, posting]));
+  const topMatches = activeReports
+    .sort((a, b) => (b.fitScore ?? -1) - (a.fitScore ?? -1))
+    .slice(0, 5)
+    .flatMap((report) => {
+      const posting = activePostingById.get(report.jobPostingId);
+      return posting ? [{ posting, report }] : [];
+    });
 
   res.json(
     GetDashboardSummaryResponse.parse({
       totalPostings,
       avgFitScore,
+      topMatches,
       strongMatches,
       hasProfile: !!profile,
       gmailConnected: !!gmailConn,

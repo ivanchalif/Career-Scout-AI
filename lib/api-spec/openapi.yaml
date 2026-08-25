@@ -22,6 +22,8 @@ tags:
     description: Object storage upload and serving endpoints.
   - name: gmail
     description: Gmail OAuth connection and inbox sync
+  - name: onlineDiscovery
+    description: Profile-matched online job discovery
 paths:
   /healthz:
     get:
@@ -154,6 +156,10 @@ paths:
             type: string
           description: Filter by source (manual, gmail)
         - name: applied
+          in: query
+          schema:
+            type: boolean
+        - name: hidden
           in: query
           schema:
             type: boolean
@@ -392,6 +398,130 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
+  /online-discovery/status:
+    get:
+      operationId: getOnlineDiscoveryStatus
+      tags: [onlineDiscovery]
+      summary: Get online job discovery status
+      responses:
+        "200":
+          description: Current discovery configuration and the latest run status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OnlineDiscoveryStatus"
+
+  /online-discovery/run:
+    post:
+      operationId: runOnlineDiscovery
+      tags: [onlineDiscovery]
+      summary: Find new online job opportunities matched to the current profile
+      responses:
+        "200":
+          description: Discovery run completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OnlineDiscoveryRunResult"
+        "400":
+          description: Profile needs experience or skills before discovery can run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /online-discovery/settings:
+    put:
+      operationId: updateOnlineDiscoverySettings
+      tags: [onlineDiscovery]
+      summary: Update online job discovery settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OnlineDiscoverySettings"
+      responses:
+        "200":
+          description: Updated discovery status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OnlineDiscoveryStatus"
+
+  /filter-stats:
+    get:
+      operationId: getFilterStats
+      tags: [postings]
+      summary: Get dashboard and sync filtering metrics
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Filtering metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FilterStats"
+
+  /filtered-emails:
+    get:
+      operationId: listFilteredEmails
+      tags: [gmail]
+      summary: List emails skipped during inbox processing
+      responses:
+        "200":
+          description: Skipped emails
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FilteredEmail"
+
+  /email-sync-log:
+    get:
+      operationId: listEmailSyncLog
+      tags: [gmail]
+      summary: List Gmail processing history
+      parameters:
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: sender
+          in: query
+          schema:
+            type: string
+        - name: outcome
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Gmail processing history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EmailSyncLogItem"
 
   /match-reports:
     get:
@@ -767,6 +897,21 @@ components:
           type: ["string", "null"]
         syncScheduleHours:
           type: ["integer", "null"]
+        onlineDiscoveryScheduleHours:
+          type: ["number", "null"]
+        onlineDiscoveryMinMatchScore:
+          type: integer
+        lastOnlineDiscoveryAt:
+          type: ["string", "null"]
+          format: date-time
+        lastOnlineDiscoveryFound:
+          type: integer
+        lastOnlineDiscoveryImported:
+          type: integer
+        lastOnlineDiscoveryDuplicates:
+          type: integer
+        lastOnlineDiscoveryError:
+          type: ["string", "null"]
         createdAt:
           type: string
           format: date-time
@@ -831,6 +976,10 @@ components:
           type: ["string", "null"]
         syncScheduleHours:
           type: ["integer", "null"]
+        onlineDiscoveryScheduleHours:
+          type: ["number", "null"]
+        onlineDiscoveryMinMatchScore:
+          type: integer
 
     JobPosting:
       type: object
@@ -857,6 +1006,9 @@ components:
           type: ["integer", "null"]
         source:
           type: string
+        sourcePostedAt:
+          type: ["string", "null"]
+          format: date-time
         gmailMessageId:
           type: ["string", "null"]
         senderName:
@@ -871,6 +1023,8 @@ components:
         deletedAt:
           type: ["string", "null"]
           format: date-time
+        deletedBy:
+          type: ["string", "null"]
         closedAt:
           type: ["string", "null"]
           format: date-time
@@ -934,9 +1088,269 @@ components:
           oneOf:
             - $ref: "#/components/schemas/MatchReport"
             - type: "null"
+        filterReason:
+          $ref: "#/components/schemas/PostingFilterReason"
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/PostingSource"
       required:
         - posting
         - report
+        
+    PostingFilterReason:
+      type: object
+      properties:
+        byCompany:
+          type: boolean
+        companyReason:
+          type: ["string", "null"]
+        byTitle:
+          type: boolean
+        titleReasons:
+          type: array
+          items:
+            type: string
+      required:
+        - byCompany
+        - companyReason
+        - byTitle
+        - titleReasons
+
+    EmailSyncLogItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        gmailMessageId:
+          type: string
+        subject:
+          type: string
+        senderEmail:
+          type: string
+        senderName:
+          type: ["string", "null"]
+        processedAt:
+          type: string
+          format: date-time
+        outcome:
+          type: string
+          enum: [imported, partial, no_listings, all_skipped, skipped_blocked_sender, skipped_application_response, empty_body]
+        listingsExtracted:
+          type: integer
+        listingsImported:
+          type: integer
+        listingsSkipped:
+          type: integer
+        skipReasons:
+          type: array
+          items:
+            type: string
+      required:
+        - id
+        - gmailMessageId
+        - subject
+        - senderEmail
+        - processedAt
+        - outcome
+        - listingsExtracted
+        - listingsImported
+        - listingsSkipped
+        - skipReasons
+
+    FilteredEmail:
+      type: object
+      properties:
+        id:
+          type: integer
+        gmailMessageId:
+          type: string
+        subject:
+          type: string
+        senderEmail:
+          type: string
+        senderName:
+          type: ["string", "null"]
+        reason:
+          type: string
+          enum: [blocked_sender, application_response, body_keyword, duplicate, duplicate_dismissed, duplicate_applied]
+        blockedKeyword:
+          type: ["string", "null"]
+        listingTitle:
+          type: ["string", "null"]
+        listingCompany:
+          type: ["string", "null"]
+        filteredAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - gmailMessageId
+        - subject
+        - senderEmail
+        - reason
+        - filteredAt
+
+    FilterStats:
+      type: object
+      properties:
+        profileFilters:
+          type: object
+          required: [rawActive, shownOnDashboard, hiddenByCompany, hiddenByTitleKeywords, companyFilterMode, companyFilterCount, titleKeywordCount]
+          properties:
+            rawActive: { type: integer }
+            shownOnDashboard: { type: integer }
+            hiddenByCompany: { type: integer }
+            hiddenByTitleKeywords: { type: integer }
+            companyFilterMode: { type: string, enum: [off, include, exclude] }
+            companyFilterCount: { type: integer }
+            titleKeywordCount: { type: integer }
+        syncHistory:
+          type: array
+          items:
+            type: object
+            required: [id, source, syncedAt, emailsPreFilter, emailsFetched, jobsExtracted, jobsImported, jobsSkippedDedup, jobsSkippedActiveDup, jobsSkippedUserDeleted, jobsSkippedApplied]
+            properties:
+              id: { type: integer }
+              source: { type: string }
+              syncedAt: { type: string, format: date-time }
+              emailsPreFilter: { type: integer }
+              emailsFetched: { type: integer }
+              jobsExtracted: { type: integer }
+              jobsImported: { type: integer }
+              jobsSkippedDedup: { type: integer }
+              jobsSkippedActiveDup: { type: integer }
+              jobsSkippedUserDeleted: { type: integer }
+              jobsSkippedApplied: { type: integer }
+        totalSyncs: { type: integer }
+        totalEmailsPreFilter: { type: integer }
+        totalEmailsFetched: { type: integer }
+        totalJobsExtracted: { type: integer }
+        totalJobsImported: { type: integer }
+        totalJobsSkippedDedup: { type: integer }
+        totalSkippedActiveDup: { type: integer }
+        totalSkippedUserDeleted: { type: integer }
+        totalSkippedApplied: { type: integer }
+      required: [profileFilters, syncHistory, totalSyncs, totalEmailsPreFilter, totalEmailsFetched, totalJobsExtracted, totalJobsImported, totalJobsSkippedDedup, totalSkippedActiveDup, totalSkippedUserDeleted, totalSkippedApplied]
+
+
+    PostingSource:
+      type: object
+      properties:
+        provider:
+          type: string
+        url:
+          type: string
+          format: uri
+        sourceJobId:
+          type: ["string", "null"]
+        isPrimary:
+          type: boolean
+        firstSeenAt:
+          type: string
+          format: date-time
+        lastSeenAt:
+          type: string
+          format: date-time
+      required:
+        - provider
+        - url
+        - isPrimary
+        - firstSeenAt
+        - lastSeenAt
+
+    OnlineDiscoverySettings:
+      type: object
+      properties:
+        scheduleHours:
+          type: ["number", "null"]
+        minimumMatchScore:
+          type: integer
+          minimum: 1
+          maximum: 100
+      required:
+        - scheduleHours
+        - minimumMatchScore
+
+    OnlineDiscoveryCriteria:
+      type: object
+      properties:
+        roleTitles:
+          type: array
+          items:
+            type: string
+        skills:
+          type: array
+          items:
+            type: string
+        locations:
+          type: array
+          items:
+            type: string
+        remotePreferences:
+          type: array
+          items:
+            type: string
+      required:
+        - roleTitles
+        - skills
+        - locations
+        - remotePreferences
+
+    OnlineDiscoveryStatus:
+      type: object
+      properties:
+        source:
+          type: string
+        scheduleHours:
+          type: ["number", "null"]
+        minimumMatchScore:
+          type: integer
+        lastRunAt:
+          type: ["string", "null"]
+          format: date-time
+        nextRunAt:
+          type: ["string", "null"]
+          format: date-time
+        lastFound:
+          type: integer
+        lastImported:
+          type: integer
+        lastDuplicates:
+          type: integer
+        lastError:
+          type: ["string", "null"]
+        criteria:
+          $ref: "#/components/schemas/OnlineDiscoveryCriteria"
+      required:
+        - source
+        - minimumMatchScore
+        - lastFound
+        - lastImported
+        - lastDuplicates
+        - criteria
+
+    OnlineDiscoveryRunResult:
+      allOf:
+        - $ref: "#/components/schemas/OnlineDiscoveryStatus"
+        - type: object
+          properties:
+            fetched:
+              type: integer
+            considered:
+              type: integer
+            imported:
+              type: integer
+            duplicates:
+              type: integer
+            matchedExisting:
+              type: integer
+          required:
+            - fetched
+            - considered
+            - imported
+            - duplicates
+            - matchedExisting
 
     CreatePostingBody:
       type: object

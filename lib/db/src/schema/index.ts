@@ -1,5 +1,6 @@
 export * from "./userProfiles";
 export * from "./jobPostings";
+export * from "./jobPostingSources";
 export * from "./matchReports";
 export * from "./gmailConnections";
 export * from "./gmailSeenKeys";

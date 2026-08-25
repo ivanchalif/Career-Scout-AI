@@ -32,6 +32,25 @@ export function normalizeFuzzy(text: string): string {
     .trim();
 }
 
+/** Removes tracking-only URL details so reposts and email redirects share one identity. */
+export function canonicalizeJobUrl(rawUrl: string): string {
+  try {
+    const url = new URL(rawUrl.trim());
+    url.hash = "";
+    for (const key of [...url.searchParams.keys()]) {
+      if (/^(utm_|ref$|source$|src$|gclid$|fbclid$|trk$)/i.test(key)) {
+        url.searchParams.delete(key);
+      }
+    }
+    url.hostname = url.hostname.toLowerCase().replace(/^www\./, "");
+    url.pathname = url.pathname.replace(/\/+$/, "") || "/";
+    url.searchParams.sort();
+    return url.toString();
+  } catch {
+    return rawUrl.trim().toLowerCase().replace(/\/+$/, "");
+  }
+}
+
 // Suffix list kept in sync with normalizeFuzzy() above so DB-side normalization
 // produces the same output as the JS function.
 const SUFFIX_REGEX =
@@ -107,6 +126,7 @@ export async function isFuzzyDuplicate(
   isDuplicate: boolean;
   matchedTitle?: string;
   matchedCompany?: string;
+  matchedId?: number;
   wasDeleted?: boolean;
   wasApplied?: boolean;
 }> {
@@ -148,6 +168,7 @@ export async function isFuzzyDuplicate(
 
   if (rows.rows.length > 0) {
     const match = rows.rows[0] as {
+      id: number;
       title: string;
       company: string;
       deleted_at: string | null;
@@ -155,6 +176,7 @@ export async function isFuzzyDuplicate(
     };
     return {
       isDuplicate: true,
+      matchedId: match.id,
       matchedTitle: match.title,
       matchedCompany: match.company,
       wasDeleted: match.deleted_at !== null,

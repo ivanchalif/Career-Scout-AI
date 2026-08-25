@@ -10,6 +10,7 @@ import imapRouter from "./imap";
 import filterStatsRouter from "./filterStats";
 import filteredEmailsRouter from "./filteredEmails";
 import emailSyncLogRouter from "./emailSyncLog";
+import onlineDiscoveryRouter from "./onlineDiscovery";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(imapRouter);
 router.use(filterStatsRouter);
 router.use(filteredEmailsRouter);
 router.use(emailSyncLogRouter);
+router.use(onlineDiscoveryRouter);
 
 export default router;

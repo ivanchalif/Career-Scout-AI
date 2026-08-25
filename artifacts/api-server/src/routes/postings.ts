@@ -20,6 +20,7 @@ import { fetchJobPageContent } from "../lib/pageScraper";
 import multer from "multer";
 import { stringify } from "csv-stringify/sync";
 import { parse } from "csv-parse/sync";
+import { z } from "zod";
 
 const router: IRouter = Router();
 
@@ -41,7 +42,11 @@ async function getPostingWithReport(postingId: number, userId: string) {
 
 router.get("/postings", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId;
-  const queryParsed = ListPostingsQueryParams.safeParse(req.query);
+  const queryParsed = ListPostingsQueryParams.safeParse({
+    ...req.query,
+    applied: req.query.applied === "true" ? true : req.query.applied === "false" ? false : req.query.applied,
+    hidden: req.query.hidden === "true" ? true : req.query.hidden === "false" ? false : req.query.hidden,
+  });
   if (!queryParsed.success) {
     res.status(400).json({ error: queryParsed.error.message });
     return;
@@ -709,7 +714,7 @@ router.post("/postings/backfill-links", requireAuth, async (req, res): Promise<v
           continue;
         }
 
-        const listings = await extractJobListings(email.body, email.subject, email.sender);
+        const { listings } = await extractJobListings(email.body, email.subject, email.sender);
 
         for (const posting of group) {
           const idx = Number(posting.gmailMessageId!.split(":")[1] ?? "0");
@@ -780,7 +785,7 @@ router.post("/postings/backfill-links", requireAuth, async (req, res): Promise<v
 // recorded in server logs for future threshold tuning).
 router.post("/postings/:id/retry-link", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId;
-  const id = parseInt(req.params["id"] ?? "", 10);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const [posting] = await db
@@ -817,7 +822,7 @@ router.post("/postings/:id/retry-link", requireAuth, async (req, res): Promise<v
       return;
     }
 
-    const listings = await extractJobListings(email.body, email.subject, email.sender);
+    const { listings } = await extractJobListings(email.body, email.subject, email.sender);
     const idx = Number(posting.gmailMessageId.split(":")[1] ?? "0");
     const listing = listings[idx];
     const jobUrl = listing?.url;
@@ -845,7 +850,7 @@ router.post("/postings/:id/retry-link", requireAuth, async (req, res): Promise<v
 
 router.post("/postings/:id/flag-duplicate", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId;
-  const id = parseInt(req.params["id"] ?? "", 10);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   // Fetch regardless of deletion state so we can be idempotent

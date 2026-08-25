@@ -20,6 +20,9 @@ import {
   useUpdateCompanyFilterSettings,
   useGetTitleExcludeSettings,
   useUpdateTitleExcludeSettings,
+  useGetOnlineDiscoveryStatus,
+  useRunOnlineDiscovery,
+  useUpdateOnlineDiscoverySettings,
   getGetTitleExcludeSettingsQueryKey,
   useListDeletedPostings,
   useRestorePosting,
@@ -30,6 +33,7 @@ import {
   getGetDashboardSummaryQueryKey,
   getGetGmailStatusQueryKey,
   getGetCompanyFilterSettingsQueryKey,
+  getGetOnlineDiscoveryStatusQueryKey,
   type CreatePostingBody,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -161,6 +165,7 @@ export default function DashboardPage() {
   const [dismissedNearDups, setDismissedNearDups] = useState<Set<number>>(new Set());
   const [reviewingNearDups, setReviewingNearDups] = useState<Set<number>>(new Set());
   const [autoSweepCount, setAutoSweepCount] = useState<number | null>(null);
+  const [discoveryMinScore, setDiscoveryMinScore] = useState(12);
 
   useEffect(() => {
     const SESSION_KEY = "dedup-sweep-done";
@@ -332,6 +337,7 @@ export default function DashboardPage() {
   const appliedCountQ = useListPostings({ applied: true });
   const deletedQ = useListDeletedPostings();
   const gmailStatusQ = useGetGmailStatus();
+  const discoveryQ = useGetOnlineDiscoveryStatus();
   const createMutation = useCreatePosting();
   const deleteMutation = useDeletePosting();
   const markAppliedMutation = useMarkApplied();
@@ -340,6 +346,14 @@ export default function DashboardPage() {
   const reopenMutation = useReopenPosting();
   const syncMutation = useSyncGmail();
   const disconnectMutation = useDisconnectGmail();
+  const runDiscoveryMutation = useRunOnlineDiscovery();
+  const updateDiscoveryMutation = useUpdateOnlineDiscoverySettings();
+
+  useEffect(() => {
+    if (discoveryQ.data?.minimumMatchScore != null) {
+      setDiscoveryMinScore(discoveryQ.data.minimumMatchScore);
+    }
+  }, [discoveryQ.data?.minimumMatchScore]);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<CreatePostingBody>({
     defaultValues: { title: "", company: "", fullDescription: "", source: "manual" },
@@ -348,6 +362,37 @@ export default function DashboardPage() {
   const summary = dashboardQ.data;
   const rawPostings = postingsQ.data ?? [];
   const gmailStatus = gmailStatusQ.data;
+  const discoveryStatus = discoveryQ.data;
+
+  function saveDiscoverySettings(scheduleHours: number | null, minimumMatchScore = discoveryMinScore) {
+    updateDiscoveryMutation.mutate(
+      { data: { scheduleHours, minimumMatchScore } },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: getGetOnlineDiscoveryStatusQueryKey() });
+          toast({ title: "Discovery preferences saved" });
+        },
+        onError: () => toast({ title: "Could not save discovery preferences", variant: "destructive" }),
+      },
+    );
+  }
+
+  function onDiscoverOnline() {
+    runDiscoveryMutation.mutate(undefined, {
+      onSuccess: (result) => {
+        qc.invalidateQueries({ queryKey: getGetOnlineDiscoveryStatusQueryKey() });
+        qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+        toast({
+          title: "Online search complete",
+          description: result.imported
+            ? `Added ${result.imported} profile-matched job${result.imported === 1 ? "" : "s"} for scoring.`
+            : result.duplicates ? "No new jobs — matching postings were already saved." : "No new matches found this time.",
+        });
+      },
+      onError: (error: Error) => toast({ title: "Discovery failed", description: error.message, variant: "destructive" }),
+    });
+  }
 
   const tabStats = useMemo(() => {
     const items: Array<{ report?: { fitScore?: number | null } | null }> =
@@ -906,6 +951,63 @@ export default function DashboardPage() {
               <span className="hidden sm:inline">Add job</span>
             </Button>
           </div>
+        </div>
+
+        {/* Profile-matched online discovery */}
+        <div className="flex flex-col bg-violet-950/30 border border-violet-800/40 rounded-xl px-5 pt-4 pb-3 mb-4 gap-3" data-testid="online-discovery-panel">
+          <div className="flex items-start gap-3">
+            <SearchCode className="w-5 h-5 text-violet-300 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-violet-200">Discover jobs online</p>
+              <p className="text-xs text-violet-300/70 mt-0.5">
+                {discoveryStatus?.criteria.roleTitles.length || discoveryStatus?.criteria.skills.length
+                  ? `Matching ${[...discoveryStatus.criteria.roleTitles, ...discoveryStatus.criteria.skills].slice(0, 4).join(", ")}${(discoveryStatus.criteria.roleTitles.length + discoveryStatus.criteria.skills.length) > 4 ? "…" : ""}`
+                  : "Add experience or skills to your profile to start matching."}
+              </p>
+            </div>
+            <Button
+              size="sm"
+              onClick={onDiscoverOnline}
+              disabled={runDiscoveryMutation.isPending}
+              className="bg-violet-600 hover:bg-violet-500 gap-1.5"
+              data-testid="discover-online-button"
+            >
+              <SearchCode className={`w-3.5 h-3.5 ${runDiscoveryMutation.isPending ? "animate-pulse" : ""}`} />
+              {runDiscoveryMutation.isPending ? "Searching…" : "Discover now"}
+            </Button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 border-t border-violet-800/30 pt-2.5">
+            <label className="text-xs text-violet-300/80">Auto-discover</label>
+            <select
+              className="h-8 rounded-md border border-violet-700/50 bg-background px-2 text-xs"
+              value={discoveryStatus?.scheduleHours == null ? "manual" : String(discoveryStatus.scheduleHours)}
+              onChange={(event) => saveDiscoverySettings(event.target.value === "manual" ? null : Number(event.target.value))}
+              disabled={updateDiscoveryMutation.isPending}
+              data-testid="discovery-schedule-select"
+            >
+              <option value="manual">Manually</option>
+              <option value="12">Every 12 hours</option>
+              <option value="24">Daily</option>
+              <option value="72">Every 3 days</option>
+            </select>
+            <label className="text-xs text-violet-300/80 ml-1">Minimum match</label>
+            <Input
+              type="number"
+              min={1}
+              max={100}
+              value={discoveryMinScore}
+              onChange={(event) => setDiscoveryMinScore(Math.min(100, Math.max(1, Number(event.target.value) || 1)))}
+              onBlur={() => saveDiscoverySettings(discoveryStatus?.scheduleHours ?? null)}
+              className="h-8 w-16 text-xs"
+              data-testid="discovery-min-match-input"
+            />
+            <span className="text-xs text-violet-300/60">
+              {discoveryStatus?.lastRunAt
+                ? `Last search ${formatAdded(discoveryStatus.lastRunAt)} · ${discoveryStatus.lastImported} added`
+                : "Uses your profile, location, and filters"}
+            </span>
+          </div>
+          {discoveryStatus?.lastError && <p className="text-xs text-destructive">{discoveryStatus.lastError}</p>}
         </div>
 
         {/* Gmail banner */}

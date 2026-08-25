@@ -48,6 +48,16 @@ export interface UserProfile {
   resumeText?: string | null;
   /** @nullable */
   syncScheduleHours?: number | null;
+  /** @nullable */
+  onlineDiscoveryScheduleHours?: number | null;
+  onlineDiscoveryMinMatchScore?: number;
+  /** @nullable */
+  lastOnlineDiscoveryAt?: string | null;
+  lastOnlineDiscoveryFound?: number;
+  lastOnlineDiscoveryImported?: number;
+  lastOnlineDiscoveryDuplicates?: number;
+  /** @nullable */
+  lastOnlineDiscoveryError?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -68,6 +78,9 @@ export interface UpsertProfileBody {
   resumeText?: string | null;
   /** @nullable */
   syncScheduleHours?: number | null;
+  /** @nullable */
+  onlineDiscoveryScheduleHours?: number | null;
+  onlineDiscoveryMinMatchScore?: number;
 }
 
 export interface JobPosting {
@@ -84,6 +97,8 @@ export interface JobPosting {
   /** @nullable */
   salaryMax?: number | null;
   source: string;
+  /** @nullable */
+  sourcePostedAt?: string | null;
   /** @nullable */
   gmailMessageId?: string | null;
   /** @nullable */
@@ -119,14 +134,43 @@ export interface MatchReport {
   updatedAt: string;
 }
 
-export type EmailSyncOutcome =
-  | "imported"
-  | "partial"
-  | "no_listings"
-  | "all_skipped"
-  | "skipped_blocked_sender"
-  | "skipped_application_response"
-  | "empty_body";
+export interface PostingFilterReason {
+  byCompany: boolean;
+  /** @nullable */
+  companyReason: string | null;
+  byTitle: boolean;
+  titleReasons: string[];
+}
+
+export interface PostingSource {
+  provider: string;
+  url: string;
+  /** @nullable */
+  sourceJobId?: string | null;
+  isPrimary: boolean;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
+
+export interface PostingWithReport {
+  posting: JobPosting;
+  report: MatchReport | null;
+  filterReason?: PostingFilterReason;
+  sources?: PostingSource[];
+}
+
+export type EmailSyncLogItemOutcome =
+  (typeof EmailSyncLogItemOutcome)[keyof typeof EmailSyncLogItemOutcome];
+
+export const EmailSyncLogItemOutcome = {
+  imported: "imported",
+  partial: "partial",
+  no_listings: "no_listings",
+  all_skipped: "all_skipped",
+  skipped_blocked_sender: "skipped_blocked_sender",
+  skipped_application_response: "skipped_application_response",
+  empty_body: "empty_body",
+} as const;
 
 export interface EmailSyncLogItem {
   id: number;
@@ -136,27 +180,24 @@ export interface EmailSyncLogItem {
   /** @nullable */
   senderName?: string | null;
   processedAt: string;
-  outcome: EmailSyncOutcome;
+  outcome: EmailSyncLogItemOutcome;
   listingsExtracted: number;
   listingsImported: number;
   listingsSkipped: number;
   skipReasons: string[];
 }
 
-export interface ListEmailSyncLogParams {
-  startDate?: string;
-  endDate?: string;
-  sender?: string;
-  outcome?: string;
-}
-
 export type FilteredEmailReason =
-  | "blocked_sender"
-  | "application_response"
-  | "body_keyword"
-  | "duplicate"
-  | "duplicate_dismissed"
-  | "duplicate_applied";
+  (typeof FilteredEmailReason)[keyof typeof FilteredEmailReason];
+
+export const FilteredEmailReason = {
+  blocked_sender: "blocked_sender",
+  application_response: "application_response",
+  body_keyword: "body_keyword",
+  duplicate: "duplicate",
+  duplicate_dismissed: "duplicate_dismissed",
+  duplicate_applied: "duplicate_applied",
+} as const;
 
 export interface FilteredEmail {
   id: number;
@@ -175,19 +216,94 @@ export interface FilteredEmail {
   filteredAt: string;
 }
 
-export interface PostingFilterReason {
-  byCompany: boolean;
-  /** @nullable */
-  companyReason: string | null;
-  byTitle: boolean;
-  titleReasons: string[];
+export type FilterStatsProfileFiltersCompanyFilterMode =
+  (typeof FilterStatsProfileFiltersCompanyFilterMode)[keyof typeof FilterStatsProfileFiltersCompanyFilterMode];
+
+export const FilterStatsProfileFiltersCompanyFilterMode = {
+  off: "off",
+  include: "include",
+  exclude: "exclude",
+} as const;
+
+export type FilterStatsProfileFilters = {
+  rawActive: number;
+  shownOnDashboard: number;
+  hiddenByCompany: number;
+  hiddenByTitleKeywords: number;
+  companyFilterMode: FilterStatsProfileFiltersCompanyFilterMode;
+  companyFilterCount: number;
+  titleKeywordCount: number;
+};
+
+export type FilterStatsSyncHistoryItem = {
+  id: number;
+  source: string;
+  syncedAt: string;
+  emailsPreFilter: number;
+  emailsFetched: number;
+  jobsExtracted: number;
+  jobsImported: number;
+  jobsSkippedDedup: number;
+  jobsSkippedActiveDup: number;
+  jobsSkippedUserDeleted: number;
+  jobsSkippedApplied: number;
+};
+
+export interface FilterStats {
+  profileFilters: FilterStatsProfileFilters;
+  syncHistory: FilterStatsSyncHistoryItem[];
+  totalSyncs: number;
+  totalEmailsPreFilter: number;
+  totalEmailsFetched: number;
+  totalJobsExtracted: number;
+  totalJobsImported: number;
+  totalJobsSkippedDedup: number;
+  totalSkippedActiveDup: number;
+  totalSkippedUserDeleted: number;
+  totalSkippedApplied: number;
 }
 
-export interface PostingWithReport {
-  posting: JobPosting;
-  report: MatchReport | null;
-  filterReason?: PostingFilterReason;
+export interface OnlineDiscoverySettings {
+  /** @nullable */
+  scheduleHours: number | null;
+  /**
+   * @minimum 1
+   * @maximum 100
+   */
+  minimumMatchScore: number;
 }
+
+export interface OnlineDiscoveryCriteria {
+  roleTitles: string[];
+  skills: string[];
+  locations: string[];
+  remotePreferences: string[];
+}
+
+export interface OnlineDiscoveryStatus {
+  source: string;
+  /** @nullable */
+  scheduleHours?: number | null;
+  minimumMatchScore: number;
+  /** @nullable */
+  lastRunAt?: string | null;
+  /** @nullable */
+  nextRunAt?: string | null;
+  lastFound: number;
+  lastImported: number;
+  lastDuplicates: number;
+  /** @nullable */
+  lastError?: string | null;
+  criteria: OnlineDiscoveryCriteria;
+}
+
+export type OnlineDiscoveryRunResult = OnlineDiscoveryStatus & {
+  fetched: number;
+  considered: number;
+  imported: number;
+  duplicates: number;
+  matchedExisting: number;
+};
 
 export interface CreatePostingBody {
   title: string;
@@ -327,12 +443,9 @@ export type ListPostingsParams = {
    * Filter by source (manual, gmail)
    */
   source?: string;
-  /**
-   * Filter by applied status
-   */
   applied?: boolean;
   /**
-   * When true, return jobs suppressed by active profile filters instead of visible ones
+   * Filter by applied status
    */
   hidden?: boolean;
 };
@@ -349,6 +462,18 @@ export type ImportPostingsCsvBody = {
   file: Blob;
 };
 
+export type GetFilterStatsParams = {
+  from?: string;
+  to?: string;
+};
+
+export type ListEmailSyncLogParams = {
+  startDate?: string;
+  endDate?: string;
+  sender?: string;
+  outcome?: string;
+};
+
 export type ParseResume200 = {
   experienceHistory: ExperienceEntry[];
 };
@@ -357,38 +482,4 @@ export type GmailCallbackParams = {
   code?: string;
   state?: string;
   error?: string;
-};
-
-export type FilterStats = {
-  profileFilters: {
-    rawActive: number;
-    shownOnDashboard: number;
-    hiddenByCompany: number;
-    hiddenByTitleKeywords: number;
-    companyFilterMode: "off" | "include" | "exclude";
-    companyFilterCount: number;
-    titleKeywordCount: number;
-  };
-  syncHistory: Array<{
-    id: number;
-    source: string;
-    syncedAt: string;
-    emailsPreFilter: number;
-    emailsFetched: number;
-    jobsExtracted: number;
-    jobsImported: number;
-    jobsSkippedDedup: number;
-    jobsSkippedActiveDup: number;
-    jobsSkippedUserDeleted: number;
-    jobsSkippedApplied: number;
-  }>;
-  totalSyncs: number;
-  totalEmailsPreFilter: number;
-  totalEmailsFetched: number;
-  totalJobsExtracted: number;
-  totalJobsImported: number;
-  totalJobsSkippedDedup: number;
-  totalSkippedActiveDup: number;
-  totalSkippedUserDeleted: number;
-  totalSkippedApplied: number;
 };

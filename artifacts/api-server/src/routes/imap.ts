@@ -113,7 +113,7 @@ router.post("/imap/sync", requireAuth, async (req, res): Promise<void> => {
     for (const email of emails) {
       if (!email.body.trim()) continue;
 
-      const listings = await extractJobListings(email.body, email.subject, email.sender);
+      const { listings } = await extractJobListings(email.body, email.subject, email.sender);
 
       for (let i = 0; i < listings.length; i++) {
         const listing = listings[i];

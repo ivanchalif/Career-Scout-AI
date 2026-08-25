@@ -68,6 +68,13 @@ export const GetProfileResponse = zod.object({
   resumeUrl: zod.string().nullish(),
   resumeText: zod.string().nullish(),
   syncScheduleHours: zod.number().nullish(),
+  onlineDiscoveryScheduleHours: zod.number().nullish(),
+  onlineDiscoveryMinMatchScore: zod.number().optional(),
+  lastOnlineDiscoveryAt: zod.coerce.date().nullish(),
+  lastOnlineDiscoveryFound: zod.number().optional(),
+  lastOnlineDiscoveryImported: zod.number().optional(),
+  lastOnlineDiscoveryDuplicates: zod.number().optional(),
+  lastOnlineDiscoveryError: zod.string().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
 });
@@ -96,6 +103,8 @@ export const UpsertProfileBody = zod.object({
   resumeUrl: zod.string().nullish(),
   resumeText: zod.string().nullish(),
   syncScheduleHours: zod.number().nullish(),
+  onlineDiscoveryScheduleHours: zod.number().nullish(),
+  onlineDiscoveryMinMatchScore: zod.number().optional(),
 });
 
 export const UpsertProfileResponse = zod.object({
@@ -118,6 +127,13 @@ export const UpsertProfileResponse = zod.object({
   resumeUrl: zod.string().nullish(),
   resumeText: zod.string().nullish(),
   syncScheduleHours: zod.number().nullish(),
+  onlineDiscoveryScheduleHours: zod.number().nullish(),
+  onlineDiscoveryMinMatchScore: zod.number().optional(),
+  lastOnlineDiscoveryAt: zod.coerce.date().nullish(),
+  lastOnlineDiscoveryFound: zod.number().optional(),
+  lastOnlineDiscoveryImported: zod.number().optional(),
+  lastOnlineDiscoveryDuplicates: zod.number().optional(),
+  lastOnlineDiscoveryError: zod.string().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
 });
@@ -139,14 +155,8 @@ export const ListPostingsQueryParams = zod.object({
     .string()
     .optional()
     .describe("Filter by source (manual, gmail)"),
-  applied: zod.preprocess(
-    (v) => (v === "true" ? true : v === "false" ? false : undefined),
-    zod.boolean().optional()
-  ).describe("Filter by applied status"),
-  hidden: zod.preprocess(
-    (v) => (v === "true" ? true : v === "false" ? false : undefined),
-    zod.boolean().optional()
-  ).describe("When true, return jobs suppressed by active profile filters instead of visible ones"),
+  applied: zod.coerce.boolean().optional(),
+  hidden: zod.coerce.boolean().optional().describe("Filter by applied status"),
 });
 
 export const ListPostingsResponseItem = zod.object({
@@ -161,6 +171,7 @@ export const ListPostingsResponseItem = zod.object({
     salaryMin: zod.number().nullish(),
     salaryMax: zod.number().nullish(),
     source: zod.string(),
+    sourcePostedAt: zod.coerce.date().nullish(),
     gmailMessageId: zod.string().nullish(),
     senderName: zod.string().nullish(),
     appliedAt: zod.coerce.date().nullish(),
@@ -186,12 +197,26 @@ export const ListPostingsResponseItem = zod.object({
     }),
     zod.null(),
   ]),
-  filterReason: zod.object({
-    byCompany: zod.boolean(),
-    companyReason: zod.string().nullable(),
-    byTitle: zod.boolean(),
-    titleReasons: zod.array(zod.string()),
-  }).optional(),
+  filterReason: zod
+    .object({
+      byCompany: zod.boolean(),
+      companyReason: zod.string().nullable(),
+      byTitle: zod.boolean(),
+      titleReasons: zod.array(zod.string()),
+    })
+    .optional(),
+  sources: zod
+    .array(
+      zod.object({
+        provider: zod.string(),
+        url: zod.string().url(),
+        sourceJobId: zod.string().nullish(),
+        isPrimary: zod.boolean(),
+        firstSeenAt: zod.coerce.date(),
+        lastSeenAt: zod.coerce.date(),
+      }),
+    )
+    .optional(),
 });
 export const ListPostingsResponse = zod.array(ListPostingsResponseItem);
 
@@ -224,6 +249,7 @@ export const ListDeletedPostingsResponseItem = zod.object({
     salaryMin: zod.number().nullish(),
     salaryMax: zod.number().nullish(),
     source: zod.string(),
+    sourcePostedAt: zod.coerce.date().nullish(),
     gmailMessageId: zod.string().nullish(),
     senderName: zod.string().nullish(),
     appliedAt: zod.coerce.date().nullish(),
@@ -249,6 +275,26 @@ export const ListDeletedPostingsResponseItem = zod.object({
     }),
     zod.null(),
   ]),
+  filterReason: zod
+    .object({
+      byCompany: zod.boolean(),
+      companyReason: zod.string().nullable(),
+      byTitle: zod.boolean(),
+      titleReasons: zod.array(zod.string()),
+    })
+    .optional(),
+  sources: zod
+    .array(
+      zod.object({
+        provider: zod.string(),
+        url: zod.string().url(),
+        sourceJobId: zod.string().nullish(),
+        isPrimary: zod.boolean(),
+        firstSeenAt: zod.coerce.date(),
+        lastSeenAt: zod.coerce.date(),
+      }),
+    )
+    .optional(),
 });
 export const ListDeletedPostingsResponse = zod.array(
   ListDeletedPostingsResponseItem,
@@ -273,12 +319,14 @@ export const GetPostingResponse = zod.object({
     salaryMin: zod.number().nullish(),
     salaryMax: zod.number().nullish(),
     source: zod.string(),
+    sourcePostedAt: zod.coerce.date().nullish(),
     gmailMessageId: zod.string().nullish(),
     senderName: zod.string().nullish(),
     appliedAt: zod.coerce.date().nullish(),
     location: zod.string().nullish(),
     remoteType: zod.string().nullish(),
     deletedAt: zod.coerce.date().nullish(),
+    deletedBy: zod.string().nullish(),
     closedAt: zod.coerce.date().nullish(),
     createdAt: zod.coerce.date(),
   }),
@@ -297,6 +345,26 @@ export const GetPostingResponse = zod.object({
     }),
     zod.null(),
   ]),
+  filterReason: zod
+    .object({
+      byCompany: zod.boolean(),
+      companyReason: zod.string().nullable(),
+      byTitle: zod.boolean(),
+      titleReasons: zod.array(zod.string()),
+    })
+    .optional(),
+  sources: zod
+    .array(
+      zod.object({
+        provider: zod.string(),
+        url: zod.string().url(),
+        sourceJobId: zod.string().nullish(),
+        isPrimary: zod.boolean(),
+        firstSeenAt: zod.coerce.date(),
+        lastSeenAt: zod.coerce.date(),
+      }),
+    )
+    .optional(),
 });
 
 /**
@@ -352,7 +420,7 @@ export const MarkAppliedResponse = zod.object({
  * @summary Import job postings from CSV
  */
 export const ImportPostingsCsvBody = zod.object({
-  file: zod.any(),
+  file: zod.instanceof(File),
 });
 
 export const ImportPostingsCsvResponse = zod.object({
@@ -382,6 +450,192 @@ export const AnalyzePostingResponse = zod.object({
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
 });
+
+/**
+ * @summary Get online job discovery status
+ */
+export const GetOnlineDiscoveryStatusResponse = zod.object({
+  source: zod.string(),
+  scheduleHours: zod.number().nullish(),
+  minimumMatchScore: zod.number(),
+  lastRunAt: zod.coerce.date().nullish(),
+  nextRunAt: zod.coerce.date().nullish(),
+  lastFound: zod.number(),
+  lastImported: zod.number(),
+  lastDuplicates: zod.number(),
+  lastError: zod.string().nullish(),
+  criteria: zod.object({
+    roleTitles: zod.array(zod.string()),
+    skills: zod.array(zod.string()),
+    locations: zod.array(zod.string()),
+    remotePreferences: zod.array(zod.string()),
+  }),
+});
+
+/**
+ * @summary Find new online job opportunities matched to the current profile
+ */
+export const RunOnlineDiscoveryResponse = zod
+  .object({
+    source: zod.string(),
+    scheduleHours: zod.number().nullish(),
+    minimumMatchScore: zod.number(),
+    lastRunAt: zod.coerce.date().nullish(),
+    nextRunAt: zod.coerce.date().nullish(),
+    lastFound: zod.number(),
+    lastImported: zod.number(),
+    lastDuplicates: zod.number(),
+    lastError: zod.string().nullish(),
+    criteria: zod.object({
+      roleTitles: zod.array(zod.string()),
+      skills: zod.array(zod.string()),
+      locations: zod.array(zod.string()),
+      remotePreferences: zod.array(zod.string()),
+    }),
+  })
+  .and(
+    zod.object({
+      fetched: zod.number(),
+      considered: zod.number(),
+      imported: zod.number(),
+      duplicates: zod.number(),
+      matchedExisting: zod.number(),
+    }),
+  );
+
+/**
+ * @summary Update online job discovery settings
+ */
+export const updateOnlineDiscoverySettingsBodyMinimumMatchScoreMax = 100;
+
+export const UpdateOnlineDiscoverySettingsBody = zod.object({
+  scheduleHours: zod.number().nullable(),
+  minimumMatchScore: zod
+    .number()
+    .min(1)
+    .max(updateOnlineDiscoverySettingsBodyMinimumMatchScoreMax),
+});
+
+export const UpdateOnlineDiscoverySettingsResponse = zod.object({
+  source: zod.string(),
+  scheduleHours: zod.number().nullish(),
+  minimumMatchScore: zod.number(),
+  lastRunAt: zod.coerce.date().nullish(),
+  nextRunAt: zod.coerce.date().nullish(),
+  lastFound: zod.number(),
+  lastImported: zod.number(),
+  lastDuplicates: zod.number(),
+  lastError: zod.string().nullish(),
+  criteria: zod.object({
+    roleTitles: zod.array(zod.string()),
+    skills: zod.array(zod.string()),
+    locations: zod.array(zod.string()),
+    remotePreferences: zod.array(zod.string()),
+  }),
+});
+
+/**
+ * @summary Get dashboard and sync filtering metrics
+ */
+export const GetFilterStatsQueryParams = zod.object({
+  from: zod.date().optional(),
+  to: zod.date().optional(),
+});
+
+export const GetFilterStatsResponse = zod.object({
+  profileFilters: zod.object({
+    rawActive: zod.number(),
+    shownOnDashboard: zod.number(),
+    hiddenByCompany: zod.number(),
+    hiddenByTitleKeywords: zod.number(),
+    companyFilterMode: zod.enum(["off", "include", "exclude"]),
+    companyFilterCount: zod.number(),
+    titleKeywordCount: zod.number(),
+  }),
+  syncHistory: zod.array(
+    zod.object({
+      id: zod.number(),
+      source: zod.string(),
+      syncedAt: zod.coerce.date(),
+      emailsPreFilter: zod.number(),
+      emailsFetched: zod.number(),
+      jobsExtracted: zod.number(),
+      jobsImported: zod.number(),
+      jobsSkippedDedup: zod.number(),
+      jobsSkippedActiveDup: zod.number(),
+      jobsSkippedUserDeleted: zod.number(),
+      jobsSkippedApplied: zod.number(),
+    }),
+  ),
+  totalSyncs: zod.number(),
+  totalEmailsPreFilter: zod.number(),
+  totalEmailsFetched: zod.number(),
+  totalJobsExtracted: zod.number(),
+  totalJobsImported: zod.number(),
+  totalJobsSkippedDedup: zod.number(),
+  totalSkippedActiveDup: zod.number(),
+  totalSkippedUserDeleted: zod.number(),
+  totalSkippedApplied: zod.number(),
+});
+
+/**
+ * @summary List emails skipped during inbox processing
+ */
+export const ListFilteredEmailsResponseItem = zod.object({
+  id: zod.number(),
+  gmailMessageId: zod.string(),
+  subject: zod.string(),
+  senderEmail: zod.string(),
+  senderName: zod.string().nullish(),
+  reason: zod.enum([
+    "blocked_sender",
+    "application_response",
+    "body_keyword",
+    "duplicate",
+    "duplicate_dismissed",
+    "duplicate_applied",
+  ]),
+  blockedKeyword: zod.string().nullish(),
+  listingTitle: zod.string().nullish(),
+  listingCompany: zod.string().nullish(),
+  filteredAt: zod.coerce.date(),
+});
+export const ListFilteredEmailsResponse = zod.array(
+  ListFilteredEmailsResponseItem,
+);
+
+/**
+ * @summary List Gmail processing history
+ */
+export const ListEmailSyncLogQueryParams = zod.object({
+  startDate: zod.date().optional(),
+  endDate: zod.date().optional(),
+  sender: zod.coerce.string().optional(),
+  outcome: zod.coerce.string().optional(),
+});
+
+export const ListEmailSyncLogResponseItem = zod.object({
+  id: zod.number(),
+  gmailMessageId: zod.string(),
+  subject: zod.string(),
+  senderEmail: zod.string(),
+  senderName: zod.string().nullish(),
+  processedAt: zod.coerce.date(),
+  outcome: zod.enum([
+    "imported",
+    "partial",
+    "no_listings",
+    "all_skipped",
+    "skipped_blocked_sender",
+    "skipped_application_response",
+    "empty_body",
+  ]),
+  listingsExtracted: zod.number(),
+  listingsImported: zod.number(),
+  listingsSkipped: zod.number(),
+  skipReasons: zod.array(zod.string()),
+});
+export const ListEmailSyncLogResponse = zod.array(ListEmailSyncLogResponseItem);
 
 /**
  * @summary List match reports for current user
@@ -586,12 +840,14 @@ export const GetDashboardSummaryResponse = zod.object({
         salaryMin: zod.number().nullish(),
         salaryMax: zod.number().nullish(),
         source: zod.string(),
+        sourcePostedAt: zod.coerce.date().nullish(),
         gmailMessageId: zod.string().nullish(),
         senderName: zod.string().nullish(),
         appliedAt: zod.coerce.date().nullish(),
         location: zod.string().nullish(),
         remoteType: zod.string().nullish(),
         deletedAt: zod.coerce.date().nullish(),
+        deletedBy: zod.string().nullish(),
         closedAt: zod.coerce.date().nullish(),
         createdAt: zod.coerce.date(),
       }),
@@ -610,92 +866,29 @@ export const GetDashboardSummaryResponse = zod.object({
         }),
         zod.null(),
       ]),
+      filterReason: zod
+        .object({
+          byCompany: zod.boolean(),
+          companyReason: zod.string().nullable(),
+          byTitle: zod.boolean(),
+          titleReasons: zod.array(zod.string()),
+        })
+        .optional(),
+      sources: zod
+        .array(
+          zod.object({
+            provider: zod.string(),
+            url: zod.string().url(),
+            sourceJobId: zod.string().nullish(),
+            isPrimary: zod.boolean(),
+            firstSeenAt: zod.coerce.date(),
+            lastSeenAt: zod.coerce.date(),
+          }),
+        )
+        .optional(),
     }),
-  ).optional().default([]),
+  ),
   strongMatches: zod.number().optional(),
   hasProfile: zod.boolean(),
   gmailConnected: zod.boolean(),
-});
-
-/**
- * @summary Get filter effectiveness statistics
- */
-/**
- * @summary List email sync log entries
- */
-export const ListEmailSyncLogQueryParams = zod.object({
-  startDate: zod.coerce.string().optional(),
-  endDate: zod.coerce.string().optional(),
-  sender: zod.coerce.string().optional(),
-  outcome: zod.coerce.string().optional(),
-});
-
-export const EmailSyncLogItem = zod.object({
-  id: zod.number(),
-  gmailMessageId: zod.string(),
-  subject: zod.string(),
-  senderEmail: zod.string(),
-  senderName: zod.string().nullish(),
-  processedAt: zod.coerce.date(),
-  outcome: zod.enum(["imported", "partial", "no_listings", "all_skipped", "skipped_blocked_sender", "skipped_application_response", "empty_body"]),
-  listingsExtracted: zod.number(),
-  listingsImported: zod.number(),
-  listingsSkipped: zod.number(),
-  skipReasons: zod.array(zod.string()),
-});
-
-export const ListEmailSyncLogResponse = zod.array(EmailSyncLogItem);
-
-/**
- * @summary List emails skipped during Gmail sync
- */
-export const ListFilteredEmailsResponseItem = zod.object({
-  id: zod.number(),
-  gmailMessageId: zod.string(),
-  subject: zod.string(),
-  senderEmail: zod.string(),
-  senderName: zod.string().nullish(),
-  reason: zod.enum(["blocked_sender", "application_response", "body_keyword", "duplicate", "duplicate_dismissed", "duplicate_applied"]),
-  blockedKeyword: zod.string().nullish(),
-  listingTitle: zod.string().nullish(),
-  listingCompany: zod.string().nullish(),
-  filteredAt: zod.coerce.date(),
-});
-
-export const ListFilteredEmailsResponse = zod.array(ListFilteredEmailsResponseItem);
-
-export const GetFilterStatsResponse = zod.object({
-  profileFilters: zod.object({
-    rawActive: zod.number(),
-    shownOnDashboard: zod.number(),
-    hiddenByCompany: zod.number(),
-    hiddenByTitleKeywords: zod.number(),
-    companyFilterMode: zod.enum(["off", "include", "exclude"]),
-    companyFilterCount: zod.number(),
-    titleKeywordCount: zod.number(),
-  }),
-  syncHistory: zod.array(
-    zod.object({
-      id: zod.number(),
-      source: zod.string(),
-      syncedAt: zod.coerce.date(),
-      emailsPreFilter: zod.number(),
-      emailsFetched: zod.number(),
-      jobsExtracted: zod.number(),
-      jobsImported: zod.number(),
-      jobsSkippedDedup: zod.number(),
-      jobsSkippedActiveDup: zod.number(),
-      jobsSkippedUserDeleted: zod.number(),
-      jobsSkippedApplied: zod.number(),
-    }),
-  ),
-  totalSyncs: zod.number(),
-  totalEmailsPreFilter: zod.number(),
-  totalEmailsFetched: zod.number(),
-  totalJobsExtracted: zod.number(),
-  totalJobsImported: zod.number(),
-  totalJobsSkippedDedup: zod.number(),
-  totalSkippedActiveDup: zod.number(),
-  totalSkippedUserDeleted: zod.number(),
-  totalSkippedApplied: zod.number(),
 });

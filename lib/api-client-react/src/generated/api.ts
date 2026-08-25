@@ -27,7 +27,7 @@ import type {
   ErrorResponse,
   FilterStats,
   FilteredEmail,
-  ListEmailSyncLogParams,
+  GetFilterStatsParams,
   GmailCallbackParams,
   GmailStatus,
   GmailSyncResult,
@@ -38,9 +38,13 @@ import type {
   ImportPostingsCsvBody,
   ImportSummary,
   JobPosting,
+  ListEmailSyncLogParams,
   ListPostingsParams,
   MarkAppliedResult,
   MatchReport,
+  OnlineDiscoveryRunResult,
+  OnlineDiscoverySettings,
+  OnlineDiscoveryStatus,
   ParseResume200,
   PostingWithReport,
   ReopenPosting200,
@@ -1485,6 +1489,519 @@ export const useAnalyzePosting = <
 > => {
   return useMutation(getAnalyzePostingMutationOptions(options));
 };
+
+/**
+ * @summary Get online job discovery status
+ */
+export const getGetOnlineDiscoveryStatusUrl = () => {
+  return `/api/online-discovery/status`;
+};
+
+export const getOnlineDiscoveryStatus = async (
+  options?: RequestInit,
+): Promise<OnlineDiscoveryStatus> => {
+  return customFetch<OnlineDiscoveryStatus>(getGetOnlineDiscoveryStatusUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetOnlineDiscoveryStatusQueryKey = () => {
+  return [`/api/online-discovery/status`] as const;
+};
+
+export const getGetOnlineDiscoveryStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getOnlineDiscoveryStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getOnlineDiscoveryStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetOnlineDiscoveryStatusQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getOnlineDiscoveryStatus>>
+  > = ({ signal }) => getOnlineDiscoveryStatus({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getOnlineDiscoveryStatus>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetOnlineDiscoveryStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getOnlineDiscoveryStatus>>
+>;
+export type GetOnlineDiscoveryStatusQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get online job discovery status
+ */
+
+export function useGetOnlineDiscoveryStatus<
+  TData = Awaited<ReturnType<typeof getOnlineDiscoveryStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getOnlineDiscoveryStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetOnlineDiscoveryStatusQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Find new online job opportunities matched to the current profile
+ */
+export const getRunOnlineDiscoveryUrl = () => {
+  return `/api/online-discovery/run`;
+};
+
+export const runOnlineDiscovery = async (
+  options?: RequestInit,
+): Promise<OnlineDiscoveryRunResult> => {
+  return customFetch<OnlineDiscoveryRunResult>(getRunOnlineDiscoveryUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getRunOnlineDiscoveryMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runOnlineDiscovery>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof runOnlineDiscovery>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["runOnlineDiscovery"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof runOnlineDiscovery>>,
+    void
+  > = () => {
+    return runOnlineDiscovery(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RunOnlineDiscoveryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof runOnlineDiscovery>>
+>;
+
+export type RunOnlineDiscoveryMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Find new online job opportunities matched to the current profile
+ */
+export const useRunOnlineDiscovery = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runOnlineDiscovery>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof runOnlineDiscovery>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getRunOnlineDiscoveryMutationOptions(options));
+};
+
+/**
+ * @summary Update online job discovery settings
+ */
+export const getUpdateOnlineDiscoverySettingsUrl = () => {
+  return `/api/online-discovery/settings`;
+};
+
+export const updateOnlineDiscoverySettings = async (
+  onlineDiscoverySettings: OnlineDiscoverySettings,
+  options?: RequestInit,
+): Promise<OnlineDiscoveryStatus> => {
+  return customFetch<OnlineDiscoveryStatus>(
+    getUpdateOnlineDiscoverySettingsUrl(),
+    {
+      ...options,
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(onlineDiscoverySettings),
+    },
+  );
+};
+
+export const getUpdateOnlineDiscoverySettingsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateOnlineDiscoverySettings>>,
+    TError,
+    { data: BodyType<OnlineDiscoverySettings> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateOnlineDiscoverySettings>>,
+  TError,
+  { data: BodyType<OnlineDiscoverySettings> },
+  TContext
+> => {
+  const mutationKey = ["updateOnlineDiscoverySettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateOnlineDiscoverySettings>>,
+    { data: BodyType<OnlineDiscoverySettings> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateOnlineDiscoverySettings(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateOnlineDiscoverySettingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateOnlineDiscoverySettings>>
+>;
+export type UpdateOnlineDiscoverySettingsMutationBody =
+  BodyType<OnlineDiscoverySettings>;
+export type UpdateOnlineDiscoverySettingsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update online job discovery settings
+ */
+export const useUpdateOnlineDiscoverySettings = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateOnlineDiscoverySettings>>,
+    TError,
+    { data: BodyType<OnlineDiscoverySettings> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateOnlineDiscoverySettings>>,
+  TError,
+  { data: BodyType<OnlineDiscoverySettings> },
+  TContext
+> => {
+  return useMutation(getUpdateOnlineDiscoverySettingsMutationOptions(options));
+};
+
+/**
+ * @summary Get dashboard and sync filtering metrics
+ */
+export const getGetFilterStatsUrl = (params?: GetFilterStatsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/filter-stats?${stringifiedParams}`
+    : `/api/filter-stats`;
+};
+
+export const getFilterStats = async (
+  params?: GetFilterStatsParams,
+  options?: RequestInit,
+): Promise<FilterStats> => {
+  return customFetch<FilterStats>(getGetFilterStatsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetFilterStatsQueryKey = (params?: GetFilterStatsParams) => {
+  return [`/api/filter-stats`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetFilterStatsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getFilterStats>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetFilterStatsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getFilterStats>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetFilterStatsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getFilterStats>>> = ({
+    signal,
+  }) => getFilterStats(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getFilterStats>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetFilterStatsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getFilterStats>>
+>;
+export type GetFilterStatsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get dashboard and sync filtering metrics
+ */
+
+export function useGetFilterStats<
+  TData = Awaited<ReturnType<typeof getFilterStats>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetFilterStatsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getFilterStats>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetFilterStatsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List emails skipped during inbox processing
+ */
+export const getListFilteredEmailsUrl = () => {
+  return `/api/filtered-emails`;
+};
+
+export const listFilteredEmails = async (
+  options?: RequestInit,
+): Promise<FilteredEmail[]> => {
+  return customFetch<FilteredEmail[]>(getListFilteredEmailsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListFilteredEmailsQueryKey = () => {
+  return [`/api/filtered-emails`] as const;
+};
+
+export const getListFilteredEmailsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listFilteredEmails>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listFilteredEmails>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListFilteredEmailsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listFilteredEmails>>
+  > = ({ signal }) => listFilteredEmails({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listFilteredEmails>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListFilteredEmailsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listFilteredEmails>>
+>;
+export type ListFilteredEmailsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List emails skipped during inbox processing
+ */
+
+export function useListFilteredEmails<
+  TData = Awaited<ReturnType<typeof listFilteredEmails>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listFilteredEmails>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListFilteredEmailsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List Gmail processing history
+ */
+export const getListEmailSyncLogUrl = (params?: ListEmailSyncLogParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/email-sync-log?${stringifiedParams}`
+    : `/api/email-sync-log`;
+};
+
+export const listEmailSyncLog = async (
+  params?: ListEmailSyncLogParams,
+  options?: RequestInit,
+): Promise<EmailSyncLogItem[]> => {
+  return customFetch<EmailSyncLogItem[]>(getListEmailSyncLogUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListEmailSyncLogQueryKey = (
+  params?: ListEmailSyncLogParams,
+) => {
+  return [`/api/email-sync-log`, ...(params ? [params] : [])] as const;
+};
+
+export const getListEmailSyncLogQueryOptions = <
+  TData = Awaited<ReturnType<typeof listEmailSyncLog>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListEmailSyncLogParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listEmailSyncLog>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListEmailSyncLogQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listEmailSyncLog>>
+  > = ({ signal }) => listEmailSyncLog(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listEmailSyncLog>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListEmailSyncLogQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listEmailSyncLog>>
+>;
+export type ListEmailSyncLogQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List Gmail processing history
+ */
+
+export function useListEmailSyncLog<
+  TData = Awaited<ReturnType<typeof listEmailSyncLog>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListEmailSyncLogParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listEmailSyncLog>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListEmailSyncLogQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary List match reports for current user
@@ -3015,192 +3532,4 @@ export function useGetDashboardSummary<
   };
 
   return { ...query, queryKey: queryOptions.queryKey };
-}
-
-export type FilterStatsParams = { from?: string; to?: string };
-
-export const getGetFilterStatsUrl = (params?: FilterStatsParams) => {
-  const qs = new URLSearchParams();
-  if (params?.from) qs.set("from", params.from);
-  if (params?.to)   qs.set("to",   params.to);
-  const search = qs.toString();
-  return search ? `/api/filter-stats?${search}` : `/api/filter-stats`;
-};
-
-export const getFilterStats = async (
-  params?: FilterStatsParams,
-  options?: RequestInit,
-): Promise<FilterStats> => {
-  return customFetch<FilterStats>(getGetFilterStatsUrl(params), {
-    ...options,
-    method: "GET",
-  });
-};
-
-export const getGetFilterStatsQueryKey = (params?: FilterStatsParams) => {
-  return [`/api/filter-stats`, params] as const;
-};
-
-export const getGetFilterStatsQueryOptions = <
-  TData = Awaited<ReturnType<typeof getFilterStats>>,
-  TError = ErrorType<unknown>,
->(
-  params?: FilterStatsParams,
-  options?: {
-    query?: UseQueryOptions<
-      Awaited<ReturnType<typeof getFilterStats>>,
-      TError,
-      TData
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-  const queryKey = queryOptions?.queryKey ?? getGetFilterStatsQueryKey(params);
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof getFilterStats>>
-  > = ({ signal }) => getFilterStats(params, { signal, ...requestOptions });
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
-    Awaited<ReturnType<typeof getFilterStats>>,
-    TError,
-    TData
-  > & { queryKey: QueryKey };
-};
-
-export type GetFilterStatsQueryResult = NonNullable<
-  Awaited<ReturnType<typeof getFilterStats>>
->;
-export type GetFilterStatsQueryError = ErrorType<unknown>;
-
-/**
- * @summary Get filter effectiveness statistics
- */
-export function useGetFilterStats<
-  TData = Awaited<ReturnType<typeof getFilterStats>>,
-  TError = ErrorType<unknown>,
->(
-  params?: FilterStatsParams,
-  options?: {
-    query?: UseQueryOptions<
-      Awaited<ReturnType<typeof getFilterStats>>,
-      TError,
-      TData
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetFilterStatsQueryOptions(params, options);
-  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
-    queryKey: QueryKey;
-  };
-  return { ...query, queryKey: queryOptions.queryKey };
-}
-
-/**
- * @summary List emails skipped during Gmail sync
- */
-export const getListFilteredEmailsUrl = () => `/api/filtered-emails`;
-
-export const listFilteredEmails = async (
-  options?: RequestInit,
-): Promise<FilteredEmail[]> => {
-  return customFetch<FilteredEmail[]>(getListFilteredEmailsUrl(), {
-    ...options,
-    method: "GET",
-  });
-};
-
-export const getListFilteredEmailsQueryKey = () =>
-  [`/api/filtered-emails`] as const;
-
-export type GetListFilteredEmailsQueryKey = ReturnType<
-  typeof getListFilteredEmailsQueryKey
->;
-
-export type GetListFilteredEmailsQueryResult = NonNullable<
-  Awaited<ReturnType<typeof listFilteredEmails>>
->;
-export type GetListFilteredEmailsQueryError = ErrorType<ErrorEnvelope>;
-
-export function useListFilteredEmails<
-  TData = Awaited<ReturnType<typeof listFilteredEmails>>,
-  TError = ErrorType<ErrorEnvelope>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof listFilteredEmails>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const { query: queryOptions } = options ?? {};
-  const queryKey =
-    queryOptions?.queryKey ?? getListFilteredEmailsQueryKey();
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof listFilteredEmails>>
-  > = ({ signal }) => listFilteredEmails({ signal });
-
-  return {
-    ...useQuery({ queryKey, queryFn, ...queryOptions }),
-    queryKey,
-  } as UseQueryResult<TData, TError> & { queryKey: QueryKey };
-}
-
-/**
- * @summary List email sync log entries
- */
-export const getListEmailSyncLogUrl = (params?: ListEmailSyncLogParams) => {
-  const query = new URLSearchParams();
-  if (params?.startDate) query.set("startDate", params.startDate);
-  if (params?.endDate) query.set("endDate", params.endDate);
-  if (params?.sender) query.set("sender", params.sender);
-  if (params?.outcome) query.set("outcome", params.outcome);
-  const qs = query.toString();
-  return `/api/email-sync-log${qs ? `?${qs}` : ""}`;
-};
-
-export const listEmailSyncLog = async (
-  params?: ListEmailSyncLogParams,
-  options?: RequestInit,
-): Promise<EmailSyncLogItem[]> => {
-  return customFetch<EmailSyncLogItem[]>(getListEmailSyncLogUrl(params), {
-    ...options,
-    method: "GET",
-  });
-};
-
-export const getListEmailSyncLogQueryKey = (params?: ListEmailSyncLogParams) =>
-  [`/api/email-sync-log`, params] as const;
-
-export type GetListEmailSyncLogQueryKey = ReturnType<typeof getListEmailSyncLogQueryKey>;
-
-export type GetListEmailSyncLogQueryResult = NonNullable<
-  Awaited<ReturnType<typeof listEmailSyncLog>>
->;
-export type GetListEmailSyncLogQueryError = ErrorType<ErrorEnvelope>;
-
-export function useListEmailSyncLog<
-  TData = Awaited<ReturnType<typeof listEmailSyncLog>>,
-  TError = ErrorType<ErrorEnvelope>,
->(
-  params?: ListEmailSyncLogParams,
-  options?: {
-    query?: UseQueryOptions<
-      Awaited<ReturnType<typeof listEmailSyncLog>>,
-      TError,
-      TData
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const { query: queryOptions } = options ?? {};
-  const queryKey = queryOptions?.queryKey ?? getListEmailSyncLogQueryKey(params);
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof listEmailSyncLog>>
-  > = ({ signal }) => listEmailSyncLog(params, { signal });
-
-  return {
-    ...useQuery({ queryKey, queryFn, ...queryOptions }),
-    queryKey,
-  } as UseQueryResult<TData, TError> & { queryKey: QueryKey };
 }

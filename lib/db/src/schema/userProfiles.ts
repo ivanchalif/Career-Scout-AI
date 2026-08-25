@@ -14,6 +14,13 @@ export const userProfilesTable = pgTable("user_profiles", {
   resumeUrl: text("resume_url"),
   resumeText: text("resume_text"),
   syncScheduleHours: real("sync_schedule_hours"),
+  onlineDiscoveryScheduleHours: real("online_discovery_schedule_hours"),
+  onlineDiscoveryMinMatchScore: integer("online_discovery_min_match_score").notNull().default(12),
+  lastOnlineDiscoveryAt: timestamp("last_online_discovery_at", { withTimezone: true }),
+  lastOnlineDiscoveryFound: integer("last_online_discovery_found").notNull().default(0),
+  lastOnlineDiscoveryImported: integer("last_online_discovery_imported").notNull().default(0),
+  lastOnlineDiscoveryDuplicates: integer("last_online_discovery_duplicates").notNull().default(0),
+  lastOnlineDiscoveryError: text("last_online_discovery_error"),
   companyFilterSettings: jsonb("company_filter_settings").$type<{
     mode: "off" | "include" | "exclude";
     companies: string[];

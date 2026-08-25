@@ -10,11 +10,19 @@ import {
   useListFilteredEmails,
   useListEmailSyncLog,
 } from "@workspace/api-client-react";
-import type { FilteredEmailReason, EmailSyncOutcome } from "@workspace/api-client-react";
+import type { FilteredEmailReason } from "@workspace/api-client-react";
 import Layout from "@/components/layout";
 
 type Tab = "suppressed" | "skipped" | "sync-log";
 type DateRange = "today" | "7d" | "30d" | "all";
+type EmailSyncOutcome =
+  | "imported"
+  | "partial"
+  | "no_listings"
+  | "all_skipped"
+  | "skipped_blocked_sender"
+  | "skipped_application_response"
+  | "empty_body";
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
