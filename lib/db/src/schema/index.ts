@@ -8,3 +8,4 @@ export * from "./imapConnections";
 export * from "./syncEvents";
 export * from "./filteredEmails";
 export * from "./emailSyncLog";
+export * from "./onlineDiscoverySources";

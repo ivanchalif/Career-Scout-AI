@@ -1,4 +1,4 @@
-import { pgTable, text, integer, real, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { boolean, pgTable, text, integer, real, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -16,6 +16,7 @@ export const userProfilesTable = pgTable("user_profiles", {
   syncScheduleHours: real("sync_schedule_hours"),
   onlineDiscoveryScheduleHours: real("online_discovery_schedule_hours"),
   onlineDiscoveryMinMatchScore: integer("online_discovery_min_match_score").notNull().default(12),
+  onlineDiscoverySourcesInitialized: boolean("online_discovery_sources_initialized").notNull().default(false),
   lastOnlineDiscoveryAt: timestamp("last_online_discovery_at", { withTimezone: true }),
   lastOnlineDiscoveryFound: integer("last_online_discovery_found").notNull().default(0),
   lastOnlineDiscoveryImported: integer("last_online_discovery_imported").notNull().default(0),

@@ -273,6 +273,49 @@ export interface OnlineDiscoverySettings {
   minimumMatchScore: number;
 }
 
+export type OnlineDiscoverySourceKind =
+  (typeof OnlineDiscoverySourceKind)[keyof typeof OnlineDiscoverySourceKind];
+
+export const OnlineDiscoverySourceKind = {
+  builtin: "builtin",
+  custom: "custom",
+} as const;
+
+export interface OnlineDiscoverySource {
+  id: number;
+  provider: string;
+  name: string;
+  url: string;
+  kind: OnlineDiscoverySourceKind;
+  isSuppressed: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OnlineDiscoverySourceCatalogItem {
+  provider: string;
+  name: string;
+  url: string;
+}
+
+export interface OnlineDiscoverySourcesResponse {
+  sources: OnlineDiscoverySource[];
+  availableSources: OnlineDiscoverySourceCatalogItem[];
+}
+
+export interface OnlineDiscoverySourceInput {
+  /** @nullable */
+  provider?: string | null;
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  url?: string | null;
+}
+
+export interface OnlineDiscoverySourceUpdate {
+  suppressed: boolean;
+}
+
 export interface OnlineDiscoveryCriteria {
   roleTitles: string[];
   skills: string[];

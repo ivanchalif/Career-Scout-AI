@@ -450,6 +450,98 @@ paths:
               schema:
                 $ref: "#/components/schemas/OnlineDiscoveryStatus"
 
+  /online-discovery/sources:
+    get:
+      operationId: getOnlineDiscoverySources
+      tags: [onlineDiscovery]
+      summary: List configured and available online job sources
+      responses:
+        "200":
+          description: Online job source configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OnlineDiscoverySourcesResponse"
+    post:
+      operationId: createOnlineDiscoverySource
+      tags: [onlineDiscovery]
+      summary: Add a built-in or custom online job source
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OnlineDiscoverySourceInput"
+      responses:
+        "201":
+          description: Added online job source
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OnlineDiscoverySource"
+        "400":
+          description: Invalid or unsupported source
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Source is already configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /online-discovery/sources/{id}:
+    patch:
+      operationId: updateOnlineDiscoverySource
+      tags: [onlineDiscovery]
+      summary: Suppress or restore an online job source
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OnlineDiscoverySourceUpdate"
+      responses:
+        "200":
+          description: Updated online job source
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OnlineDiscoverySource"
+        "404":
+          description: Source not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteOnlineDiscoverySource
+      tags: [onlineDiscovery]
+      summary: Remove an online job source configuration
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Source configuration removed
+        "404":
+          description: Source not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /filter-stats:
     get:
       operationId: getFilterStats
@@ -1271,6 +1363,87 @@ components:
       required:
         - scheduleHours
         - minimumMatchScore
+
+    OnlineDiscoverySource:
+      type: object
+      properties:
+        id:
+          type: integer
+        provider:
+          type: string
+        name:
+          type: string
+        url:
+          type: string
+          format: uri
+        kind:
+          type: string
+          enum: [builtin, custom]
+        isSuppressed:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - provider
+        - name
+        - url
+        - kind
+        - isSuppressed
+        - createdAt
+        - updatedAt
+
+    OnlineDiscoverySourceCatalogItem:
+      type: object
+      properties:
+        provider:
+          type: string
+        name:
+          type: string
+        url:
+          type: string
+          format: uri
+      required:
+        - provider
+        - name
+        - url
+
+    OnlineDiscoverySourcesResponse:
+      type: object
+      properties:
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/OnlineDiscoverySource"
+        availableSources:
+          type: array
+          items:
+            $ref: "#/components/schemas/OnlineDiscoverySourceCatalogItem"
+      required:
+        - sources
+        - availableSources
+
+    OnlineDiscoverySourceInput:
+      type: object
+      properties:
+        provider:
+          type: ["string", "null"]
+        name:
+          type: ["string", "null"]
+        url:
+          type: ["string", "null"]
+
+    OnlineDiscoverySourceUpdate:
+      type: object
+      properties:
+        suppressed:
+          type: boolean
+      required:
+        - suppressed
 
     OnlineDiscoveryCriteria:
       type: object

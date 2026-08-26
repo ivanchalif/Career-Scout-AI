@@ -4,3 +4,4 @@
 - [Gmail mark-as-read guard](gmail-mark-read-guard.md) — extractJobListings returns {listings, hadError}; only markEmailAsRead when !hadError, so LLM errors leave email unread for auto-retry.
 - [One-off Node scripts in pnpm workspace](pnpm-oneoff-scripts.md) — tsx/ts-node unavailable; for plain JS scripts use absolute paths into node_modules/.pnpm/<pkg@ver>/node_modules/<pkg>/ for imports.
 - [OpenAPI codegen contract sync](openapi-codegen-contract-sync.md) — regenerate only after the spec reflects all shipped typed routes, or codegen can silently remove active client hooks.
+- [Online discovery source lifecycle](online-discovery-source-lifecycle.md) — suppress pauses a configured source; remove deletes only its config and never imported job history.

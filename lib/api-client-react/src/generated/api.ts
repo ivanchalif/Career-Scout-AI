@@ -44,6 +44,10 @@ import type {
   MatchReport,
   OnlineDiscoveryRunResult,
   OnlineDiscoverySettings,
+  OnlineDiscoverySource,
+  OnlineDiscoverySourceInput,
+  OnlineDiscoverySourceUpdate,
+  OnlineDiscoverySourcesResponse,
   OnlineDiscoveryStatus,
   ParseResume200,
   PostingWithReport,
@@ -1735,6 +1739,350 @@ export const useUpdateOnlineDiscoverySettings = <
   TContext
 > => {
   return useMutation(getUpdateOnlineDiscoverySettingsMutationOptions(options));
+};
+
+/**
+ * @summary List configured and available online job sources
+ */
+export const getGetOnlineDiscoverySourcesUrl = () => {
+  return `/api/online-discovery/sources`;
+};
+
+export const getOnlineDiscoverySources = async (
+  options?: RequestInit,
+): Promise<OnlineDiscoverySourcesResponse> => {
+  return customFetch<OnlineDiscoverySourcesResponse>(
+    getGetOnlineDiscoverySourcesUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetOnlineDiscoverySourcesQueryKey = () => {
+  return [`/api/online-discovery/sources`] as const;
+};
+
+export const getGetOnlineDiscoverySourcesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getOnlineDiscoverySources>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getOnlineDiscoverySources>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetOnlineDiscoverySourcesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getOnlineDiscoverySources>>
+  > = ({ signal }) => getOnlineDiscoverySources({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getOnlineDiscoverySources>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetOnlineDiscoverySourcesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getOnlineDiscoverySources>>
+>;
+export type GetOnlineDiscoverySourcesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List configured and available online job sources
+ */
+
+export function useGetOnlineDiscoverySources<
+  TData = Awaited<ReturnType<typeof getOnlineDiscoverySources>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getOnlineDiscoverySources>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetOnlineDiscoverySourcesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Add a built-in or custom online job source
+ */
+export const getCreateOnlineDiscoverySourceUrl = () => {
+  return `/api/online-discovery/sources`;
+};
+
+export const createOnlineDiscoverySource = async (
+  onlineDiscoverySourceInput: OnlineDiscoverySourceInput,
+  options?: RequestInit,
+): Promise<OnlineDiscoverySource> => {
+  return customFetch<OnlineDiscoverySource>(
+    getCreateOnlineDiscoverySourceUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(onlineDiscoverySourceInput),
+    },
+  );
+};
+
+export const getCreateOnlineDiscoverySourceMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createOnlineDiscoverySource>>,
+    TError,
+    { data: BodyType<OnlineDiscoverySourceInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createOnlineDiscoverySource>>,
+  TError,
+  { data: BodyType<OnlineDiscoverySourceInput> },
+  TContext
+> => {
+  const mutationKey = ["createOnlineDiscoverySource"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createOnlineDiscoverySource>>,
+    { data: BodyType<OnlineDiscoverySourceInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createOnlineDiscoverySource(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateOnlineDiscoverySourceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createOnlineDiscoverySource>>
+>;
+export type CreateOnlineDiscoverySourceMutationBody =
+  BodyType<OnlineDiscoverySourceInput>;
+export type CreateOnlineDiscoverySourceMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Add a built-in or custom online job source
+ */
+export const useCreateOnlineDiscoverySource = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createOnlineDiscoverySource>>,
+    TError,
+    { data: BodyType<OnlineDiscoverySourceInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createOnlineDiscoverySource>>,
+  TError,
+  { data: BodyType<OnlineDiscoverySourceInput> },
+  TContext
+> => {
+  return useMutation(getCreateOnlineDiscoverySourceMutationOptions(options));
+};
+
+/**
+ * @summary Suppress or restore an online job source
+ */
+export const getUpdateOnlineDiscoverySourceUrl = (id: number) => {
+  return `/api/online-discovery/sources/${id}`;
+};
+
+export const updateOnlineDiscoverySource = async (
+  id: number,
+  onlineDiscoverySourceUpdate: OnlineDiscoverySourceUpdate,
+  options?: RequestInit,
+): Promise<OnlineDiscoverySource> => {
+  return customFetch<OnlineDiscoverySource>(
+    getUpdateOnlineDiscoverySourceUrl(id),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(onlineDiscoverySourceUpdate),
+    },
+  );
+};
+
+export const getUpdateOnlineDiscoverySourceMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateOnlineDiscoverySource>>,
+    TError,
+    { id: number; data: BodyType<OnlineDiscoverySourceUpdate> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateOnlineDiscoverySource>>,
+  TError,
+  { id: number; data: BodyType<OnlineDiscoverySourceUpdate> },
+  TContext
+> => {
+  const mutationKey = ["updateOnlineDiscoverySource"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateOnlineDiscoverySource>>,
+    { id: number; data: BodyType<OnlineDiscoverySourceUpdate> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateOnlineDiscoverySource(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateOnlineDiscoverySourceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateOnlineDiscoverySource>>
+>;
+export type UpdateOnlineDiscoverySourceMutationBody =
+  BodyType<OnlineDiscoverySourceUpdate>;
+export type UpdateOnlineDiscoverySourceMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Suppress or restore an online job source
+ */
+export const useUpdateOnlineDiscoverySource = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateOnlineDiscoverySource>>,
+    TError,
+    { id: number; data: BodyType<OnlineDiscoverySourceUpdate> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateOnlineDiscoverySource>>,
+  TError,
+  { id: number; data: BodyType<OnlineDiscoverySourceUpdate> },
+  TContext
+> => {
+  return useMutation(getUpdateOnlineDiscoverySourceMutationOptions(options));
+};
+
+/**
+ * @summary Remove an online job source configuration
+ */
+export const getDeleteOnlineDiscoverySourceUrl = (id: number) => {
+  return `/api/online-discovery/sources/${id}`;
+};
+
+export const deleteOnlineDiscoverySource = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteOnlineDiscoverySourceUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteOnlineDiscoverySourceMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteOnlineDiscoverySource>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteOnlineDiscoverySource>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteOnlineDiscoverySource"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteOnlineDiscoverySource>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteOnlineDiscoverySource(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteOnlineDiscoverySourceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteOnlineDiscoverySource>>
+>;
+
+export type DeleteOnlineDiscoverySourceMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Remove an online job source configuration
+ */
+export const useDeleteOnlineDiscoverySource = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteOnlineDiscoverySource>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteOnlineDiscoverySource>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteOnlineDiscoverySourceMutationOptions(options));
 };
 
 /**

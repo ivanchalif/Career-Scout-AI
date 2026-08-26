@@ -1,5 +1,5 @@
 export interface OnlineJobCandidate {
-  provider: "arbeitnow";
+  provider: string;
   sourceJobId: string | null;
   title: string;
   company: string;

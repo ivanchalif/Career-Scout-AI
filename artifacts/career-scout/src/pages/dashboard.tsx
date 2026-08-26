@@ -23,6 +23,10 @@ import {
   useGetOnlineDiscoveryStatus,
   useRunOnlineDiscovery,
   useUpdateOnlineDiscoverySettings,
+  useGetOnlineDiscoverySources,
+  useCreateOnlineDiscoverySource,
+  useUpdateOnlineDiscoverySource,
+  useDeleteOnlineDiscoverySource,
   getGetTitleExcludeSettingsQueryKey,
   useListDeletedPostings,
   useRestorePosting,
@@ -34,7 +38,9 @@ import {
   getGetGmailStatusQueryKey,
   getGetCompanyFilterSettingsQueryKey,
   getGetOnlineDiscoveryStatusQueryKey,
+  getGetOnlineDiscoverySourcesQueryKey,
   type CreatePostingBody,
+  type OnlineDiscoverySource,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -166,6 +172,8 @@ export default function DashboardPage() {
   const [reviewingNearDups, setReviewingNearDups] = useState<Set<number>>(new Set());
   const [autoSweepCount, setAutoSweepCount] = useState<number | null>(null);
   const [discoveryMinScore, setDiscoveryMinScore] = useState(12);
+  const [customSourceName, setCustomSourceName] = useState("");
+  const [customSourceUrl, setCustomSourceUrl] = useState("");
 
   useEffect(() => {
     const SESSION_KEY = "dedup-sweep-done";
@@ -338,6 +346,7 @@ export default function DashboardPage() {
   const deletedQ = useListDeletedPostings();
   const gmailStatusQ = useGetGmailStatus();
   const discoveryQ = useGetOnlineDiscoveryStatus();
+  const discoverySourcesQ = useGetOnlineDiscoverySources();
   const createMutation = useCreatePosting();
   const deleteMutation = useDeletePosting();
   const markAppliedMutation = useMarkApplied();
@@ -348,6 +357,9 @@ export default function DashboardPage() {
   const disconnectMutation = useDisconnectGmail();
   const runDiscoveryMutation = useRunOnlineDiscovery();
   const updateDiscoveryMutation = useUpdateOnlineDiscoverySettings();
+  const createDiscoverySourceMutation = useCreateOnlineDiscoverySource();
+  const updateDiscoverySourceMutation = useUpdateOnlineDiscoverySource();
+  const deleteDiscoverySourceMutation = useDeleteOnlineDiscoverySource();
 
   useEffect(() => {
     if (discoveryQ.data?.minimumMatchScore != null) {
@@ -363,6 +375,65 @@ export default function DashboardPage() {
   const rawPostings = postingsQ.data ?? [];
   const gmailStatus = gmailStatusQ.data;
   const discoveryStatus = discoveryQ.data;
+  const discoverySources = discoverySourcesQ.data?.sources ?? [];
+  const availableDiscoverySources = discoverySourcesQ.data?.availableSources ?? [];
+
+  function refreshDiscoverySources() {
+    qc.invalidateQueries({ queryKey: getGetOnlineDiscoverySourcesQueryKey() });
+  }
+
+  function addBuiltInDiscoverySource(provider: string) {
+    createDiscoverySourceMutation.mutate({ data: { provider } }, {
+      onSuccess: () => {
+        refreshDiscoverySources();
+        toast({ title: "Source added" });
+      },
+      onError: () => toast({ title: "Could not add source", variant: "destructive" }),
+    });
+  }
+
+  function addCustomDiscoverySource() {
+    const url = customSourceUrl.trim();
+    if (!url) {
+      toast({ title: "Add a public HTTPS feed URL", variant: "destructive" });
+      return;
+    }
+    createDiscoverySourceMutation.mutate(
+      { data: { name: customSourceName.trim() || null, url } },
+      {
+        onSuccess: () => {
+          setCustomSourceName("");
+          setCustomSourceUrl("");
+          refreshDiscoverySources();
+          toast({ title: "Custom source added" });
+        },
+        onError: (error: Error) => toast({ title: "Could not add source", description: error.message, variant: "destructive" }),
+      },
+    );
+  }
+
+  function toggleDiscoverySource(source: OnlineDiscoverySource) {
+    updateDiscoverySourceMutation.mutate({ id: source.id, data: { suppressed: !source.isSuppressed } }, {
+      onSuccess: () => {
+        refreshDiscoverySources();
+        toast({
+          title: source.isSuppressed ? "Source restored" : "Source suppressed",
+          description: source.isSuppressed ? "It will be included in future searches." : "It will be skipped in future searches.",
+        });
+      },
+      onError: () => toast({ title: "Could not update source", variant: "destructive" }),
+    });
+  }
+
+  function removeDiscoverySource(source: OnlineDiscoverySource) {
+    deleteDiscoverySourceMutation.mutate({ id: source.id }, {
+      onSuccess: () => {
+        refreshDiscoverySources();
+        toast({ title: "Source removed", description: "Previously imported jobs were kept." });
+      },
+      onError: () => toast({ title: "Could not remove source", variant: "destructive" }),
+    });
+  }
 
   function saveDiscoverySettings(scheduleHours: number | null, minimumMatchScore = discoveryMinScore) {
     updateDiscoveryMutation.mutate(
@@ -1006,6 +1077,118 @@ export default function DashboardPage() {
                 ? `Last search ${formatAdded(discoveryStatus.lastRunAt)} · ${discoveryStatus.lastImported} added`
                 : "Uses your profile, US/Canada location, and the same screening as email listings"}
             </span>
+          </div>
+          <div className="border-t border-violet-800/30 pt-3 space-y-3" data-testid="online-discovery-sources">
+            <div className="flex items-baseline justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium text-violet-200">Job sources</p>
+                <p className="text-xs text-violet-300/60 mt-0.5">Suppress a source to pause it, or remove it without deleting saved jobs.</p>
+              </div>
+              <span className="text-xs text-violet-300/60">
+                {discoverySources.filter((source) => !source.isSuppressed).length} active
+              </span>
+            </div>
+            {discoverySourcesQ.isLoading ? (
+              <Skeleton className="h-12 w-full" />
+            ) : (
+              <div className="space-y-1.5">
+                {discoverySources.map((source) => (
+                  <div
+                    key={source.id}
+                    className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border px-3 py-2 ${source.isSuppressed ? "border-violet-900/50 bg-violet-950/20 opacity-70" : "border-violet-800/40 bg-background/30"}`}
+                  >
+                    <Link2 className="w-3.5 h-3.5 text-violet-300 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-violet-100 truncate">{source.name}</p>
+                      <p className="text-[11px] text-violet-300/60 truncate">{source.url}</p>
+                    </div>
+                    {source.isSuppressed && <Badge variant="outline" className="text-[10px] border-amber-700/50 text-amber-300">Suppressed</Badge>}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs text-violet-200 hover:text-violet-50"
+                      disabled={updateDiscoverySourceMutation.isPending}
+                      onClick={() => toggleDiscoverySource(source)}
+                      data-testid={`toggle-discovery-source-${source.id}`}
+                    >
+                      {source.isSuppressed ? <RotateCcw className="w-3 h-3 mr-1" /> : <Ban className="w-3 h-3 mr-1" />}
+                      {source.isSuppressed ? "Restore" : "Suppress"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-violet-300 hover:text-destructive"
+                      disabled={deleteDiscoverySourceMutation.isPending}
+                      onClick={() => removeDiscoverySource(source)}
+                      aria-label={`Remove ${source.name}`}
+                      data-testid={`remove-discovery-source-${source.id}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                ))}
+                {discoverySources.length === 0 && (
+                  <p className="text-xs text-violet-300/60 py-1">No sources configured. Add one below to search online jobs.</p>
+                )}
+              </div>
+            )}
+            {availableDiscoverySources.filter((available) => !discoverySources.some((source) => source.kind === "builtin" && source.provider === available.provider)).length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-violet-300/70">Available</span>
+                {availableDiscoverySources
+                  .filter((available) => !discoverySources.some((source) => source.kind === "builtin" && source.provider === available.provider))
+                  .map((available) => (
+                    <Button
+                      key={available.provider}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs border-violet-700/50 text-violet-200 hover:bg-violet-900/40"
+                      disabled={createDiscoverySourceMutation.isPending}
+                      onClick={() => addBuiltInDiscoverySource(available.provider)}
+                      data-testid={`add-discovery-source-${available.provider}`}
+                    >
+                      <Plus className="w-3 h-3 mr-1" /> {available.name}
+                    </Button>
+                  ))}
+              </div>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)_auto] gap-2">
+              <Input
+                value={customSourceName}
+                onChange={(event) => setCustomSourceName(event.target.value)}
+                placeholder="Source name (optional)"
+                className="h-8 text-xs"
+                data-testid="custom-discovery-source-name"
+              />
+              <Input
+                value={customSourceUrl}
+                onChange={(event) => setCustomSourceUrl(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addCustomDiscoverySource();
+                  }
+                }}
+                placeholder="https://example.com/jobs.rss or feed.json"
+                className="h-8 text-xs"
+                data-testid="custom-discovery-source-url"
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs border-violet-700/50 text-violet-200 hover:bg-violet-900/40"
+                disabled={createDiscoverySourceMutation.isPending}
+                onClick={addCustomDiscoverySource}
+                data-testid="add-custom-discovery-source"
+              >
+                <Plus className="w-3 h-3 mr-1" /> Add feed
+              </Button>
+            </div>
+            <p className="text-[11px] text-violet-300/50">Custom feeds must be public HTTPS RSS, Atom, or JSON job feeds with title, company, and job URL fields.</p>
           </div>
           {discoveryStatus?.lastError && <p className="text-xs text-destructive">{discoveryStatus.lastError}</p>}
         </div>

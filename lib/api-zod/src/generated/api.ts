@@ -535,6 +535,69 @@ export const UpdateOnlineDiscoverySettingsResponse = zod.object({
 });
 
 /**
+ * @summary List configured and available online job sources
+ */
+export const GetOnlineDiscoverySourcesResponse = zod.object({
+  sources: zod.array(
+    zod.object({
+      id: zod.number(),
+      provider: zod.string(),
+      name: zod.string(),
+      url: zod.string().url(),
+      kind: zod.enum(["builtin", "custom"]),
+      isSuppressed: zod.boolean(),
+      createdAt: zod.coerce.date(),
+      updatedAt: zod.coerce.date(),
+    }),
+  ),
+  availableSources: zod.array(
+    zod.object({
+      provider: zod.string(),
+      name: zod.string(),
+      url: zod.string().url(),
+    }),
+  ),
+});
+
+/**
+ * @summary Add a built-in or custom online job source
+ */
+export const CreateOnlineDiscoverySourceBody = zod.object({
+  provider: zod.string().nullish(),
+  name: zod.string().nullish(),
+  url: zod.string().nullish(),
+});
+
+/**
+ * @summary Suppress or restore an online job source
+ */
+export const UpdateOnlineDiscoverySourceParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateOnlineDiscoverySourceBody = zod.object({
+  suppressed: zod.boolean(),
+});
+
+export const UpdateOnlineDiscoverySourceResponse = zod.object({
+  id: zod.number(),
+  provider: zod.string(),
+  name: zod.string(),
+  url: zod.string().url(),
+  kind: zod.enum(["builtin", "custom"]),
+  isSuppressed: zod.boolean(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Remove an online job source configuration
+ */
+export const DeleteOnlineDiscoverySourceParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
  * @summary Get dashboard and sync filtering metrics
  */
 export const GetFilterStatsQueryParams = zod.object({

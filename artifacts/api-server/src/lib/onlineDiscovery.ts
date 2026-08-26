@@ -1,15 +1,23 @@
 import { and, eq } from "drizzle-orm";
-import { db, jobPostingsTable, jobPostingSourcesTable, userProfilesTable } from "@workspace/db";
+import {
+  db,
+  jobPostingsTable,
+  jobPostingSourcesTable,
+  onlineDiscoverySourcesTable,
+  userProfilesTable,
+} from "@workspace/db";
 import { canonicalizeJobUrl, isFuzzyDuplicate, normalizeFuzzy } from "./dedup";
 import { logger } from "./logger";
 import { fetchJobPageContent } from "./pageScraper";
 import { scorePostingBackground } from "./scoringService";
 import { fetchArbeitnowJobs, type OnlineJobCandidate } from "./sources/arbeitnow";
+import { fetchCustomFeed, validatePublicFeedUrl } from "./sources/customFeed";
 import { DEFAULT_EMAIL_FILTER_CRITERIA, matchesEmailFilterCriteria, type EmailFilterCriteria } from "./gmailClient";
 
-const SOURCE = "arbeitnow";
+const SOURCE = "online";
 const MAX_CANDIDATES_PER_RUN = 12;
 const activeDiscoveryRuns = new Set<string>();
+const ARBEITNOW_URL = "https://www.arbeitnow.com/api/job-board-api";
 const NORTH_AMERICA_LOCATION_PATTERN = /\b(?:united states|u\.?\s*s\.?\s*a?\.?|usa|canada|north america|alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming|ontario|quebec|nova scotia|new brunswick|manitoba|british columbia|prince edward island|saskatchewan|alberta|newfoundland and labrador|toronto|vancouver|montreal|calgary|ottawa|edmonton|winnipeg|quebec city)\b/i;
 const NORTH_AMERICA_STATE_CODE_PATTERN = /\b(?:al|ak|az|ar|ca|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy)\b/i;
 
@@ -18,6 +26,61 @@ type CompanyFilter = { mode?: "off" | "include" | "exclude"; companies?: string[
 class SourceClaimConflictError extends Error {}
 
 export class DiscoveryProfileRequiredError extends Error {}
+
+export const ONLINE_SOURCE_CATALOG = [
+  { provider: "arbeitnow", name: "Arbeitnow", url: ARBEITNOW_URL },
+] as const;
+
+export async function ensureDefaultOnlineDiscoverySource(userId: string): Promise<void> {
+  const source = ONLINE_SOURCE_CATALOG[0];
+  if (!source) return;
+  const [profile] = await db.select({
+    initialized: userProfilesTable.onlineDiscoverySourcesInitialized,
+  }).from(userProfilesTable).where(eq(userProfilesTable.userId, userId));
+  if (profile?.initialized) return;
+
+  await db.transaction(async (tx) => {
+    await tx.insert(onlineDiscoverySourcesTable).values({
+      userId,
+      provider: source.provider,
+      name: source.name,
+      url: source.url,
+      kind: "builtin",
+    }).onConflictDoNothing();
+    await tx.update(userProfilesTable)
+      .set({ onlineDiscoverySourcesInitialized: true, updatedAt: new Date() })
+      .where(eq(userProfilesTable.userId, userId));
+  });
+}
+
+export async function getOnlineDiscoverySources(userId: string) {
+  await ensureDefaultOnlineDiscoverySource(userId);
+  const sources = await db.select()
+    .from(onlineDiscoverySourcesTable)
+    .where(eq(onlineDiscoverySourcesTable.userId, userId))
+    .orderBy(onlineDiscoverySourcesTable.createdAt);
+  return { sources, availableSources: ONLINE_SOURCE_CATALOG };
+}
+
+export function prepareCustomSourceInput(name: string, url: string) {
+  const parsedUrl = validatePublicFeedUrl(url);
+  const hostname = parsedUrl.hostname.replace(/^www\./, "");
+  return {
+    provider: "custom",
+    name: name.trim() || hostname,
+    url: parsedUrl.toString(),
+    kind: "custom" as const,
+  };
+}
+
+async function fetchConfiguredSource(
+  source: typeof onlineDiscoverySourcesTable.$inferSelect,
+): Promise<OnlineJobCandidate[]> {
+  if (source.kind === "builtin" && source.provider === "arbeitnow") {
+    return fetchArbeitnowJobs();
+  }
+  return fetchCustomFeed(source.url, `custom:${source.id}`);
+}
 
 export type DiscoveryCriteria = {
   roleTitles: string[];
@@ -173,8 +236,19 @@ export async function runOnlineDiscovery(userId: string) {
       throw new DiscoveryProfileRequiredError("Add work experience or skills to your profile before discovering online jobs.");
     }
 
-    const [feed, sourceRows, postingRows] = await Promise.all([
-      fetchArbeitnowJobs(),
+    const configuredSources = await getOnlineDiscoverySources(userId);
+    const activeSources = configuredSources.sources.filter((source) => !source.isSuppressed);
+    const sourceFetches = await Promise.allSettled(activeSources.map((source) => fetchConfiguredSource(source)));
+    const sourceErrors = sourceFetches.flatMap((result, index) => {
+      if (result.status === "fulfilled") return [];
+      return [`${activeSources[index]?.name ?? "Unknown source"}: ${result.reason instanceof Error ? result.reason.message : "request failed"}`];
+    });
+    const feed = sourceFetches.flatMap((result) => result.status === "fulfilled" ? result.value : []);
+    if (activeSources.length > 0 && feed.length === 0 && sourceErrors.length === activeSources.length) {
+      throw new Error(`All online job sources failed. ${sourceErrors.join(" ")}`);
+    }
+
+    const [sourceRows, postingRows] = await Promise.all([
       db.select().from(jobPostingSourcesTable).where(eq(jobPostingSourcesTable.userId, userId)),
       db.select({ id: jobPostingsTable.id, link: jobPostingsTable.link }).from(jobPostingsTable).where(eq(jobPostingsTable.userId, userId)),
     ]);
@@ -246,7 +320,7 @@ export async function runOnlineDiscovery(userId: string) {
               link: screenedCandidate.url,
               fullDescription: screenedCandidate.description || `${screenedCandidate.title} at ${screenedCandidate.company}`,
               extractedSkills: screenedCandidate.tags,
-            source: SOURCE,
+              source: screenedCandidate.provider,
               sourcePostedAt: screenedCandidate.postedAt,
               location: screenedCandidate.location,
               remoteType: screenedCandidate.remote ? "remote" : "unknown",
@@ -287,11 +361,19 @@ export async function runOnlineDiscovery(userId: string) {
       lastOnlineDiscoveryFound: candidates.length,
       lastOnlineDiscoveryImported: imported,
       lastOnlineDiscoveryDuplicates: duplicates,
-      lastOnlineDiscoveryError: null,
+      lastOnlineDiscoveryError: sourceErrors.length > 0 ? `Some sources failed: ${sourceErrors.join(" ")}` : null,
       updatedAt: now,
     }).where(eq(userProfilesTable.userId, userId)).returning();
 
-    logger.info({ userId, fetched: feed.length, considered: candidates.length, imported, duplicates }, "online discovery completed");
+    logger.info({
+      userId,
+      sourceCount: activeSources.length,
+      failedSourceCount: sourceErrors.length,
+      fetched: feed.length,
+      considered: candidates.length,
+      imported,
+      duplicates,
+    }, "online discovery completed");
     return { ...toDiscoveryStatus(updatedProfile), fetched: feed.length, considered: candidates.length, imported, duplicates, matchedExisting };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Online discovery failed.";
