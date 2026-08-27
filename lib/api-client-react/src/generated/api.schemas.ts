@@ -279,6 +279,7 @@ export type OnlineDiscoverySourceKind =
 export const OnlineDiscoverySourceKind = {
   builtin: "builtin",
   custom: "custom",
+  search: "search",
 } as const;
 
 export interface OnlineDiscoverySource {

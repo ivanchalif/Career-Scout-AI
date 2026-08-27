@@ -1378,7 +1378,7 @@ components:
           format: uri
         kind:
           type: string
-          enum: [builtin, custom]
+          enum: [builtin, custom, search]
         isSuppressed:
           type: boolean
         createdAt:

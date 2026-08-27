@@ -8,7 +8,7 @@ export const onlineDiscoverySourcesTable = pgTable("online_discovery_sources", {
   provider: text("provider").notNull(),
   name: text("name").notNull(),
   url: text("url").notNull(),
-  kind: text("kind").notNull().$type<"builtin" | "custom">(),
+  kind: text("kind").notNull().$type<"builtin" | "custom" | "search">(),
   isSuppressed: boolean("is_suppressed").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

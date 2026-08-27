@@ -12,6 +12,7 @@ import { fetchJobPageContent } from "./pageScraper";
 import { scorePostingBackground } from "./scoringService";
 import { fetchArbeitnowJobs, type OnlineJobCandidate } from "./sources/arbeitnow";
 import { fetchCustomFeed, validatePublicFeedUrl } from "./sources/customFeed";
+import { fetchGoogleSearchResults, isGoogleSearchUrl } from "./sources/googleSearch";
 import { DEFAULT_EMAIL_FILTER_CRITERIA, matchesEmailFilterCriteria, type EmailFilterCriteria } from "./gmailClient";
 
 const SOURCE = "online";
@@ -64,6 +65,15 @@ export async function getOnlineDiscoverySources(userId: string) {
 
 export function prepareCustomSourceInput(name: string, url: string) {
   const parsedUrl = validatePublicFeedUrl(url);
+  if (isGoogleSearchUrl(parsedUrl.toString())) {
+    const query = parsedUrl.searchParams.get("q") ?? "";
+    return {
+      provider: "google",
+      name: name.trim() || `Google: ${query.slice(0, 72)}`,
+      url: parsedUrl.toString(),
+      kind: "search" as const,
+    };
+  }
   const hostname = parsedUrl.hostname.replace(/^www\./, "");
   return {
     provider: "custom",
@@ -78,6 +88,9 @@ async function fetchConfiguredSource(
 ): Promise<OnlineJobCandidate[]> {
   if (source.kind === "builtin" && source.provider === "arbeitnow") {
     return fetchArbeitnowJobs();
+  }
+  if (source.kind === "search" && source.provider === "google") {
+    return fetchGoogleSearchResults(source.url, `google:${source.id}`);
   }
   return fetchCustomFeed(source.url, `custom:${source.id}`);
 }
