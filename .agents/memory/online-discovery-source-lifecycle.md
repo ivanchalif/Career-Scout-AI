@@ -11,6 +11,10 @@ Custom feeds must stay publicly reachable: reject non-HTTPS and private-network 
 
 Google Search URLs are saved as the user supplied them, but their query text is executed through Brave Search because Google blocks unattended server requests. Keep the UI explicit about this distinction and preserve Google query operators unchanged.
 
-**Why:** Users need reversible control over noisy sources without losing their saved job history, arbitrary feed URLs create SSRF risk, and silently scraping Google would create an unreliable source that often returns no jobs.
+For web listings, never apply email-envelope include criteria such as sender allowlists or generic subject terms. Reuse blocked-body exclusions only; source queries plus profile role, skill, location, and company criteria decide inclusion.
+
+Treat “San Francisco” and “SF Bay Area” as equivalent locations. HiringCafe URLs are dynamic result pages, not feeds; consume their server-rendered job records through the dedicated adapter.
+
+**Why:** Users need reversible control over noisy sources without losing their saved job history, arbitrary feed URLs create SSRF risk, and silently scraping Google would create an unreliable source. Email senders and alert wording do not exist on direct web jobs and previously rejected every valid result.
 
 **How to apply:** New catalog adapters should use the same lifecycle. Never cascade a source configuration delete into job postings or provenance records. Search adapters should enrich direct job pages before final screening and scoring.

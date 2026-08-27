@@ -55,7 +55,10 @@ function resultUrl(href: string): string | null {
     }
   }
   if (!["http:", "https:"].includes(parsed.protocol) || isGoogleHost(parsed.hostname)) return null;
-  if (!/\/(?:jobs?|careers?|positions?|openings?)\b/i.test(parsed.pathname) && !/greenhouse\.io$/i.test(parsed.hostname)) return null;
+  const knownBoard = /(?:^|\.)greenhouse\.io$/i.test(parsed.hostname)
+    || parsed.hostname === "jobs.lever.co"
+    || parsed.hostname === "jobs.ashbyhq.com";
+  if (!knownBoard && !/\/(?:jobs?|careers?|positions?|openings?)\b/i.test(parsed.pathname)) return null;
   return parsed.toString();
 }
 
@@ -73,11 +76,17 @@ function companyFromResult(title: string, url: URL): { title: string; company: s
   const cleanedTitle = title.replace(/^\s*job application for\s+/i, "").trim();
   const atMatch = cleanedTitle.match(/^(.+?)\s+at\s+(.+)$/i);
   if (atMatch?.[1] && atMatch[2]) return { title: atMatch[1].trim(), company: atMatch[2].trim() };
+  const boardTitle = cleanedTitle.match(/^(.+?)\s+-\s+(.+?)(?:\s+-\s+Application)?$/i);
+  if ((url.hostname === "jobs.lever.co" || url.hostname === "jobs.ashbyhq.com") && boardTitle?.[1] && boardTitle[2]) {
+    return { title: boardTitle[2].trim(), company: boardTitle[1].trim() };
+  }
   const pathParts = url.pathname.split("/").filter(Boolean);
-  const greenhouseCompany = url.hostname.includes("greenhouse.io") ? pathParts[0] : "";
+  const boardCompany = url.hostname.includes("greenhouse.io") || url.hostname === "jobs.lever.co" || url.hostname === "jobs.ashbyhq.com"
+    ? pathParts[0]
+    : "";
   return {
     title: cleanedTitle,
-    company: greenhouseCompany ? greenhouseCompany.replace(/[-_]/g, " ") : url.hostname.replace(/^www\./, ""),
+    company: boardCompany ? boardCompany.replace(/[-_]/g, " ") : url.hostname.replace(/^www\./, ""),
   };
 }
 

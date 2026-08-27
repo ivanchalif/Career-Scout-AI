@@ -82,36 +82,27 @@ describe("Arbeitnow source adapter", () => {
       .toBe("contract-to-hire");
   });
 
-  it("applies email include criteria to online title, source, and description", () => {
+  it("treats San Francisco and SF Bay Area as equivalent locations", () => {
+    expect(rankCandidate(candidate({ location: "San Francisco, United States" }), {
+      roleTitles: ["Senior Product Manager"],
+      skills: ["Product Management"],
+      locations: ["SF Bay Area", "remote"],
+      remotePreferences: ["hybrid", "onsite"],
+    }, { titleExcludeKeywords: [], companyFilterSettings: { mode: "off", companies: [] } })).toBeGreaterThan(0);
+  });
+
+  it("ignores email-envelope include terms but preserves blocked-body exclusions online", () => {
     const usCandidate = candidate({ description: "Build product roadmaps and lead discovery." });
     expect(matchesOnlineEmailCriteria(usCandidate, {
-      subjectKeywords: ["product manager"],
-      fromAddresses: [],
-      bodyKeywords: [],
+      subjectKeywords: ["job"],
+      fromAddresses: ["jobalert@example.com"],
+      bodyKeywords: ["opportunity"],
       blockedBodyKeywords: [],
     })).toBe(true);
     expect(matchesOnlineEmailCriteria(usCandidate, {
-      subjectKeywords: [],
-      fromAddresses: ["example.com"],
-      bodyKeywords: [],
-      blockedBodyKeywords: [],
-    })).toBe(true);
-    expect(matchesOnlineEmailCriteria(usCandidate, {
-      subjectKeywords: [],
-      fromAddresses: [],
-      bodyKeywords: ["roadmaps"],
-      blockedBodyKeywords: [],
-    })).toBe(true);
-    expect(matchesOnlineEmailCriteria(usCandidate, {
-      subjectKeywords: ["sales"],
-      fromAddresses: [],
-      bodyKeywords: [],
-      blockedBodyKeywords: [],
-    })).toBe(false);
-    expect(matchesOnlineEmailCriteria(usCandidate, {
-      subjectKeywords: [],
-      fromAddresses: [],
-      bodyKeywords: [],
+      subjectKeywords: ["job"],
+      fromAddresses: ["jobalert@example.com"],
+      bodyKeywords: ["opportunity"],
       blockedBodyKeywords: ["roadmaps"],
     })).toBe(false);
   });

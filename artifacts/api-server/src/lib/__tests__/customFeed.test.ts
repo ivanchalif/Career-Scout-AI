@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseCustomFeed, validatePublicFeedUrl } from "../sources/customFeed";
 import { isGoogleSearchUrl, parseBraveSearchResults, parseGoogleSearchResults } from "../sources/googleSearch";
+import { isHiringCafeUrl, parseHiringCafePage } from "../sources/hiringCafe";
 
 describe("Custom online job feeds", () => {
   it("normalizes common JSON job feed shapes", () => {
@@ -123,5 +124,57 @@ describe("Custom online job feeds", () => {
     expect(parseBraveSearchResults({
       web: { results: [{ title: "Product news", url: "https://example.com/blog/product" }] },
     }, searchUrl, "brave:23")).toEqual([]);
+  });
+
+  it("accepts Lever board links without a /jobs path", () => {
+    const searchUrl = "https://www.google.com/search?q=site%3Alever.co+%22Head+of+Product%22+%22San+Francisco%22";
+    const jobs = parseBraveSearchResults({
+      web: {
+        results: [{
+          title: "Crunchbase - Head of Product",
+          url: "https://jobs.lever.co/crunchbase/909f1a52-fb98-47f9-828b-bb4cc1268b88",
+          description: "Lead product strategy in San Francisco.",
+        }],
+      },
+    }, searchUrl, "brave:24");
+
+    expect(jobs[0]).toMatchObject({
+      title: "Head of Product",
+      company: "Crunchbase",
+      location: "San Francisco, United States",
+    });
+  });
+
+  it("normalizes server-rendered HiringCafe jobs", () => {
+    const url = "https://hiringcafe.com/?searchState=%7B%22departments%22%3A%5B%22Product%20Management%22%5D%7D";
+    const jobs = parseHiringCafePage(`
+      <script id="__NEXT_DATA__" type="application/json">${JSON.stringify({
+        props: {
+          pageProps: {
+            ssrHits: [{
+              id: "role-1",
+              apply_url: "https://jobs.example.com/role-1",
+              job_information: { title: "Head of Product" },
+              attributed_org: { name: "Example Co" },
+              v5_processed_job_data: {
+                requirements_summary: "Ten years of product leadership.",
+                role_activities: ["product strategy"],
+                job_category: "Product Management",
+                formatted_workplace_location: "San Francisco, California, United States",
+                workplace_type: "Hybrid",
+              },
+            }],
+          },
+        },
+      })}</script>
+    `, "hiringcafe:13");
+
+    expect(isHiringCafeUrl(url)).toBe(true);
+    expect(jobs[0]).toMatchObject({
+      title: "Head of Product",
+      company: "Example Co",
+      location: "San Francisco, California, United States",
+      remote: false,
+    });
   });
 });

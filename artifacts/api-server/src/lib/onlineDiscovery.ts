@@ -13,6 +13,7 @@ import { scorePostingBackground } from "./scoringService";
 import { fetchArbeitnowJobs, type OnlineJobCandidate } from "./sources/arbeitnow";
 import { fetchCustomFeed, validatePublicFeedUrl } from "./sources/customFeed";
 import { fetchGoogleSearchResults, isGoogleSearchUrl } from "./sources/googleSearch";
+import { fetchHiringCafeJobs, isHiringCafeUrl } from "./sources/hiringCafe";
 import { DEFAULT_EMAIL_FILTER_CRITERIA, matchesEmailFilterCriteria, type EmailFilterCriteria } from "./gmailClient";
 
 const SOURCE = "online";
@@ -74,6 +75,14 @@ export function prepareCustomSourceInput(name: string, url: string) {
       kind: "search" as const,
     };
   }
+  if (isHiringCafeUrl(parsedUrl.toString())) {
+    return {
+      provider: "hiringcafe",
+      name: name.trim() || "HiringCafe",
+      url: parsedUrl.toString(),
+      kind: "search" as const,
+    };
+  }
   const hostname = parsedUrl.hostname.replace(/^www\./, "");
   return {
     provider: "custom",
@@ -91,6 +100,9 @@ async function fetchConfiguredSource(
   }
   if (source.kind === "search" && (source.provider === "brave" || source.provider === "google")) {
     return fetchGoogleSearchResults(source.url, `brave:${source.id}`);
+  }
+  if (source.provider === "hiringcafe" || isHiringCafeUrl(source.url)) {
+    return fetchHiringCafeJobs(source.url, `hiringcafe:${source.id}`);
   }
   return fetchCustomFeed(source.url, `custom:${source.id}`);
 }
@@ -148,16 +160,29 @@ export function matchesOnlineEmailCriteria(
   candidate: OnlineJobCandidate,
   criteria: EmailFilterCriteria,
 ): boolean {
-  return matchesEmailFilterCriteria(
-    candidate.title,
-    onlineSenderText(candidate),
-    candidate.description,
-    criteria,
-  );
+  // Email sender/subject include terms describe alert envelopes, not job fit.
+  // Online sources have no sender, and titles such as "Head of Product" need
+  // not contain generic alert words such as "job" or "hiring". Reuse only
+  // the blocked-body exclusions; profile criteria and source queries handle
+  // online inclusion.
+  return matchesEmailFilterCriteria(candidate.title, onlineSenderText(candidate), candidate.description, {
+    subjectKeywords: [],
+    fromAddresses: [],
+    bodyKeywords: [],
+    blockedBodyKeywords: criteria.blockedBodyKeywords,
+  });
 }
 
 function normalWords(value: string): Set<string> {
   return new Set(normalizeFuzzy(value).split(" ").filter((word) => word.length > 2));
+}
+
+function locationsMatch(candidateLocation: string, wantedLocation: string): boolean {
+  const candidate = normalizeFuzzy(candidateLocation);
+  const wanted = normalizeFuzzy(wantedLocation);
+  if (candidate.includes(wanted) || wanted.includes(candidate)) return true;
+  const sanFranciscoArea = /\b(?:san francisco|sf|bay area)\b/;
+  return sanFranciscoArea.test(candidate) && sanFranciscoArea.test(wanted);
 }
 
 export function rankCandidate(candidate: OnlineJobCandidate, criteria: DiscoveryCriteria, profile: {
@@ -187,8 +212,7 @@ export function rankCandidate(candidate: OnlineJobCandidate, criteria: Discovery
   }
   if (!candidate.remote && criteria.locations.length > 0) {
     if (!candidate.location) return null;
-    const location = candidate.location.toLowerCase();
-    if (!criteria.locations.some((wanted) => location.includes(wanted.toLowerCase()) || wanted.toLowerCase().includes(location))) return null;
+    if (!criteria.locations.some((wanted) => wanted.toLowerCase() !== "remote" && locationsMatch(candidate.location ?? "", wanted))) return null;
   }
 
   const titleWords = normalWords(candidate.title);
