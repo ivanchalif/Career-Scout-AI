@@ -1911,7 +1911,7 @@ export const useCreateOnlineDiscoverySource = <
 };
 
 /**
- * @summary Suppress or restore an online job source
+ * @summary Edit, suppress, or restore an online job source
  */
 export const getUpdateOnlineDiscoverySourceUrl = (id: number) => {
   return `/api/online-discovery/sources/${id}`;
@@ -1979,7 +1979,7 @@ export type UpdateOnlineDiscoverySourceMutationBody =
 export type UpdateOnlineDiscoverySourceMutationError = ErrorType<ErrorResponse>;
 
 /**
- * @summary Suppress or restore an online job source
+ * @summary Edit, suppress, or restore an online job source
  */
 export const useUpdateOnlineDiscoverySource = <
   TError = ErrorType<ErrorResponse>,

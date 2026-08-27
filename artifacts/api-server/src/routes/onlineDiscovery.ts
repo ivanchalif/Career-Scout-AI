@@ -112,15 +112,77 @@ router.patch("/online-discovery/sources/:id", requireAuth, async (req, res): Pro
     res.status(400).json({ error: body.error.message });
     return;
   }
-  const [updated] = await db.update(onlineDiscoverySourcesTable)
-    .set({ isSuppressed: body.data.suppressed, updatedAt: new Date() })
-    .where(and(eq(onlineDiscoverySourcesTable.id, params.data.id), eq(onlineDiscoverySourcesTable.userId, req.userId)))
-    .returning();
-  if (!updated) {
+
+  const [existing] = await db.select()
+    .from(onlineDiscoverySourcesTable)
+    .where(and(eq(onlineDiscoverySourcesTable.id, params.data.id), eq(onlineDiscoverySourcesTable.userId, req.userId)));
+  if (!existing) {
     res.status(404).json({ error: "Source not found." });
     return;
   }
-  res.json(UpdateOnlineDiscoverySourceResponse.parse(updated));
+
+  const hasEditableField =
+    body.data.suppressed !== undefined
+    || body.data.name !== undefined
+    || body.data.url !== undefined;
+  if (!hasEditableField) {
+    res.status(400).json({ error: "Provide a source name, URL, or suppression state to update." });
+    return;
+  }
+
+  const changes: Partial<typeof onlineDiscoverySourcesTable.$inferInsert> = {
+    updatedAt: new Date(),
+  };
+  if (body.data.suppressed !== undefined) {
+    changes.isSuppressed = body.data.suppressed;
+  }
+
+  if (body.data.name !== undefined) {
+    const name = body.data.name.trim();
+    if (!name) {
+      res.status(400).json({ error: "Source name cannot be blank." });
+      return;
+    }
+    changes.name = name;
+  }
+
+  if (body.data.url !== undefined) {
+    if (existing.kind === "builtin") {
+      res.status(400).json({ error: "Built-in source URLs cannot be changed." });
+      return;
+    }
+    try {
+      const prepared = prepareCustomSourceInput(
+        body.data.name?.trim() || existing.name,
+        body.data.url,
+      );
+      changes.provider = prepared.provider;
+      changes.name = prepared.name;
+      changes.url = prepared.url;
+      changes.kind = prepared.kind;
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Invalid source URL." });
+      return;
+    }
+  }
+
+  try {
+    const [updated] = await db.update(onlineDiscoverySourcesTable)
+      .set(changes)
+      .where(and(eq(onlineDiscoverySourcesTable.id, params.data.id), eq(onlineDiscoverySourcesTable.userId, req.userId)))
+      .returning();
+    if (!updated) {
+      res.status(404).json({ error: "Source not found." });
+      return;
+    }
+    res.json(UpdateOnlineDiscoverySourceResponse.parse(updated));
+  } catch (error) {
+    if ((error as { code?: string }).code === "23505") {
+      res.status(409).json({ error: "This source is already configured." });
+      return;
+    }
+    throw error;
+  }
 });
 
 router.delete("/online-discovery/sources/:id", requireAuth, async (req, res): Promise<void> => {

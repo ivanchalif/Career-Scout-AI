@@ -496,7 +496,7 @@ paths:
     patch:
       operationId: updateOnlineDiscoverySource
       tags: [onlineDiscovery]
-      summary: Suppress or restore an online job source
+      summary: Edit, suppress, or restore an online job source
       parameters:
         - name: id
           in: path
@@ -516,6 +516,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OnlineDiscoverySource"
+        "400":
+          description: Invalid source name, URL, or built-in source edit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Updated source conflicts with an existing configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: Source not found
           content:
@@ -1448,10 +1460,17 @@ components:
     OnlineDiscoverySourceUpdate:
       type: object
       properties:
+        name:
+          type: string
+          minLength: 1
+          description: Replacement display name
+        url:
+          type: string
+          format: uri
+          description: Replacement public HTTPS feed or search URL
         suppressed:
           type: boolean
-      required:
-        - suppressed
+      minProperties: 1
 
     OnlineDiscoveryCriteria:
       type: object

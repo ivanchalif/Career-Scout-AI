@@ -608,14 +608,20 @@ export const CreateOnlineDiscoverySourceBody = zod.object({
 });
 
 /**
- * @summary Suppress or restore an online job source
+ * @summary Edit, suppress, or restore an online job source
  */
 export const UpdateOnlineDiscoverySourceParams = zod.object({
   id: zod.coerce.number(),
 });
 
 export const UpdateOnlineDiscoverySourceBody = zod.object({
-  suppressed: zod.boolean(),
+  name: zod.string().min(1).optional().describe("Replacement display name"),
+  url: zod
+    .string()
+    .url()
+    .optional()
+    .describe("Replacement public HTTPS feed or search URL"),
+  suppressed: zod.boolean().optional(),
 });
 
 export const UpdateOnlineDiscoverySourceResponse = zod.object({

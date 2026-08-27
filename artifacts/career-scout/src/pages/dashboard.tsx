@@ -5,7 +5,7 @@ import {
   Plus, Search, SlidersHorizontal, Mail, TrendingUp,
   BriefcaseBusiness, Star, Trash2, X,
   RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2, CheckCircle2, Undo2, MapPin, Ban, RotateCcw, Layers, Copy, Archive,
-  ChevronDown, ChevronUp, ExternalLink, SearchCode, Download, Upload,
+  ChevronDown, ChevronUp, ExternalLink, SearchCode, Download, Upload, Pencil, Check,
 } from "lucide-react";
 import {
   useGetDashboardSummary,
@@ -175,6 +175,10 @@ export default function DashboardPage() {
   const [onlineDiscoveryExpanded, setOnlineDiscoveryExpanded] = useState(false);
   const [customSourceName, setCustomSourceName] = useState("");
   const [customSourceUrl, setCustomSourceUrl] = useState("");
+  const [editingDiscoverySourceId, setEditingDiscoverySourceId] = useState<number | null>(null);
+  const [editingSourceName, setEditingSourceName] = useState("");
+  const [editingSourceUrl, setEditingSourceUrl] = useState("");
+  const [sourceEditError, setSourceEditError] = useState<string | null>(null);
 
   useEffect(() => {
     const SESSION_KEY = "dedup-sweep-done";
@@ -423,6 +427,49 @@ export default function DashboardPage() {
         });
       },
       onError: () => toast({ title: "Could not update source", variant: "destructive" }),
+    });
+  }
+
+  function startEditingDiscoverySource(source: OnlineDiscoverySource) {
+    setEditingDiscoverySourceId(source.id);
+    setEditingSourceName(source.name);
+    setEditingSourceUrl(source.url);
+    setSourceEditError(null);
+  }
+
+  function cancelEditingDiscoverySource() {
+    setEditingDiscoverySourceId(null);
+    setEditingSourceName("");
+    setEditingSourceUrl("");
+    setSourceEditError(null);
+  }
+
+  function saveDiscoverySource(source: OnlineDiscoverySource) {
+    const name = editingSourceName.trim();
+    const url = editingSourceUrl.trim();
+    if (!name) {
+      setSourceEditError("Source name cannot be blank.");
+      return;
+    }
+    if (source.kind !== "builtin" && !url) {
+      setSourceEditError("Source URL cannot be blank.");
+      return;
+    }
+
+    const data = source.kind === "builtin"
+      ? { name }
+      : { name, url };
+    setSourceEditError(null);
+    updateDiscoverySourceMutation.mutate({ id: source.id, data }, {
+      onSuccess: () => {
+        cancelEditingDiscoverySource();
+        refreshDiscoverySources();
+        toast({ title: "Source updated" });
+      },
+      onError: (error) => {
+        const message = error.data?.error ?? error.message;
+        setSourceEditError(message || "Could not update source.");
+      },
     });
   }
 
@@ -1107,43 +1154,125 @@ export default function DashboardPage() {
                   <Skeleton className="h-12 w-full" />
                 ) : (
                   <div className="space-y-1.5">
-                    {discoverySources.map((source) => (
-                      <div
-                        key={source.id}
-                        className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border px-3 py-2 ${source.isSuppressed ? "border-violet-900/50 bg-violet-950/20 opacity-70" : "border-violet-800/40 bg-background/30"}`}
-                      >
-                        <Link2 className="w-3.5 h-3.5 text-violet-300 shrink-0" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-medium text-violet-100 truncate">{source.name}</p>
-                          <p className="text-[11px] text-violet-300/60 truncate">{source.url}</p>
+                    {discoverySources.map((source) => {
+                      const isEditing = editingDiscoverySourceId === source.id;
+                      return (
+                        <div
+                          key={source.id}
+                          className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border px-3 py-2 ${source.isSuppressed ? "border-violet-900/50 bg-violet-950/20 opacity-70" : "border-violet-800/40 bg-background/30"}`}
+                        >
+                          <Link2 className="w-3.5 h-3.5 text-violet-300 shrink-0" />
+                          {isEditing ? (
+                            <div className="min-w-0 flex-1 basis-full sm:basis-auto space-y-1.5">
+                              <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)] gap-2">
+                                <Input
+                                  value={editingSourceName}
+                                  onChange={(event) => {
+                                    setEditingSourceName(event.target.value);
+                                    setSourceEditError(null);
+                                  }}
+                                  placeholder="Source name"
+                                  className="h-8 text-xs"
+                                  aria-label={`Edit ${source.name} name`}
+                                  data-testid={`edit-discovery-source-name-${source.id}`}
+                                />
+                                {source.kind === "builtin" ? (
+                                  <p className="flex items-center text-[11px] text-violet-300/60 truncate" title="Built-in source URLs cannot be changed">
+                                    Built-in URL cannot be changed
+                                  </p>
+                                ) : (
+                                  <Input
+                                    value={editingSourceUrl}
+                                    onChange={(event) => {
+                                      setEditingSourceUrl(event.target.value);
+                                      setSourceEditError(null);
+                                    }}
+                                    placeholder="Public HTTPS feed or search URL"
+                                    className="h-8 text-xs"
+                                    aria-label={`Edit ${source.name} URL`}
+                                    data-testid={`edit-discovery-source-url-${source.id}`}
+                                  />
+                                )}
+                              </div>
+                              {sourceEditError && (
+                                <p className="text-[11px] text-destructive" data-testid={`edit-discovery-source-error-${source.id}`}>
+                                  {sourceEditError}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-medium text-violet-100 truncate">{source.name}</p>
+                              <p className="text-[11px] text-violet-300/60 truncate">{source.url}</p>
+                            </div>
+                          )}
+                          {source.isSuppressed && <Badge variant="outline" className="text-[10px] border-amber-700/50 text-amber-300">Suppressed</Badge>}
+                          {isEditing ? (
+                            <>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-xs text-emerald-300 hover:text-emerald-200"
+                                disabled={updateDiscoverySourceMutation.isPending}
+                                onClick={() => saveDiscoverySource(source)}
+                                data-testid={`save-discovery-source-${source.id}`}
+                              >
+                                <Check className="w-3 h-3 mr-1" /> Save
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-xs text-violet-200 hover:text-violet-50"
+                                disabled={updateDiscoverySourceMutation.isPending}
+                                onClick={cancelEditingDiscoverySource}
+                                data-testid={`cancel-edit-discovery-source-${source.id}`}
+                              >
+                                Cancel
+                              </Button>
+                            </>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-violet-300 hover:text-violet-100"
+                              disabled={updateDiscoverySourceMutation.isPending}
+                              onClick={() => startEditingDiscoverySource(source)}
+                              aria-label={`Edit ${source.name}`}
+                              data-testid={`edit-discovery-source-${source.id}`}
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs text-violet-200 hover:text-violet-50"
+                            disabled={updateDiscoverySourceMutation.isPending || isEditing}
+                            onClick={() => toggleDiscoverySource(source)}
+                            data-testid={`toggle-discovery-source-${source.id}`}
+                          >
+                            {source.isSuppressed ? <RotateCcw className="w-3 h-3 mr-1" /> : <Ban className="w-3 h-3 mr-1" />}
+                            {source.isSuppressed ? "Restore" : "Suppress"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-violet-300 hover:text-destructive"
+                            disabled={deleteDiscoverySourceMutation.isPending || isEditing}
+                            onClick={() => removeDiscoverySource(source)}
+                            aria-label={`Remove ${source.name}`}
+                            data-testid={`remove-discovery-source-${source.id}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
                         </div>
-                        {source.isSuppressed && <Badge variant="outline" className="text-[10px] border-amber-700/50 text-amber-300">Suppressed</Badge>}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2 text-xs text-violet-200 hover:text-violet-50"
-                          disabled={updateDiscoverySourceMutation.isPending}
-                          onClick={() => toggleDiscoverySource(source)}
-                          data-testid={`toggle-discovery-source-${source.id}`}
-                        >
-                          {source.isSuppressed ? <RotateCcw className="w-3 h-3 mr-1" /> : <Ban className="w-3 h-3 mr-1" />}
-                          {source.isSuppressed ? "Restore" : "Suppress"}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-violet-300 hover:text-destructive"
-                          disabled={deleteDiscoverySourceMutation.isPending}
-                          onClick={() => removeDiscoverySource(source)}
-                          aria-label={`Remove ${source.name}`}
-                          data-testid={`remove-discovery-source-${source.id}`}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                    </div>
-                    ))}
+                      );
+                    })}
                     {discoverySources.length === 0 && (
                       <p className="text-xs text-violet-300/60 py-1">No sources configured. Add one below to search online jobs.</p>
                     )}

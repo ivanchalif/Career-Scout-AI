@@ -326,7 +326,14 @@ export interface OnlineDiscoverySourceInput {
 }
 
 export interface OnlineDiscoverySourceUpdate {
-  suppressed: boolean;
+  /**
+   * Replacement display name
+   * @minLength 1
+   */
+  name?: string;
+  /** Replacement public HTTPS feed or search URL */
+  url?: string;
+  suppressed?: boolean;
 }
 
 export interface OnlineDiscoveryCriteria {
