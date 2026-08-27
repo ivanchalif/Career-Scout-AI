@@ -152,6 +152,11 @@ export default function PostingDetailPage({ id }: { id: number }) {
                       </span>
                     )}
                     <Badge variant="secondary" className="text-xs">{posting.senderName ?? data.sourceName ?? posting.source}</Badge>
+                    {data.onlineMatchScore != null && (
+                      <Badge variant="outline" className="text-xs text-violet-300 border-violet-800/50" title="Online discovery match score">
+                        Match {data.onlineMatchScore}
+                      </Badge>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">

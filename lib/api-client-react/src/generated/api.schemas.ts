@@ -160,6 +160,13 @@ export interface PostingWithReport {
    * @nullable
    */
   sourceName?: string | null;
+  /**
+   * Profile match score used by online discovery
+   * @minimum 0
+   * @maximum 100
+   * @nullable
+   */
+  onlineMatchScore?: number | null;
   filterReason?: PostingFilterReason;
   sources?: PostingSource[];
 }

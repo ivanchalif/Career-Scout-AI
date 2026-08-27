@@ -1183,6 +1183,11 @@ components:
         sourceName:
           type: ["string", "null"]
           description: Display name of the configured online discovery source
+        onlineMatchScore:
+          type: ["integer", "null"]
+          minimum: 0
+          maximum: 100
+          description: Profile match score used by online discovery
         filterReason:
           $ref: "#/components/schemas/PostingFilterReason"
         sources:

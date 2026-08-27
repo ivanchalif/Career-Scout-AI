@@ -24,12 +24,49 @@ import { fetchSingleEmail } from "../lib/gmailClient";
 import { isFuzzyDuplicate, sweepDuplicatesOf, runDedupSweep, dbNormalizeSql } from "../lib/dedup";
 import { logger } from "../lib/logger";
 import { fetchJobPageContent } from "../lib/pageScraper";
+import { buildDiscoveryCriteria, rankCandidate } from "../lib/onlineDiscovery";
 import multer from "multer";
 import { stringify } from "csv-stringify/sync";
 import { parse } from "csv-parse/sync";
 import { z } from "zod";
 
 const router: IRouter = Router();
+const ONLINE_POSTING_SOURCE_PATTERN = /^(?:arbeitnow|brave|google|hiringcafe|custom)(?::\d+)?$/;
+
+type DiscoveryScoreProfile = {
+  experienceHistory?: unknown;
+  skills?: string[] | null;
+  locationPreferences?: string[] | null;
+  remotePreferences?: string[] | null;
+  titleExcludeKeywords?: string[] | null;
+  companyFilterSettings?: unknown;
+  emailFilterSettings?: {
+    subjectKeywords: string[];
+    fromAddresses: string[];
+    bodyKeywords: string[];
+    blockedBodyKeywords: string[];
+  } | null;
+};
+
+function getOnlineMatchScore(
+  posting: typeof jobPostingsTable.$inferSelect,
+  profile: DiscoveryScoreProfile | null | undefined,
+): number | null {
+  if (!profile || !ONLINE_POSTING_SOURCE_PATTERN.test(posting.source)) return null;
+
+  return rankCandidate({
+    provider: posting.source,
+    sourceJobId: null,
+    title: posting.title,
+    company: posting.company,
+    description: posting.fullDescription,
+    url: posting.link ?? "",
+    location: posting.location,
+    remote: posting.remoteType === "remote",
+    tags: posting.extractedSkills,
+    postedAt: posting.sourcePostedAt,
+  }, buildDiscoveryCriteria(profile), profile);
+}
 
 async function getPostingWithReport(postingId: number, userId: string) {
   const [posting] = await db
@@ -44,6 +81,19 @@ async function getPostingWithReport(postingId: number, userId: string) {
     .from(matchReportsTable)
     .where(and(eq(matchReportsTable.jobPostingId, postingId), eq(matchReportsTable.userId, userId)));
 
+  const [profile] = await db
+    .select({
+      experienceHistory: userProfilesTable.experienceHistory,
+      skills: userProfilesTable.skills,
+      locationPreferences: userProfilesTable.locationPreferences,
+      remotePreferences: userProfilesTable.remotePreferences,
+      titleExcludeKeywords: userProfilesTable.titleExcludeKeywords,
+      companyFilterSettings: userProfilesTable.companyFilterSettings,
+      emailFilterSettings: userProfilesTable.emailFilterSettings,
+    })
+    .from(userProfilesTable)
+    .where(eq(userProfilesTable.userId, userId));
+
   const sources = await db
     .select({ provider: onlineDiscoverySourcesTable.provider, id: onlineDiscoverySourcesTable.id, name: onlineDiscoverySourcesTable.name })
     .from(onlineDiscoverySourcesTable)
@@ -53,7 +103,12 @@ async function getPostingWithReport(postingId: number, userId: string) {
     posting.source === source.provider || posting.source === `${source.provider}:${source.id}`
   )?.name ?? null;
 
-  return { posting, report: report ?? null, sourceName };
+  return {
+    posting,
+    report: report ?? null,
+    sourceName,
+    onlineMatchScore: getOnlineMatchScore(posting, profile),
+  };
 }
 
 router.get("/postings", requireAuth, async (req, res): Promise<void> => {
@@ -74,6 +129,11 @@ router.get("/postings", requireAuth, async (req, res): Promise<void> => {
     .select({
       companyFilterSettings: userProfilesTable.companyFilterSettings,
       titleExcludeKeywords: userProfilesTable.titleExcludeKeywords,
+      experienceHistory: userProfilesTable.experienceHistory,
+      skills: userProfilesTable.skills,
+      locationPreferences: userProfilesTable.locationPreferences,
+      remotePreferences: userProfilesTable.remotePreferences,
+      emailFilterSettings: userProfilesTable.emailFilterSettings,
     })
     .from(userProfilesTable)
     .where(eq(userProfilesTable.userId, userId));
@@ -175,6 +235,7 @@ router.get("/postings", requireAuth, async (req, res): Promise<void> => {
         posting,
         report: report ?? null,
         sourceName: sourceNames.get(posting.source) ?? null,
+        onlineMatchScore: getOnlineMatchScore(posting, userProfile),
         ...(filterReason !== undefined ? { filterReason } : {}),
       };
     }),
@@ -228,6 +289,19 @@ router.get("/postings/deleted", requireAuth, async (req, res): Promise<void> => 
     ))
     .orderBy(jobPostingsTable.deletedAt);
 
+  const [profile] = await db
+    .select({
+      experienceHistory: userProfilesTable.experienceHistory,
+      skills: userProfilesTable.skills,
+      locationPreferences: userProfilesTable.locationPreferences,
+      remotePreferences: userProfilesTable.remotePreferences,
+      titleExcludeKeywords: userProfilesTable.titleExcludeKeywords,
+      companyFilterSettings: userProfilesTable.companyFilterSettings,
+      emailFilterSettings: userProfilesTable.emailFilterSettings,
+    })
+    .from(userProfilesTable)
+    .where(eq(userProfilesTable.userId, userId));
+
   const onlineSources = await db
     .select({ provider: onlineDiscoverySourcesTable.provider, id: onlineDiscoverySourcesTable.id, name: onlineDiscoverySourcesTable.name })
     .from(onlineDiscoverySourcesTable)
@@ -245,7 +319,12 @@ router.get("/postings/deleted", requireAuth, async (req, res): Promise<void> => 
         .select()
         .from(matchReportsTable)
         .where(and(eq(matchReportsTable.jobPostingId, posting.id), eq(matchReportsTable.userId, userId)));
-      return { posting, report: report ?? null, sourceName: sourceNames.get(posting.source) ?? null };
+      return {
+        posting,
+        report: report ?? null,
+        sourceName: sourceNames.get(posting.source) ?? null,
+        onlineMatchScore: getOnlineMatchScore(posting, profile),
+      };
     }),
   );
 

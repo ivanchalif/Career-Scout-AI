@@ -1544,6 +1544,11 @@ export default function DashboardPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <ScoreBadge score={score} />
+                        {item.onlineMatchScore != null && (
+                          <Badge variant="outline" className="text-xs text-violet-300 border-violet-800/50" title="Online discovery match score">
+                            Match {item.onlineMatchScore}
+                          </Badge>
+                        )}
                         <span className="font-semibold text-foreground line-through">{posting.title}</span>
                         <Badge variant="secondary" className="text-xs">{posting.senderName ?? item.sourceName ?? posting.source}</Badge>
                         {posting.deletedBy === "sweep" && (
@@ -1662,6 +1667,11 @@ export default function DashboardPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <ScoreBadge score={score} />
+                        {item.onlineMatchScore != null && (
+                          <Badge variant="outline" className="text-xs text-violet-300 border-violet-800/50" title="Online discovery match score">
+                            Match {item.onlineMatchScore}
+                          </Badge>
+                        )}
                         <span
                           className="font-semibold text-foreground"
                           data-testid={`posting-title-${posting.id}`}

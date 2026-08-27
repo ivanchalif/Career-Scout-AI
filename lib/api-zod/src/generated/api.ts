@@ -159,6 +159,9 @@ export const ListPostingsQueryParams = zod.object({
   hidden: zod.coerce.boolean().optional().describe("Filter by applied status"),
 });
 
+export const listPostingsResponseOnlineMatchScoreMin = 0;
+export const listPostingsResponseOnlineMatchScoreMax = 100;
+
 export const ListPostingsResponseItem = zod.object({
   posting: zod.object({
     id: zod.number(),
@@ -201,6 +204,12 @@ export const ListPostingsResponseItem = zod.object({
     .string()
     .nullish()
     .describe("Display name of the configured online discovery source"),
+  onlineMatchScore: zod
+    .number()
+    .min(listPostingsResponseOnlineMatchScoreMin)
+    .max(listPostingsResponseOnlineMatchScoreMax)
+    .nullish()
+    .describe("Profile match score used by online discovery"),
   filterReason: zod
     .object({
       byCompany: zod.boolean(),
@@ -241,6 +250,9 @@ export const CreatePostingBody = zod.object({
 /**
  * @summary List deleted job postings
  */
+export const listDeletedPostingsResponseOnlineMatchScoreMin = 0;
+export const listDeletedPostingsResponseOnlineMatchScoreMax = 100;
+
 export const ListDeletedPostingsResponseItem = zod.object({
   posting: zod.object({
     id: zod.number(),
@@ -283,6 +295,12 @@ export const ListDeletedPostingsResponseItem = zod.object({
     .string()
     .nullish()
     .describe("Display name of the configured online discovery source"),
+  onlineMatchScore: zod
+    .number()
+    .min(listDeletedPostingsResponseOnlineMatchScoreMin)
+    .max(listDeletedPostingsResponseOnlineMatchScoreMax)
+    .nullish()
+    .describe("Profile match score used by online discovery"),
   filterReason: zod
     .object({
       byCompany: zod.boolean(),
@@ -314,6 +332,9 @@ export const ListDeletedPostingsResponse = zod.array(
 export const GetPostingParams = zod.object({
   id: zod.coerce.number(),
 });
+
+export const getPostingResponseOnlineMatchScoreMin = 0;
+export const getPostingResponseOnlineMatchScoreMax = 100;
 
 export const GetPostingResponse = zod.object({
   posting: zod.object({
@@ -357,6 +378,12 @@ export const GetPostingResponse = zod.object({
     .string()
     .nullish()
     .describe("Display name of the configured online discovery source"),
+  onlineMatchScore: zod
+    .number()
+    .min(getPostingResponseOnlineMatchScoreMin)
+    .max(getPostingResponseOnlineMatchScoreMax)
+    .nullish()
+    .describe("Profile match score used by online discovery"),
   filterReason: zod
     .object({
       byCompany: zod.boolean(),
@@ -899,6 +926,9 @@ export const SyncGmailResponse = zod.object({
 /**
  * @summary Get dashboard summary statistics
  */
+export const getDashboardSummaryResponseTopMatchesItemOnlineMatchScoreMin = 0;
+export const getDashboardSummaryResponseTopMatchesItemOnlineMatchScoreMax = 100;
+
 export const GetDashboardSummaryResponse = zod.object({
   totalPostings: zod.number(),
   avgFitScore: zod.number().nullable(),
@@ -945,6 +975,12 @@ export const GetDashboardSummaryResponse = zod.object({
         .string()
         .nullish()
         .describe("Display name of the configured online discovery source"),
+      onlineMatchScore: zod
+        .number()
+        .min(getDashboardSummaryResponseTopMatchesItemOnlineMatchScoreMin)
+        .max(getDashboardSummaryResponseTopMatchesItemOnlineMatchScoreMax)
+        .nullish()
+        .describe("Profile match score used by online discovery"),
       filterReason: zod
         .object({
           byCompany: zod.boolean(),
