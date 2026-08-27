@@ -172,7 +172,7 @@ export default function DashboardPage() {
   const [reviewingNearDups, setReviewingNearDups] = useState<Set<number>>(new Set());
   const [autoSweepCount, setAutoSweepCount] = useState<number | null>(null);
   const [discoveryMinScore, setDiscoveryMinScore] = useState(12);
-  const [onlineDiscoveryExpanded, setOnlineDiscoveryExpanded] = useState(true);
+  const [onlineDiscoveryExpanded, setOnlineDiscoveryExpanded] = useState(false);
   const [customSourceName, setCustomSourceName] = useState("");
   const [customSourceUrl, setCustomSourceUrl] = useState("");
 
