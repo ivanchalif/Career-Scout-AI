@@ -9,6 +9,8 @@ Suppressing a source pauses future discovery while keeping its configuration and
 
 Custom feeds must stay publicly reachable: reject non-HTTPS and private-network URLs, validate resolved hosts before fetching, and validate every redirect target.
 
-**Why:** Users need reversible control over noisy sources without losing their saved job history, while arbitrary feed URLs create SSRF risk.
+Google Search URLs are saved as the user supplied them, but their query text is executed through Brave Search because Google blocks unattended server requests. Keep the UI explicit about this distinction and preserve Google query operators unchanged.
 
-**How to apply:** New catalog adapters should use the same lifecycle. Never cascade a source configuration delete into job postings or provenance records.
+**Why:** Users need reversible control over noisy sources without losing their saved job history, arbitrary feed URLs create SSRF risk, and silently scraping Google would create an unreliable source that often returns no jobs.
+
+**How to apply:** New catalog adapters should use the same lifecycle. Never cascade a source configuration delete into job postings or provenance records. Search adapters should enrich direct job pages before final screening and scoring.

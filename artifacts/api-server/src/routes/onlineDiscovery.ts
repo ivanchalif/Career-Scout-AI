@@ -62,7 +62,7 @@ router.post("/online-discovery/sources", requireAuth, async (req, res): Promise<
     return;
   }
 
-  let source: { provider: string; name: string; url: string; kind: "builtin" | "custom" };
+  let source: { provider: string; name: string; url: string; kind: "builtin" | "custom" | "search" };
   if (parsed.data.provider) {
     const builtin = ONLINE_SOURCE_CATALOG.find((candidate) => candidate.provider === parsed.data.provider);
     if (!builtin) {

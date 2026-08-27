@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseCustomFeed, validatePublicFeedUrl } from "../sources/customFeed";
-import { isGoogleSearchUrl, parseGoogleSearchResults } from "../sources/googleSearch";
+import { isGoogleSearchUrl, parseBraveSearchResults, parseGoogleSearchResults } from "../sources/googleSearch";
 
 describe("Custom online job feeds", () => {
   it("normalizes common JSON job feed shapes", () => {
@@ -78,5 +78,50 @@ describe("Custom online job feeds", () => {
       location: "San Francisco, United States",
     });
     expect(jobs[0]?.url).toBe("https://job-boards.greenhouse.io/northbeam/jobs/12345");
+  });
+
+  it("normalizes Brave results for a saved Google query", () => {
+    const searchUrl = "https://www.google.com/search?q=site%3Agreenhouse.io+%22Head+of+Product%22+%22San+Francisco%22";
+    const jobs = parseBraveSearchResults({
+      web: {
+        results: [{
+          title: "Job Application for Head of Product at Northbeam",
+          url: "https://job-boards.greenhouse.io/northbeam/jobs/12345",
+          description: "Lead product strategy and build a world-class product organization.",
+        }],
+      },
+    }, searchUrl, "brave:21");
+
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]).toMatchObject({
+      provider: "brave:21",
+      title: "Head of Product",
+      company: "Northbeam",
+      location: "San Francisco, United States",
+      remote: false,
+    });
+  });
+
+  it("maps Canadian query locations to Canada", () => {
+    const searchUrl = "https://www.google.com/search?q=site%3Agreenhouse.io+%22Product+Director%22+Toronto";
+    const jobs = parseBraveSearchResults({
+      web: {
+        results: [{
+          title: "Product Director at Example",
+          url: "https://job-boards.greenhouse.io/example/jobs/987",
+          description: "Build products in Toronto.",
+        }],
+      },
+    }, searchUrl, "brave:22");
+
+    expect(jobs[0]?.location).toBe("Toronto, Canada");
+  });
+
+  it("ignores empty or non-job Brave result sets", () => {
+    const searchUrl = "https://www.google.com/search?q=%22Head+of+Product%22+%22San+Francisco%22";
+    expect(parseBraveSearchResults({}, searchUrl, "brave:23")).toEqual([]);
+    expect(parseBraveSearchResults({
+      web: { results: [{ title: "Product news", url: "https://example.com/blog/product" }] },
+    }, searchUrl, "brave:23")).toEqual([]);
   });
 });

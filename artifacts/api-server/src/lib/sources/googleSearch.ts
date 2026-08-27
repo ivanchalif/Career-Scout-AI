@@ -1,3 +1,4 @@
+import { ReplitConnectors } from "@replit/connectors-sdk";
 import { htmlToPlainText, type OnlineJobCandidate } from "./arbeitnow";
 import { validatePublicFeedUrl } from "./customFeed";
 
@@ -113,23 +114,80 @@ export function parseGoogleSearchResults(raw: string, searchUrl: string, provide
   return candidates;
 }
 
+type BraveWebResult = {
+  title?: string;
+  url?: string;
+  description?: string;
+  extra_snippets?: string[];
+};
+
+type BraveSearchResponse = {
+  web?: {
+    results?: BraveWebResult[];
+  };
+};
+
+export function parseBraveSearchResults(
+  payload: BraveSearchResponse,
+  searchUrl: string,
+  provider: string,
+): OnlineJobCandidate[] {
+  const query = validateGoogleSearchUrl(searchUrl).searchParams.get("q") ?? "";
+  const location = locationHint(query);
+  const seen = new Set<string>();
+  const candidates: OnlineJobCandidate[] = [];
+
+  for (const result of payload.web?.results ?? []) {
+    if (candidates.length >= MAX_RESULTS || !result.url || !result.title) continue;
+    const url = resultUrl(result.url);
+    if (!url || seen.has(url)) continue;
+    const parsedUrl = new URL(url);
+    const titleText = decodeHtml(result.title).replace(/\s+/g, " ").trim();
+    const { title, company } = companyFromResult(titleText, parsedUrl);
+    if (!title || !company) continue;
+    const description = [
+      result.description,
+      ...(result.extra_snippets ?? []),
+    ].filter((value): value is string => Boolean(value?.trim()))
+      .map((value) => decodeHtml(value))
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+    seen.add(url);
+    candidates.push({
+      provider,
+      sourceJobId: url,
+      title,
+      company,
+      description: description.slice(0, 2_000) || titleText,
+      url,
+      location,
+      remote: /\bremote\b/i.test(`${query} ${titleText} ${description}`),
+      tags: [],
+      postedAt: null,
+    });
+  }
+  return candidates;
+}
+
 export async function fetchGoogleSearchResults(rawUrl: string, provider: string): Promise<OnlineJobCandidate[]> {
   const searchUrl = validateGoogleSearchUrl(rawUrl);
-  searchUrl.searchParams.set("num", String(MAX_RESULTS));
-  searchUrl.searchParams.set("gbv", "1");
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15_000);
-  try {
-    const response = await fetch(searchUrl, {
-      signal: controller.signal,
-      headers: {
-        Accept: "text/html",
-        "User-Agent": "CareerScout/1.0",
-      },
-    });
-    if (!response.ok) throw new Error(`Google Search request failed (${response.status}).`);
-    return parseGoogleSearchResults(await response.text(), rawUrl, provider);
-  } finally {
-    clearTimeout(timeout);
-  }
+  const query = searchUrl.searchParams.get("q") ?? "";
+  const country = /\b(?:canada|toronto|vancouver|montreal|calgary|ottawa|edmonton|winnipeg)\b/i.test(query)
+    ? "ca"
+    : "us";
+  const params = new URLSearchParams({
+    q: query,
+    count: String(MAX_RESULTS),
+    country,
+    search_lang: "en",
+    safesearch: "moderate",
+    extra_snippets: "true",
+  });
+  const connectors = new ReplitConnectors();
+  const response = await connectors.proxy("brave", `/res/v1/web/search?${params.toString()}`, {
+    method: "GET",
+  });
+  if (!response.ok) throw new Error(`Web search request failed (${response.status}).`);
+  return parseBraveSearchResults(await response.json() as BraveSearchResponse, rawUrl, provider);
 }

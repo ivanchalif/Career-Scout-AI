@@ -1188,7 +1188,7 @@ export default function DashboardPage() {
                 <Plus className="w-3 h-3 mr-1" /> Add source
               </Button>
             </div>
-            <p className="text-[11px] text-violet-300/50">Use a public HTTPS RSS, Atom, JSON, or Google Search URL. Results need a title, company, and job link.</p>
+            <p className="text-[11px] text-violet-300/50">Use a public HTTPS RSS, Atom, JSON, or Google Search URL. Search URLs run through Brave, preserving operators such as site: and quoted phrases.</p>
           </div>
           {discoveryStatus?.lastError && <p className="text-xs text-destructive">{discoveryStatus.lastError}</p>}
         </div>

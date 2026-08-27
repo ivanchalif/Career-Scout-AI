@@ -68,8 +68,8 @@ export function prepareCustomSourceInput(name: string, url: string) {
   if (isGoogleSearchUrl(parsedUrl.toString())) {
     const query = parsedUrl.searchParams.get("q") ?? "";
     return {
-      provider: "google",
-      name: name.trim() || `Google: ${query.slice(0, 72)}`,
+      provider: "brave",
+      name: name.trim() || `Web search: ${query.slice(0, 72)}`,
       url: parsedUrl.toString(),
       kind: "search" as const,
     };
@@ -89,8 +89,8 @@ async function fetchConfiguredSource(
   if (source.kind === "builtin" && source.provider === "arbeitnow") {
     return fetchArbeitnowJobs();
   }
-  if (source.kind === "search" && source.provider === "google") {
-    return fetchGoogleSearchResults(source.url, `google:${source.id}`);
+  if (source.kind === "search" && (source.provider === "brave" || source.provider === "google")) {
+    return fetchGoogleSearchResults(source.url, `brave:${source.id}`);
   }
   return fetchCustomFeed(source.url, `custom:${source.id}`);
 }
