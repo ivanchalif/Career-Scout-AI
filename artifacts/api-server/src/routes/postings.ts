@@ -1,6 +1,13 @@
 import { Router, type IRouter } from "express";
 import { sql, eq, and, ilike, or, gte, isNotNull, isNull, inArray } from "drizzle-orm";
-import { db, jobPostingsTable, matchReportsTable, userProfilesTable, gmailConnectionsTable } from "@workspace/db";
+import {
+  db,
+  jobPostingsTable,
+  matchReportsTable,
+  userProfilesTable,
+  gmailConnectionsTable,
+  onlineDiscoverySourcesTable,
+} from "@workspace/db";
 import {
   CreatePostingBody,
   GetPostingParams,
@@ -37,7 +44,16 @@ async function getPostingWithReport(postingId: number, userId: string) {
     .from(matchReportsTable)
     .where(and(eq(matchReportsTable.jobPostingId, postingId), eq(matchReportsTable.userId, userId)));
 
-  return { posting, report: report ?? null };
+  const sources = await db
+    .select({ provider: onlineDiscoverySourcesTable.provider, id: onlineDiscoverySourcesTable.id, name: onlineDiscoverySourcesTable.name })
+    .from(onlineDiscoverySourcesTable)
+    .where(eq(onlineDiscoverySourcesTable.userId, userId));
+
+  const sourceName = sources.find((source) =>
+    posting.source === source.provider || posting.source === `${source.provider}:${source.id}`
+  )?.name ?? null;
+
+  return { posting, report: report ?? null, sourceName };
 }
 
 router.get("/postings", requireAuth, async (req, res): Promise<void> => {
@@ -86,6 +102,17 @@ router.get("/postings", requireAuth, async (req, res): Promise<void> => {
     .from(jobPostingsTable)
     .where(and(...conditions))
     .orderBy(jobPostingsTable.createdAt);
+
+  const onlineSources = await db
+    .select({ provider: onlineDiscoverySourcesTable.provider, id: onlineDiscoverySourcesTable.id, name: onlineDiscoverySourcesTable.name })
+    .from(onlineDiscoverySourcesTable)
+    .where(eq(onlineDiscoverySourcesTable.userId, userId));
+  const sourceNames = new Map(
+    onlineSources.flatMap((source) => [
+      [source.provider, source.name] as const,
+      [`${source.provider}:${source.id}`, source.name] as const,
+    ]),
+  );
 
   type FilterReason = {
     byCompany: boolean;
@@ -144,7 +171,12 @@ router.get("/postings", requireAuth, async (req, res): Promise<void> => {
         .from(matchReportsTable)
         .where(and(eq(matchReportsTable.jobPostingId, posting.id), eq(matchReportsTable.userId, userId)));
       const filterReason = hidden ? (getFilterReason(posting) ?? undefined) : undefined;
-      return { posting, report: report ?? null, ...(filterReason !== undefined ? { filterReason } : {}) };
+      return {
+        posting,
+        report: report ?? null,
+        sourceName: sourceNames.get(posting.source) ?? null,
+        ...(filterReason !== undefined ? { filterReason } : {}),
+      };
     }),
   );
 
@@ -196,13 +228,24 @@ router.get("/postings/deleted", requireAuth, async (req, res): Promise<void> => 
     ))
     .orderBy(jobPostingsTable.deletedAt);
 
+  const onlineSources = await db
+    .select({ provider: onlineDiscoverySourcesTable.provider, id: onlineDiscoverySourcesTable.id, name: onlineDiscoverySourcesTable.name })
+    .from(onlineDiscoverySourcesTable)
+    .where(eq(onlineDiscoverySourcesTable.userId, userId));
+  const sourceNames = new Map(
+    onlineSources.flatMap((source) => [
+      [source.provider, source.name] as const,
+      [`${source.provider}:${source.id}`, source.name] as const,
+    ]),
+  );
+
   const results = await Promise.all(
     postings.map(async (posting) => {
       const [report] = await db
         .select()
         .from(matchReportsTable)
         .where(and(eq(matchReportsTable.jobPostingId, posting.id), eq(matchReportsTable.userId, userId)));
-      return { posting, report: report ?? null };
+      return { posting, report: report ?? null, sourceName: sourceNames.get(posting.source) ?? null };
     }),
   );
 

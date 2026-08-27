@@ -1526,7 +1526,7 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <ScoreBadge score={score} />
                         <span className="font-semibold text-foreground line-through">{posting.title}</span>
-                        <Badge variant="secondary" className="text-xs">{posting.senderName ?? posting.source}</Badge>
+                        <Badge variant="secondary" className="text-xs">{posting.senderName ?? item.sourceName ?? posting.source}</Badge>
                         {posting.deletedBy === "sweep" && (
                           <Badge variant="outline" className="text-xs text-amber-400 border-amber-800/50 gap-1">
                             <Layers className="w-3 h-3" />
@@ -1650,7 +1650,7 @@ export default function DashboardPage() {
                           {posting.title}
                         </span>
                         <Badge variant="secondary" className="text-xs">
-                          {posting.senderName ?? posting.source}
+                          {posting.senderName ?? item.sourceName ?? posting.source}
                         </Badge>
                         {posting.appliedAt && (
                           <span className="flex items-center gap-1 text-xs text-sky-400">

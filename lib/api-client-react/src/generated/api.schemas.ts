@@ -155,6 +155,11 @@ export interface PostingSource {
 export interface PostingWithReport {
   posting: JobPosting;
   report: MatchReport | null;
+  /**
+   * Display name of the configured online discovery source
+   * @nullable
+   */
+  sourceName?: string | null;
   filterReason?: PostingFilterReason;
   sources?: PostingSource[];
 }

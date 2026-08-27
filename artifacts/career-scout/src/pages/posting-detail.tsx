@@ -151,7 +151,7 @@ export default function PostingDetailPage({ id }: { id: number }) {
                         {posting.location}
                       </span>
                     )}
-                    <Badge variant="secondary" className="text-xs">{posting.source}</Badge>
+                    <Badge variant="secondary" className="text-xs">{posting.senderName ?? data.sourceName ?? posting.source}</Badge>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">

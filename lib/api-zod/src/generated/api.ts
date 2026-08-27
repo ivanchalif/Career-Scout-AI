@@ -197,6 +197,10 @@ export const ListPostingsResponseItem = zod.object({
     }),
     zod.null(),
   ]),
+  sourceName: zod
+    .string()
+    .nullish()
+    .describe("Display name of the configured online discovery source"),
   filterReason: zod
     .object({
       byCompany: zod.boolean(),
@@ -275,6 +279,10 @@ export const ListDeletedPostingsResponseItem = zod.object({
     }),
     zod.null(),
   ]),
+  sourceName: zod
+    .string()
+    .nullish()
+    .describe("Display name of the configured online discovery source"),
   filterReason: zod
     .object({
       byCompany: zod.boolean(),
@@ -345,6 +353,10 @@ export const GetPostingResponse = zod.object({
     }),
     zod.null(),
   ]),
+  sourceName: zod
+    .string()
+    .nullish()
+    .describe("Display name of the configured online discovery source"),
   filterReason: zod
     .object({
       byCompany: zod.boolean(),
@@ -929,6 +941,10 @@ export const GetDashboardSummaryResponse = zod.object({
         }),
         zod.null(),
       ]),
+      sourceName: zod
+        .string()
+        .nullish()
+        .describe("Display name of the configured online discovery source"),
       filterReason: zod
         .object({
           byCompany: zod.boolean(),
