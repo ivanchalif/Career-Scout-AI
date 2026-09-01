@@ -7,6 +7,8 @@ import {
   useSyncGmail,
   useGetProfile,
   getGetProfileQueryKey,
+  getListPostingsQueryKey,
+  getGetDashboardSummaryQueryKey,
   useUpsertProfile,
   useGetImapStatus,
   getGetImapStatusQueryKey,
@@ -122,8 +124,12 @@ export default function InboxPage() {
 
   const syncGmailMutation = useSyncGmail({
     mutation: {
-      onSuccess: (data) => {
-        qc.invalidateQueries({ queryKey: getGetGmailStatusQueryKey() });
+      onSuccess: async (data) => {
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: getGetGmailStatusQueryKey() }),
+          qc.invalidateQueries({ queryKey: getListPostingsQueryKey() }),
+          qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }),
+        ]);
         toast({ title: "Inbox synced", description: `Found ${data.synced} new job email${data.synced === 1 ? "" : "s"}.` });
       },
       onError: (err) => {
@@ -169,8 +175,12 @@ export default function InboxPage() {
 
   const syncImapMutation = useSyncImap({
     mutation: {
-      onSuccess: (data) => {
-        qc.invalidateQueries({ queryKey: getGetImapStatusQueryKey() });
+      onSuccess: async (data) => {
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: getGetImapStatusQueryKey() }),
+          qc.invalidateQueries({ queryKey: getListPostingsQueryKey() }),
+          qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }),
+        ]);
         toast({ title: "Inbox synced", description: `Found ${data.synced} new job email${data.synced === 1 ? "" : "s"}.` });
       },
       onError: () => toast({ title: "Sync failed", description: "Could not sync inbox. Check your IMAP settings.", variant: "destructive" }),

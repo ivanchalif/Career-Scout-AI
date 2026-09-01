@@ -5,7 +5,7 @@ import {
   Plus, Search, SlidersHorizontal, Mail, TrendingUp,
   BriefcaseBusiness, Star, Trash2, X,
   RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2, CheckCircle2, Undo2, MapPin, Ban, RotateCcw, Layers, Copy, Archive,
-  ChevronDown, ChevronUp, ExternalLink, SearchCode, Download, Upload, Pencil, Check,
+  ChevronDown, ChevronUp, ExternalLink, SearchCode, Download, Upload, Pencil, Check, Loader2,
 } from "lucide-react";
 import {
   useGetDashboardSummary,
@@ -179,6 +179,8 @@ export default function DashboardPage() {
   const [editingSourceName, setEditingSourceName] = useState("");
   const [editingSourceUrl, setEditingSourceUrl] = useState("");
   const [sourceEditError, setSourceEditError] = useState<string | null>(null);
+  const [gmailProcessing, setGmailProcessing] = useState(false);
+  const [onlineProcessing, setOnlineProcessing] = useState(false);
 
   useEffect(() => {
     const SESSION_KEY = "dedup-sweep-done";
@@ -497,11 +499,15 @@ export default function DashboardPage() {
   }
 
   function onDiscoverOnline() {
+    setOnlineProcessing(true);
     runDiscoveryMutation.mutate(undefined, {
-      onSuccess: (result) => {
-        qc.invalidateQueries({ queryKey: getGetOnlineDiscoveryStatusQueryKey() });
-        qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
-        qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+      onSuccess: async (result) => {
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: getGetOnlineDiscoveryStatusQueryKey() }),
+          qc.invalidateQueries({ queryKey: getListPostingsQueryKey() }),
+          qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }),
+        ]);
+        setOnlineProcessing(false);
         toast({
           title: "Online search complete",
           description: result.imported
@@ -509,7 +515,10 @@ export default function DashboardPage() {
             : result.duplicates ? "No new jobs — matching postings were already saved." : "No new matches found this time.",
         });
       },
-      onError: (error: Error) => toast({ title: "Discovery failed", description: error.message, variant: "destructive" }),
+      onError: (error: Error) => {
+        setOnlineProcessing(false);
+        toast({ title: "Discovery failed", description: error.message, variant: "destructive" });
+      },
     });
   }
 
@@ -657,13 +666,17 @@ export default function DashboardPage() {
   }
 
   async function onSyncGmail() {
+    setGmailProcessing(true);
     await syncMutation.mutateAsync(
       undefined,
       {
-        onSuccess: (data) => {
-          qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
-          qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
-          qc.invalidateQueries({ queryKey: getGetGmailStatusQueryKey() });
+        onSuccess: async (data) => {
+          await Promise.all([
+            qc.invalidateQueries({ queryKey: getListPostingsQueryKey() }),
+            qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }),
+            qc.invalidateQueries({ queryKey: getGetGmailStatusQueryKey() }),
+          ]);
+          setGmailProcessing(false);
           toast({
             title: "Gmail synced",
             description: data.synced > 0
@@ -685,7 +698,10 @@ export default function DashboardPage() {
               .catch(() => {});
           }).catch(() => {});
         },
-        onError: () => toast({ title: "Sync failed", description: "Could not sync Gmail.", variant: "destructive" }),
+        onError: () => {
+          setGmailProcessing(false);
+          toast({ title: "Sync failed", description: "Could not sync Gmail.", variant: "destructive" });
+        },
       }
     );
   }
@@ -1072,6 +1088,28 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {(gmailProcessing || onlineProcessing) && (
+          <div
+            className="mb-4 flex flex-col gap-2 rounded-xl border border-indigo-800/40 bg-indigo-950/25 px-4 py-3"
+            role="status"
+            aria-live="polite"
+            data-testid="job-processing-status"
+          >
+            {gmailProcessing && (
+              <div className="flex items-center gap-2 text-sm text-indigo-200" data-testid="gmail-processing-indicator">
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                <span>Processing Gmail jobs. New matches will appear here when ready.</span>
+              </div>
+            )}
+            {onlineProcessing && (
+              <div className="flex items-center gap-2 text-sm text-violet-200" data-testid="online-processing-indicator">
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                <span>Searching and processing online jobs. New matches will appear here when ready.</span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Profile-matched online discovery */}
         <div className="flex flex-col bg-violet-950/30 border border-violet-800/40 rounded-xl px-5 pt-4 pb-3 mb-4 gap-3" data-testid="online-discovery-panel">
           <div className="flex items-start gap-3">
@@ -1087,12 +1125,12 @@ export default function DashboardPage() {
             <Button
               size="sm"
               onClick={onDiscoverOnline}
-              disabled={runDiscoveryMutation.isPending}
+              disabled={onlineProcessing}
               className="bg-violet-600 hover:bg-violet-500 gap-1.5"
               data-testid="discover-online-button"
             >
-              <SearchCode className={`w-3.5 h-3.5 ${runDiscoveryMutation.isPending ? "animate-pulse" : ""}`} />
-              {runDiscoveryMutation.isPending ? "Searching…" : "Discover now"}
+              <SearchCode className={`w-3.5 h-3.5 ${onlineProcessing ? "animate-pulse" : ""}`} />
+              {onlineProcessing ? "Searching…" : "Discover now"}
             </Button>
             <Button
               type="button"

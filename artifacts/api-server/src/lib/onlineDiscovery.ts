@@ -31,6 +31,21 @@ export class DiscoveryProfileRequiredError extends Error {}
 
 export const ONLINE_SOURCE_CATALOG = [
   { provider: "arbeitnow", name: "Arbeitnow", url: ARBEITNOW_URL },
+  {
+    provider: "brave-linkedin",
+    name: "LinkedIn public jobs (Brave)",
+    url: "https://www.google.com/search?q=site%3Alinkedin.com%2Fjobs%2Fview+jobs",
+  },
+  {
+    provider: "brave-workatastartup",
+    name: "Work at a Startup public jobs (Brave)",
+    url: "https://www.google.com/search?q=site%3Aworkatastartup.com+jobs",
+  },
+  {
+    provider: "brave-jobright",
+    name: "Jobright public jobs (Brave)",
+    url: "https://www.google.com/search?q=site%3Ajobright.ai%2Fjobs%2Finfo+jobs",
+  },
 ] as const;
 
 export async function ensureDefaultOnlineDiscoverySource(userId: string): Promise<void> {
@@ -92,11 +107,41 @@ export function prepareCustomSourceInput(name: string, url: string) {
   };
 }
 
+function braveProfileQuery(provider: string, criteria: DiscoveryCriteria): string | null {
+  const site =
+    provider === "brave-linkedin"
+      ? "linkedin.com/jobs/view"
+      : provider === "brave-workatastartup"
+        ? "workatastartup.com"
+        : provider === "brave-jobright"
+          ? "jobright.ai/jobs/info"
+          : null;
+  if (!site) return null;
+
+  const roles = criteria.roleTitles.slice(0, 4).map((role) => `"${role.replace(/"/g, "")}"`);
+  const skills = criteria.skills.slice(0, 6).map((skill) => `"${skill.replace(/"/g, "")}"`);
+  const roleOrSkill = [...roles, ...skills].join(" OR ");
+  if (!roleOrSkill) return null;
+
+  // The location clause keeps public snippets useful for both markets. The
+  // final candidate filter still validates the actual location before import.
+  return `site:${site} (${roleOrSkill}) ("United States" OR Canada OR remote) jobs`;
+}
+
+function braveSearchUrl(query: string): string {
+  return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+}
+
 async function fetchConfiguredSource(
   source: typeof onlineDiscoverySourcesTable.$inferSelect,
+  criteria: DiscoveryCriteria,
 ): Promise<OnlineJobCandidate[]> {
   if (source.kind === "builtin" && source.provider === "arbeitnow") {
     return fetchArbeitnowJobs();
+  }
+  const profileQuery = source.kind === "builtin" ? braveProfileQuery(source.provider, criteria) : null;
+  if (profileQuery) {
+    return fetchGoogleSearchResults(braveSearchUrl(profileQuery), `brave:${source.id}`);
   }
   if (source.kind === "search" && (source.provider === "brave" || source.provider === "google")) {
     return fetchGoogleSearchResults(source.url, `brave:${source.id}`);
@@ -275,7 +320,7 @@ export async function runOnlineDiscovery(userId: string) {
 
     const configuredSources = await getOnlineDiscoverySources(userId);
     const activeSources = configuredSources.sources.filter((source) => !source.isSuppressed);
-    const sourceFetches = await Promise.allSettled(activeSources.map((source) => fetchConfiguredSource(source)));
+     const sourceFetches = await Promise.allSettled(activeSources.map((source) => fetchConfiguredSource(source, criteria)));
     const sourceErrors = sourceFetches.flatMap((result, index) => {
       if (result.status === "fulfilled") return [];
       return [`${activeSources[index]?.name ?? "Unknown source"}: ${result.reason instanceof Error ? result.reason.message : "request failed"}`];
