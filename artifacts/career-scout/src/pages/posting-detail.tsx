@@ -68,7 +68,13 @@ export default function PostingDetailPage({ id }: { id: number }) {
   const qc = useQueryClient();
 
   const postingQ = useGetPosting(id, {
-    query: { queryKey: getGetPostingQueryKey(id) },
+    query: {
+      queryKey: getGetPostingQueryKey(id),
+      // A missing posting is a stable state (it may have been deleted,
+      // deduplicated, or removed by another tab), so retrying only creates
+      // repeated runtime errors while the user is looking at the page.
+      retry: false,
+    },
   });
   const analyzeMutation = useAnalyzePosting();
 
@@ -95,6 +101,28 @@ export default function PostingDetailPage({ id }: { id: number }) {
         <div className="px-6 py-8 max-w-4xl mx-auto">
           <Skeleton className="h-8 w-32 mb-6" />
           <Skeleton className="h-48 rounded-xl" />
+        </div>
+      </Layout>
+    );
+  }
+
+  if (postingQ.isError) {
+    const error = postingQ.error as { status?: number; message?: string } | null;
+    const isMissing = error?.status === 404 || error?.message?.includes("Posting not found");
+    return (
+      <Layout>
+        <div className="px-6 py-8 max-w-4xl mx-auto text-center py-20" data-testid="posting-detail-error">
+          <p className="text-foreground font-medium">
+            {isMissing ? "This job posting is no longer available." : "Could not load this job posting."}
+          </p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {isMissing
+              ? "It may have been deleted, closed, or removed as a duplicate."
+              : "Please return to the dashboard and try again."}
+          </p>
+          <Link href="/dashboard">
+            <Button variant="outline" className="mt-4">Back to dashboard</Button>
+          </Link>
         </div>
       </Layout>
     );
