@@ -2,6 +2,6 @@
 - [api-client-react dist rebuild](api-client-react-dist.md) — composite TS project; must run tsc in lib/api-client-react after editing src/ or hooks go missing from IDE.
 - [req.userId vs req.auth.userId](clerk-req-userId.md) — always use req.userId (set by requireAuth) not req.auth.userId; the latter can be undefined in Clerk Express v2.
 - [Gmail mark-as-read guard](gmail-mark-read-guard.md) — extractJobListings returns {listings, hadError}; only markEmailAsRead when !hadError, so LLM errors leave email unread for auto-retry.
-- [One-off Node scripts in pnpm workspace](pnpm-oneoff-scripts.md) — tsx/ts-node unavailable; for plain JS scripts use absolute paths into node_modules/.pnpm/<pkg@ver>/node_modules/<pkg>/ for imports.
+- [One-off Node scripts in pnpm workspace](pnpm-oneoff-scripts.md) — pnpm exec may not expose transitive CLIs; invoke their resolved virtual-store path or use plain ESM with absolute imports.
 - [OpenAPI codegen contract sync](openapi-codegen-contract-sync.md) — regenerate only after the spec reflects all shipped typed routes, or codegen can silently remove active client hooks.
 - [Online discovery source lifecycle](online-discovery-source-lifecycle.md) — suppress pauses a configured source; remove deletes only its config and never imported job history.

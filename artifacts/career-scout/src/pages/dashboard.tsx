@@ -508,11 +508,19 @@ export default function DashboardPage() {
           qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }),
         ]);
         setOnlineProcessing(false);
+        const filtered = Math.max(0, result.lastFound - result.imported - result.duplicates);
+        const resultSummary = result.imported
+          ? `Added ${result.imported} profile-matched job${result.imported === 1 ? "" : "s"} for scoring.`
+          : result.duplicates && filtered
+            ? `No new jobs added — ${result.duplicates} were already saved and ${filtered} were excluded by your filters.`
+            : result.duplicates
+              ? "No new jobs — matching postings were already saved."
+              : result.lastFound
+                ? "Matches were found, but they were excluded by your filters."
+                : "No new matches found this time.";
         toast({
-          title: "Online search complete",
-          description: result.imported
-            ? `Added ${result.imported} profile-matched job${result.imported === 1 ? "" : "s"} for scoring.`
-            : result.duplicates ? "No new jobs — matching postings were already saved." : "No new matches found this time.",
+          title: result.lastError ? "Online search completed with warnings" : "Online search complete",
+          description: result.lastError ? `${resultSummary} ${result.lastError}` : resultSummary,
         });
       },
       onError: (error: Error) => {
@@ -1174,7 +1182,7 @@ export default function DashboardPage() {
                 />
                 <span className="text-xs text-violet-300/60">
                   {discoveryStatus?.lastRunAt
-                    ? `Last search ${formatAdded(discoveryStatus.lastRunAt)} · ${discoveryStatus.lastImported} added`
+                    ? `Last search ${formatAdded(discoveryStatus.lastRunAt)} · ${discoveryStatus.lastFound} matched · ${discoveryStatus.lastImported} added · ${discoveryStatus.lastDuplicates} already saved`
                     : "Uses your profile, US/Canada location, and the same screening as email listings"}
                 </span>
               </div>

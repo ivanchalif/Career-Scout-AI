@@ -18,6 +18,7 @@ import { DEFAULT_EMAIL_FILTER_CRITERIA, matchesEmailFilterCriteria, type EmailFi
 
 const SOURCE = "online";
 const MAX_CANDIDATES_PER_RUN = 12;
+const MAX_SCREENED_CANDIDATES_PER_RUN = 24;
 const activeDiscoveryRuns = new Set<string>();
 const ARBEITNOW_URL = "https://www.arbeitnow.com/api/job-board-api";
 const NORTH_AMERICA_LOCATION_PATTERN = /\b(?:united states|u\.?\s*s\.?\s*a?\.?|usa|canada|north america|alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming|ontario|quebec|nova scotia|new brunswick|manitoba|british columbia|prince edward island|saskatchewan|alberta|newfoundland and labrador|toronto|vancouver|montreal|calgary|ottawa|edmonton|winnipeg|quebec city)\b/i;
@@ -132,6 +133,14 @@ function braveSearchUrl(query: string): string {
   return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
 }
 
+function hiringCafeProfileQuery(criteria: DiscoveryCriteria): string | null {
+  const roles = criteria.roleTitles.slice(0, 4).map((role) => `"${role.replace(/"/g, "")}"`);
+  const skills = criteria.skills.slice(0, 4).map((skill) => `"${skill.replace(/"/g, "")}"`);
+  const roleOrSkill = [...roles, ...skills].join(" OR ");
+  if (!roleOrSkill) return null;
+  return `site:hiringcafe.com/job (${roleOrSkill}) ("United States" OR Canada OR remote)`;
+}
+
 async function fetchConfiguredSource(
   source: typeof onlineDiscoverySourcesTable.$inferSelect,
   criteria: DiscoveryCriteria,
@@ -147,7 +156,17 @@ async function fetchConfiguredSource(
     return fetchGoogleSearchResults(source.url, `brave:${source.id}`);
   }
   if (source.provider === "hiringcafe" || isHiringCafeUrl(source.url)) {
-    return fetchHiringCafeJobs(source.url, `hiringcafe:${source.id}`);
+    try {
+      return await fetchHiringCafeJobs(source.url, `hiringcafe:${source.id}`);
+    } catch (error) {
+      const fallbackQuery = hiringCafeProfileQuery(criteria);
+      if (!fallbackQuery) throw error;
+      logger.warn(
+        { sourceId: source.id, error },
+        "HiringCafe direct request failed; falling back to Brave",
+      );
+      return fetchGoogleSearchResults(braveSearchUrl(fallbackQuery), `hiringcafe:${source.id}`);
+    }
   }
   return fetchCustomFeed(source.url, `custom:${source.id}`);
 }
@@ -342,8 +361,7 @@ export async function runOnlineDiscovery(userId: string) {
         score: rankCandidate(candidate, criteria, { ...(profile ?? {}), emailFilterSettings }),
       }))
       .filter((entry): entry is { candidate: OnlineJobCandidate; score: number } => entry.score !== null && entry.score >= minimum)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, MAX_CANDIDATES_PER_RUN);
+      .sort((a, b) => b.score - a.score);
 
     const sourceByUrl = new Map(sourceRows.map((row) => [row.canonicalUrl, row.jobPostingId]));
     const sourceById = new Map(sourceRows.filter((row) => row.sourceJobId).map((row) => [`${row.provider}:${row.sourceJobId}`, row.jobPostingId]));
@@ -351,8 +369,27 @@ export async function runOnlineDiscovery(userId: string) {
     let imported = 0;
     let duplicates = 0;
     let matchedExisting = 0;
+    let screened = 0;
 
     for (const { candidate } of candidates) {
+      if (imported >= MAX_CANDIDATES_PER_RUN || screened >= MAX_SCREENED_CANDIDATES_PER_RUN) break;
+
+      // Known URLs and provider IDs are cheap to reject and should not consume
+      // the page-screening budget. Previously, duplicates occupied most or all
+      // of the top-12 candidate cap, preventing fresh results lower in the
+      // ranked feed from ever being examined.
+      const initialCanonicalUrl = canonicalizeJobUrl(candidate.url);
+      const knownId = sourceByUrl.get(initialCanonicalUrl)
+        ?? postingByUrl.get(initialCanonicalUrl)
+        ?? (candidate.sourceJobId ? sourceById.get(`${candidate.provider}:${candidate.sourceJobId}`) : undefined);
+      if (knownId) {
+        await attachSource(userId, knownId, candidate);
+        duplicates++;
+        matchedExisting++;
+        continue;
+      }
+
+      screened++;
       let screenedCandidate = candidate;
       const pageResult = await fetchJobPageContent(candidate.url);
       if (pageResult) {
@@ -452,11 +489,13 @@ export async function runOnlineDiscovery(userId: string) {
       sourceCount: activeSources.length,
       failedSourceCount: sourceErrors.length,
       fetched: feed.length,
-      considered: candidates.length,
+      matched: candidates.length,
+      screened,
       imported,
       duplicates,
+      sourceErrors,
     }, "online discovery completed");
-    return { ...toDiscoveryStatus(updatedProfile), fetched: feed.length, considered: candidates.length, imported, duplicates, matchedExisting };
+    return { ...toDiscoveryStatus(updatedProfile), fetched: feed.length, considered: screened, imported, duplicates, matchedExisting };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Online discovery failed.";
     // Record the attempt even when it fails so scheduled discovery keeps the
