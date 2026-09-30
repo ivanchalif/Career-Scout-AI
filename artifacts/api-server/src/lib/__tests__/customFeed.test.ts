@@ -62,7 +62,7 @@ describe("Custom online job feeds", () => {
     expect(() => validatePublicFeedUrl("https://192.168.1.5/feed.json")).toThrow("public HTTPS host");
   });
 
-  it("normalizes Google Search job result links with a US location hint", () => {
+  it("normalizes Google Search job links without claiming the query location", () => {
     const searchUrl = "https://www.google.com/search?q=site%3Agreenhouse.io+%22Head+of+Product%22+%22San+Francisco%22";
     const jobs = parseGoogleSearchResults(`
       <a href="/url?q=https%3A%2F%2Fjob-boards.greenhouse.io%2Fnorthbeam%2Fjobs%2F12345&amp;sa=U">
@@ -76,7 +76,7 @@ describe("Custom online job feeds", () => {
       provider: "google:21",
       title: "Head of Product",
       company: "Northbeam",
-      location: "San Francisco, United States",
+      location: null,
     });
     expect(jobs[0]?.url).toBe("https://job-boards.greenhouse.io/northbeam/jobs/12345");
   });
@@ -98,12 +98,12 @@ describe("Custom online job feeds", () => {
       provider: "brave:21",
       title: "Head of Product",
       company: "Northbeam",
-      location: "San Francisco, United States",
+      location: null,
       remote: false,
     });
   });
 
-  it("maps Canadian query locations to Canada", () => {
+  it("does not treat a Canadian query or snippet as verified location", () => {
     const searchUrl = "https://www.google.com/search?q=site%3Agreenhouse.io+%22Product+Director%22+Toronto";
     const jobs = parseBraveSearchResults({
       web: {
@@ -115,7 +115,7 @@ describe("Custom online job feeds", () => {
       },
     }, searchUrl, "brave:22");
 
-    expect(jobs[0]?.location).toBe("Toronto, Canada");
+    expect(jobs[0]?.location).toBeNull();
   });
 
   it("ignores empty or non-job Brave result sets", () => {
@@ -141,7 +141,7 @@ describe("Custom online job feeds", () => {
     expect(jobs[0]).toMatchObject({
       title: "Head of Product",
       company: "Crunchbase",
-      location: "San Francisco, United States",
+      location: null,
     });
   });
 

@@ -3,12 +3,6 @@ import { htmlToPlainText, type OnlineJobCandidate } from "./arbeitnow";
 import { validatePublicFeedUrl } from "./customFeed";
 
 const MAX_RESULTS = 20;
-const LOCATION_HINTS = [
-  "San Francisco", "New York", "Los Angeles", "Seattle", "Chicago", "Boston", "Austin",
-  "Denver", "Washington DC", "Washington, DC", "Atlanta", "Miami", "Dallas", "Houston",
-  "San Diego", "Portland", "Toronto", "Vancouver", "Montreal", "Calgary", "Ottawa",
-  "Edmonton", "Winnipeg", "Canada", "United States", "USA",
-];
 
 function decodeHtml(value: string): string {
   return htmlToPlainText(value)
@@ -62,16 +56,6 @@ function resultUrl(href: string): string | null {
   return parsed.toString();
 }
 
-function locationHint(query: string): string | null {
-  const lowerQuery = query.toLowerCase();
-  const hint = LOCATION_HINTS.find((candidate) => lowerQuery.includes(candidate.toLowerCase()));
-  if (!hint) return null;
-  if (["Toronto", "Vancouver", "Montreal", "Calgary", "Ottawa", "Edmonton", "Winnipeg", "Canada"].includes(hint)) {
-    return hint === "Canada" ? hint : `${hint}, Canada`;
-  }
-  return ["United States", "USA"].includes(hint) ? hint : `${hint}, United States`;
-}
-
 function companyFromResult(title: string, url: URL): { title: string; company: string } {
   const cleanedTitle = title.replace(/^\s*job application for\s+/i, "").trim();
   const atMatch = cleanedTitle.match(/^(.+?)\s+at\s+(.+)$/i);
@@ -91,8 +75,7 @@ function companyFromResult(title: string, url: URL): { title: string; company: s
 }
 
 export function parseGoogleSearchResults(raw: string, searchUrl: string, provider: string): OnlineJobCandidate[] {
-  const query = validateGoogleSearchUrl(searchUrl).searchParams.get("q") ?? "";
-  const location = locationHint(query);
+  validateGoogleSearchUrl(searchUrl);
   const candidates: OnlineJobCandidate[] = [];
   const seen = new Set<string>();
   const anchorPattern = /<a\b[^>]*href=(["'])(.*?)\1[^>]*>([\s\S]*?)<\/a>/gi;
@@ -114,8 +97,9 @@ export function parseGoogleSearchResults(raw: string, searchUrl: string, provide
       company,
       description: anchorText.slice(0, 2_000),
       url,
-      location,
-      remote: /\bremote\b/i.test(query),
+      // Search query terms are not evidence of a listing's location or remote status.
+      location: null,
+      remote: /\bremote\b/i.test(`${anchorText}`),
       tags: [],
       postedAt: null,
     });
@@ -141,8 +125,7 @@ export function parseBraveSearchResults(
   searchUrl: string,
   provider: string,
 ): OnlineJobCandidate[] {
-  const query = validateGoogleSearchUrl(searchUrl).searchParams.get("q") ?? "";
-  const location = locationHint(query);
+  validateGoogleSearchUrl(searchUrl);
   const seen = new Set<string>();
   const candidates: OnlineJobCandidate[] = [];
 
@@ -170,8 +153,9 @@ export function parseBraveSearchResults(
       company,
       description: description.slice(0, 2_000) || titleText,
       url,
-      location,
-      remote: /\bremote\b/i.test(`${query} ${titleText} ${description}`),
+      // A query's location/remote terms are not listing metadata.
+      location: null,
+      remote: /\bremote\b/i.test(`${titleText} ${description}`),
       tags: [],
       postedAt: null,
     });

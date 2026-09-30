@@ -2,13 +2,14 @@ import { and, eq } from "drizzle-orm";
 import {
   db,
   jobPostingsTable,
+  jobPostingFeedbackTable,
   jobPostingSourcesTable,
   onlineDiscoverySourcesTable,
   userProfilesTable,
 } from "@workspace/db";
 import { canonicalizeJobUrl, isFuzzyDuplicate, normalizeFuzzy } from "./dedup";
 import { logger } from "./logger";
-import { fetchJobPageContent } from "./pageScraper";
+import { fetchJobPageContent, type AvailabilityCheck, type JobPageMetadata } from "./pageScraper";
 import { scorePostingBackground } from "./scoringService";
 import { fetchArbeitnowJobs, type OnlineJobCandidate } from "./sources/arbeitnow";
 import { fetchCustomFeed, validatePublicFeedUrl } from "./sources/customFeed";
@@ -20,6 +21,7 @@ const SOURCE = "online";
 const MAX_CANDIDATES_PER_RUN = 12;
 const MAX_SCREENED_CANDIDATES_PER_RUN = 24;
 const activeDiscoveryRuns = new Set<string>();
+const searchRotations = new Map<string, number>();
 const ARBEITNOW_URL = "https://www.arbeitnow.com/api/job-board-api";
 const NORTH_AMERICA_LOCATION_PATTERN = /\b(?:united states|u\.?\s*s\.?\s*a?\.?|usa|canada|north america|alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming|ontario|quebec|nova scotia|new brunswick|manitoba|british columbia|prince edward island|saskatchewan|alberta|newfoundland and labrador|toronto|vancouver|montreal|calgary|ottawa|edmonton|winnipeg|quebec city)\b/i;
 const NORTH_AMERICA_STATE_CODE_PATTERN = /\b(?:al|ak|az|ar|ca|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy)\b/i;
@@ -108,7 +110,7 @@ export function prepareCustomSourceInput(name: string, url: string) {
   };
 }
 
-function braveProfileQuery(provider: string, criteria: DiscoveryCriteria): string | null {
+function sourceSite(provider: string): string | null {
   const site =
     provider === "brave-linkedin"
       ? "linkedin.com/jobs/view"
@@ -117,28 +119,45 @@ function braveProfileQuery(provider: string, criteria: DiscoveryCriteria): strin
         : provider === "brave-jobright"
           ? "jobright.ai/jobs/info"
           : null;
-  if (!site) return null;
+  return site;
+}
 
-  const roles = criteria.roleTitles.slice(0, 4).map((role) => `"${role.replace(/"/g, "")}"`);
-  const skills = criteria.skills.slice(0, 6).map((skill) => `"${skill.replace(/"/g, "")}"`);
-  const roleOrSkill = [...roles, ...skills].join(" OR ");
-  if (!roleOrSkill) return null;
-
-  // The location clause keeps public snippets useful for both markets. The
-  // final candidate filter still validates the actual location before import.
-  return `site:${site} (${roleOrSkill}) ("United States" OR Canada OR remote) jobs`;
+function rotationFor(key: string): number {
+  const rotation = searchRotations.get(key) ?? 0;
+  searchRotations.set(key, rotation + 1);
+  return rotation;
 }
 
 function braveSearchUrl(query: string): string {
   return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
 }
 
-function hiringCafeProfileQuery(criteria: DiscoveryCriteria): string | null {
-  const roles = criteria.roleTitles.slice(0, 4).map((role) => `"${role.replace(/"/g, "")}"`);
-  const skills = criteria.skills.slice(0, 4).map((skill) => `"${skill.replace(/"/g, "")}"`);
-  const roleOrSkill = [...roles, ...skills].join(" OR ");
-  if (!roleOrSkill) return null;
-  return `site:hiringcafe.com/job (${roleOrSkill}) ("United States" OR Canada OR remote)`;
+/**
+ * Build a small rotating set of source/role/location-specific web searches.
+ * Location in the search is only a relevance hint: parsed search results must
+ * not treat it as verified listing metadata.
+ */
+export function buildFocusedSearchQueries(
+  site: string,
+  criteria: DiscoveryCriteria,
+  rotation = 0,
+  maxQueries = 2,
+): string[] {
+  const roles = criteria.roleTitles.slice(0, 6).map((value) => value.trim()).filter(Boolean);
+  const skills = criteria.skills.slice(0, 6).map((value) => value.trim()).filter(Boolean);
+  const terms = (roles.length ? roles : skills).slice(0, 6);
+  if (terms.length === 0) return [];
+  const locations = criteria.locations.filter((value) => value.trim() && value.trim().toLowerCase() !== "remote").slice(0, 10);
+  const combinations = terms.flatMap((term) => (locations.length ? locations : [""]).map((location) => ({ term, location })));
+  const start = ((rotation % combinations.length) + combinations.length) % combinations.length;
+  const selected: string[] = [];
+  for (let offset = 0; offset < combinations.length && selected.length < Math.max(1, Math.min(maxQueries, 3)); offset += 1) {
+    const combination = combinations[(start + offset) % combinations.length];
+    if (!combination) continue;
+    const query = `site:${site} "${combination.term.replace(/"/g, "")}"${combination.location ? ` "${combination.location.replace(/"/g, "")}"` : ""} jobs`;
+    selected.push(query);
+  }
+  return selected;
 }
 
 async function fetchConfiguredSource(
@@ -148,9 +167,17 @@ async function fetchConfiguredSource(
   if (source.kind === "builtin" && source.provider === "arbeitnow") {
     return fetchArbeitnowJobs();
   }
-  const profileQuery = source.kind === "builtin" ? braveProfileQuery(source.provider, criteria) : null;
-  if (profileQuery) {
-    return fetchGoogleSearchResults(braveSearchUrl(profileQuery), `brave:${source.id}`);
+  const site = source.kind === "builtin" ? sourceSite(source.provider) : null;
+  if (site) {
+    const queries = buildFocusedSearchQueries(site, criteria, rotationFor(source.provider));
+    const batches = await Promise.all(queries.map((query) => fetchGoogleSearchResults(braveSearchUrl(query), `brave:${source.id}`)));
+    const seen = new Set<string>();
+    return batches.flat().filter((candidate) => {
+      const canonical = canonicalizeJobUrl(candidate.url);
+      if (seen.has(canonical)) return false;
+      seen.add(canonical);
+      return true;
+    });
   }
   if (source.kind === "search" && (source.provider === "brave" || source.provider === "google")) {
     return fetchGoogleSearchResults(source.url, `brave:${source.id}`);
@@ -159,13 +186,24 @@ async function fetchConfiguredSource(
     try {
       return await fetchHiringCafeJobs(source.url, `hiringcafe:${source.id}`);
     } catch (error) {
-      const fallbackQuery = hiringCafeProfileQuery(criteria);
-      if (!fallbackQuery) throw error;
+      const fallbackQueries = buildFocusedSearchQueries(
+        "hiringcafe.com/job",
+        criteria,
+        rotationFor("hiringcafe"),
+      );
+      if (fallbackQueries.length === 0) throw error;
       logger.warn(
         { sourceId: source.id, error },
         "HiringCafe direct request failed; falling back to Brave",
       );
-      return fetchGoogleSearchResults(braveSearchUrl(fallbackQuery), `hiringcafe:${source.id}`);
+      const batches = await Promise.all(fallbackQueries.map((query) => fetchGoogleSearchResults(braveSearchUrl(query), `hiringcafe:${source.id}`)));
+      const seen = new Set<string>();
+      return batches.flat().filter((candidate) => {
+        const canonical = canonicalizeJobUrl(candidate.url);
+        if (seen.has(canonical)) return false;
+        seen.add(canonical);
+        return true;
+      });
     }
   }
   return fetchCustomFeed(source.url, `custom:${source.id}`);
@@ -249,12 +287,123 @@ function locationsMatch(candidateLocation: string, wantedLocation: string): bool
   return sanFranciscoArea.test(candidate) && sanFranciscoArea.test(wanted);
 }
 
+function wordSimilarity(a: string, b: string): number {
+  const wordsA = normalWords(a);
+  const wordsB = normalWords(b);
+  if (wordsA.size === 0 || wordsB.size === 0) return 0;
+  let overlap = 0;
+  for (const word of wordsA) {
+    if (wordsB.has(word)) overlap += 1;
+  }
+  return overlap / Math.max(wordsA.size, wordsB.size);
+}
+
+type DiscoveryFeedback = {
+  kind: string;
+  title: string;
+  location: string | null;
+  link: string | null;
+};
+
+function feedbackAdjustment(candidate: OnlineJobCandidate, feedback: DiscoveryFeedback[]): number {
+  let adjustment = 0;
+  for (const item of feedback) {
+    if (item.kind === "not_my_role") {
+      adjustment -= wordSimilarity(candidate.title, item.title) * 10;
+    } else if (item.kind === "wrong_location" && item.location && candidate.location) {
+      const roleSimilarity = wordSimilarity(candidate.title, item.title);
+      const locationSimilarity = locationsMatch(candidate.location, item.location) ? 1 : 0;
+      adjustment -= roleSimilarity * locationSimilarity * 10;
+    } else if (item.kind === "more_like_this") {
+      adjustment += wordSimilarity(candidate.title, item.title) * 8;
+    }
+  }
+  return Math.max(-20, Math.min(20, adjustment));
+}
+
+function freshnessAdjustment(
+  postedAt: Date | null,
+  freshnessWindow: string | null | undefined,
+  now = Date.now(),
+): number {
+  if (!postedAt || !freshnessWindow || freshnessWindow === "any_time") return 0;
+  const windowDays = freshnessWindow === "past_week" ? 7 : 30;
+  const ageDays = (now - postedAt.getTime()) / 86_400_000;
+  if (ageDays < 0) return 0;
+  // Freshness is a ranking preference, not an eligibility gate. Missing source
+  // dates remain untouched rather than being inferred from fetch time.
+  return ageDays <= windowDays ? 4 : -Math.min(12, 4 + (ageDays - windowDays) / windowDays * 4);
+}
+
+export function compareCandidateRecency(
+  a: Pick<OnlineJobCandidate, "postedAt">,
+  b: Pick<OnlineJobCandidate, "postedAt">,
+): number {
+  return (b.postedAt?.getTime() ?? 0) - (a.postedAt?.getTime() ?? 0);
+}
+
+const GENERIC_UNVERIFIED_LOCATION = /^(?:remote|hybrid|onsite|work from home|anywhere|unknown|not specified|not provided|unspecified)$/i;
+const EXPLICIT_GLOBAL_REMOTE = /\b(?:worldwide|anywhere in the world|global remote|work from anywhere|all countries)\b/i;
+
+export type CandidateScoreOptions = {
+  remoteKnown?: boolean;
+  feedback?: DiscoveryFeedback[];
+  freshnessWindow?: string | null;
+  now?: number;
+};
+
+/**
+ * Scores using the candidate's current (preferably page-verified) fields.
+ * Missing location/work-mode facts reduce relevance but do not disqualify;
+ * explicit out-of-market locations and confirmed work-mode mismatches do.
+ */
+export function scoreCandidateForDiscovery(
+  candidate: OnlineJobCandidate,
+  criteria: DiscoveryCriteria,
+  profile: {
+    titleExcludeKeywords?: string[] | null;
+    companyFilterSettings?: unknown;
+    emailFilterSettings?: EmailFilterCriteria | null;
+  },
+  options: CandidateScoreOptions = {},
+): number | null {
+  const rawLocation = candidate.location?.trim() ?? "";
+  const genericRemoteLocation = !rawLocation || GENERIC_UNVERIFIED_LOCATION.test(rawLocation);
+  const geographicCandidate = genericRemoteLocation ? { ...candidate, location: null } : candidate;
+  const hasNorthAmericanEvidence = isUsOrCanadaCandidate(geographicCandidate);
+
+  if (rawLocation && !genericRemoteLocation && !hasNorthAmericanEvidence) return null;
+  if (candidate.remote && EXPLICIT_GLOBAL_REMOTE.test(`${rawLocation} ${candidate.description}`)
+    && !hasNorthAmericanEvidence) return null;
+
+  const profileLocations = criteria.locations.filter((location) => location.toLowerCase() !== "remote");
+  if (!candidate.remote && rawLocation && !genericRemoteLocation && profileLocations.length > 0
+    && !profileLocations.some((wanted) => locationsMatch(rawLocation, wanted))) return null;
+
+  const remoteKnown = options.remoteKnown ?? candidate.remote;
+  const workModes = criteria.remotePreferences.map((preference) => preference.toLowerCase());
+  if (remoteKnown && workModes.length > 0) {
+    if (candidate.remote && !workModes.includes("remote")) return null;
+    if (!candidate.remote && !workModes.some((mode) => mode === "onsite" || mode === "hybrid")) return null;
+  }
+
+  const baseScore = rankCandidate(candidate, criteria, profile, true);
+  if (baseScore === null) return null;
+  const unknownLocationPenalty = !hasNorthAmericanEvidence ? 5 : 0;
+  const unknownWorkModePenalty = workModes.length > 0 && !remoteKnown ? 3 : 0;
+  return baseScore
+    - unknownLocationPenalty
+    - unknownWorkModePenalty
+    + feedbackAdjustment(candidate, options.feedback ?? [])
+    + freshnessAdjustment(candidate.postedAt, options.freshnessWindow, options.now);
+}
+
 export function rankCandidate(candidate: OnlineJobCandidate, criteria: DiscoveryCriteria, profile: {
   titleExcludeKeywords?: string[] | null;
   companyFilterSettings?: unknown;
   emailFilterSettings?: EmailFilterCriteria | null;
-}): number | null {
-  if (!isUsOrCanadaCandidate(candidate)) return null;
+}, allowMissingListingMetadata = false): number | null {
+  if (!allowMissingListingMetadata && !isUsOrCanadaCandidate(candidate)) return null;
   if (profile.emailFilterSettings && !matchesOnlineEmailCriteria(candidate, profile.emailFilterSettings)) return null;
 
   const title = candidate.title.toLowerCase();
@@ -268,13 +417,13 @@ export function rankCandidate(candidate: OnlineJobCandidate, criteria: Discovery
   if ((companyFilter.mode === "exclude" && companyMatches) || (companyFilter.mode === "include" && listedCompanies.length > 0 && !companyMatches)) return null;
 
   const workModes = criteria.remotePreferences.map((preference) => preference.toLowerCase());
-  if (workModes.length > 0) {
+  if (workModes.length > 0 && !allowMissingListingMetadata) {
     if (candidate.remote && !workModes.includes("remote")) return null;
     // Arbeitnow supplies only a remote flag. Treat non-remote roles as eligible
     // only when the profile explicitly accepts onsite or hybrid work.
     if (!candidate.remote && !workModes.some((mode) => mode === "onsite" || mode === "hybrid")) return null;
   }
-  if (!candidate.remote && criteria.locations.length > 0) {
+  if (!candidate.remote && criteria.locations.length > 0 && !allowMissingListingMetadata) {
     if (!candidate.location) return null;
     if (!criteria.locations.some((wanted) => wanted.toLowerCase() !== "remote" && locationsMatch(candidate.location ?? "", wanted))) return null;
   }
@@ -300,6 +449,7 @@ export function toDiscoveryStatus(profile: typeof userProfilesTable.$inferSelect
     source: SOURCE,
     scheduleHours: profile?.onlineDiscoveryScheduleHours ?? null,
     minimumMatchScore: profile?.onlineDiscoveryMinMatchScore ?? 12,
+    freshnessWindow: profile?.onlineDiscoveryFreshnessWindow ?? "any_time",
     lastRunAt: profile?.lastOnlineDiscoveryAt ?? null,
     nextRunAt: nextRunAt(profile?.lastOnlineDiscoveryAt ?? null, profile?.onlineDiscoveryScheduleHours ?? null),
     lastFound: profile?.lastOnlineDiscoveryFound ?? 0,
@@ -349,19 +499,53 @@ export async function runOnlineDiscovery(userId: string) {
       throw new Error(`All online job sources failed. ${sourceErrors.join(" ")}`);
     }
 
-    const [sourceRows, postingRows] = await Promise.all([
+    const [sourceRows, postingRows, feedbackRows] = await Promise.all([
       db.select().from(jobPostingSourcesTable).where(eq(jobPostingSourcesTable.userId, userId)),
       db.select({ id: jobPostingsTable.id, link: jobPostingsTable.link }).from(jobPostingsTable).where(eq(jobPostingsTable.userId, userId)),
+      db.select({
+        kind: jobPostingFeedbackTable.kind,
+        title: jobPostingsTable.title,
+        location: jobPostingsTable.location,
+        link: jobPostingsTable.link,
+      })
+        .from(jobPostingFeedbackTable)
+        .innerJoin(jobPostingsTable, and(
+          eq(jobPostingsTable.id, jobPostingFeedbackTable.jobPostingId),
+          eq(jobPostingsTable.userId, userId),
+        ))
+        .where(eq(jobPostingFeedbackTable.userId, userId)),
     ]);
     const minimum = profile?.onlineDiscoveryMinMatchScore ?? 12;
     const emailFilterSettings = profile?.emailFilterSettings ?? DEFAULT_EMAIL_FILTER_CRITERIA;
+    const flaggedClosedUrls = new Set(feedbackRows
+      .filter((feedback) => feedback.kind === "already_closed" && feedback.link)
+      .map((feedback) => canonicalizeJobUrl(feedback.link as string)));
     const candidates = feed
       .map((candidate) => ({
         candidate,
-        score: rankCandidate(candidate, criteria, { ...(profile ?? {}), emailFilterSettings }),
+        preliminaryScore: scoreCandidateForDiscovery(
+          candidate,
+          criteria,
+          {
+            ...(profile ?? {}),
+            // Page JSON-LD may correct these search-snippet fields; apply such
+            // hard profile filters only after the bounded page-screening pass.
+            titleExcludeKeywords: [],
+            companyFilterSettings: { mode: "off", companies: [] },
+            emailFilterSettings,
+          },
+          {
+            remoteKnown: candidate.remote || candidate.provider === "arbeitnow",
+            feedback: feedbackRows,
+            freshnessWindow: profile?.onlineDiscoveryFreshnessWindow,
+          },
+        ),
       }))
-      .filter((entry): entry is { candidate: OnlineJobCandidate; score: number } => entry.score !== null && entry.score >= minimum)
-      .sort((a, b) => b.score - a.score);
+      .filter((entry): entry is { candidate: OnlineJobCandidate; preliminaryScore: number } =>
+        entry.preliminaryScore !== null
+        && !flaggedClosedUrls.has(canonicalizeJobUrl(entry.candidate.url)))
+      .sort((a, b) => b.preliminaryScore - a.preliminaryScore
+        || compareCandidateRecency(a.candidate, b.candidate));
 
     const sourceByUrl = new Map(sourceRows.map((row) => [row.canonicalUrl, row.jobPostingId]));
     const sourceById = new Map(sourceRows.filter((row) => row.sourceJobId).map((row) => [`${row.provider}:${row.sourceJobId}`, row.jobPostingId]));
@@ -370,14 +554,31 @@ export async function runOnlineDiscovery(userId: string) {
     let duplicates = 0;
     let matchedExisting = 0;
     let screened = 0;
+    const seenScreenedUrls = new Set<string>();
+    const screenedShortlist: Array<{
+      candidate: OnlineJobCandidate;
+      score: number;
+      availability: AvailabilityCheck;
+      metadata: JobPageMetadata | null;
+      canonicalUrl: string;
+    }> = [];
+    const availabilityChecks: Array<{
+      provider: string;
+      url: string;
+      status: AvailabilityCheck["status"];
+      checkedAt: Date;
+      reason: string;
+      confidence: number;
+      evidence: string[];
+      sourcePostedAt: Date | null;
+      listingMetadata: { title?: string; company?: string; location?: string; remote?: boolean } | null;
+      fieldEvidence: JobPageMetadata["fieldEvidence"];
+    }> = [];
 
     for (const { candidate } of candidates) {
-      if (imported >= MAX_CANDIDATES_PER_RUN || screened >= MAX_SCREENED_CANDIDATES_PER_RUN) break;
+      if (screened >= MAX_SCREENED_CANDIDATES_PER_RUN) break;
 
-      // Known URLs and provider IDs are cheap to reject and should not consume
-      // the page-screening budget. Previously, duplicates occupied most or all
-      // of the top-12 candidate cap, preventing fresh results lower in the
-      // ranked feed from ever being examined.
+      // Keep the inexpensive URL/provider duplicate check before page fetches.
       const initialCanonicalUrl = canonicalizeJobUrl(candidate.url);
       const knownId = sourceByUrl.get(initialCanonicalUrl)
         ?? postingByUrl.get(initialCanonicalUrl)
@@ -389,35 +590,117 @@ export async function runOnlineDiscovery(userId: string) {
         continue;
       }
 
+      // The same new URL may arrive from multiple configured sources. It must
+      // not consume the bounded page budget more than once.
+      if (seenScreenedUrls.has(initialCanonicalUrl)) {
+        duplicates++;
+        continue;
+      }
+      seenScreenedUrls.add(initialCanonicalUrl);
       screened++;
-      let screenedCandidate = candidate;
       const pageResult = await fetchJobPageContent(candidate.url);
-      if (pageResult) {
-        screenedCandidate = {
-          ...candidate,
-          url: pageResult.finalUrl,
-          description: pageResult.contentUsable ? pageResult.content : candidate.description,
-        };
+      const availability = pageResult?.availability ?? {
+        status: "unverified" as const,
+        checkedAt: new Date(),
+        reason: "page_fetch_failed",
+        confidence: 0,
+        evidence: [],
+      };
+      const metadata = pageResult?.metadata ?? null;
+      const screenedCandidate: OnlineJobCandidate = pageResult
+        ? {
+            ...candidate,
+            url: pageResult.finalUrl,
+            description: pageResult.contentUsable ? pageResult.content : candidate.description,
+            title: metadata?.title ?? candidate.title,
+            company: metadata?.company ?? candidate.company,
+            location: metadata?.location ?? candidate.location,
+            remote: metadata?.remote ?? candidate.remote,
+            postedAt: metadata?.sourcePostedAt ?? candidate.postedAt,
+          }
+        : candidate;
+      const canonicalUrl = canonicalizeJobUrl(screenedCandidate.url);
+      availabilityChecks.push({
+        provider: candidate.provider,
+        url: screenedCandidate.url,
+        status: availability.status,
+        checkedAt: availability.checkedAt,
+        reason: availability.reason,
+        confidence: availability.confidence,
+        evidence: availability.evidence,
+        sourcePostedAt: metadata?.sourcePostedAt ?? candidate.postedAt,
+        listingMetadata: metadata ? {
+          title: metadata.title,
+          company: metadata.company,
+          location: metadata.location,
+          remote: metadata.remote,
+        } : null,
+        fieldEvidence: metadata?.fieldEvidence ?? {},
+      });
+      if (availability.status === "closed") {
+        logger.info(
+          { userId, title: screenedCandidate.title, company: screenedCandidate.company, availability },
+          "online discovery skipped confirmed-closed listing",
+        );
+        continue;
+      }
+      // Also reject an alias whose final URL was previously reported closed.
+      if (flaggedClosedUrls.has(canonicalUrl)) {
+        logger.info({ userId, url: screenedCandidate.url }, "online discovery skipped URL previously marked closed");
+        continue;
+      }
+
+      const redirectedExistingId = sourceByUrl.get(canonicalUrl)
+        ?? postingByUrl.get(canonicalUrl)
+        ?? (candidate.sourceJobId ? sourceById.get(`${candidate.provider}:${candidate.sourceJobId}`) : undefined);
+      if (redirectedExistingId) {
+        await attachSource(userId, redirectedExistingId, screenedCandidate);
+        duplicates++;
+        matchedExisting++;
+        continue;
       }
 
       const blockedKeyword = blockedKeywordForCandidate(screenedCandidate, emailFilterSettings.blockedBodyKeywords ?? []);
-      if (blockedKeyword) {
+      if (blockedKeyword || !matchesOnlineEmailCriteria(screenedCandidate, emailFilterSettings)) continue;
+      const remoteKnown = Boolean(metadata?.fieldEvidence.remote)
+        || candidate.remote
+        || candidate.provider === "arbeitnow";
+      const score = scoreCandidateForDiscovery(
+        screenedCandidate,
+        criteria,
+        { ...(profile ?? {}), emailFilterSettings },
+        {
+          remoteKnown,
+          feedback: feedbackRows,
+          freshnessWindow: profile?.onlineDiscoveryFreshnessWindow,
+        },
+      );
+      const matchScore = scoreCandidateForDiscovery(
+        screenedCandidate,
+        criteria,
+        { ...(profile ?? {}), emailFilterSettings },
+        { remoteKnown },
+      );
+      if (score === null || matchScore === null || matchScore < minimum) {
         logger.info(
-          { userId, title: candidate.title, company: candidate.company, blockedKeyword },
-          "online discovery skipped listing with blocked keyword",
+          { userId, title: screenedCandidate.title, company: screenedCandidate.company, score, matchScore, minimum },
+          "online discovery skipped listing below final match threshold",
         );
         continue;
       }
-      if (!matchesOnlineEmailCriteria(screenedCandidate, emailFilterSettings)) {
-        logger.info(
-          { userId, title: candidate.title, company: candidate.company },
-          "online discovery skipped listing that did not match email filter criteria",
-        );
-        continue;
-      }
+      screenedShortlist.push({ candidate: screenedCandidate, score, availability, metadata, canonicalUrl });
+    }
 
-      const canonicalUrl = canonicalizeJobUrl(screenedCandidate.url);
-      let existingId = sourceByUrl.get(canonicalUrl) ?? postingByUrl.get(canonicalUrl) ?? (candidate.sourceJobId ? sourceById.get(`${candidate.provider}:${candidate.sourceJobId}`) : undefined);
+    screenedShortlist.sort((a, b) => b.score - a.score
+      || compareCandidateRecency(a.candidate, b.candidate));
+    for (const { candidate: screenedCandidate, availability, metadata, canonicalUrl } of screenedShortlist) {
+      if (imported >= MAX_CANDIDATES_PER_RUN) break;
+
+      let existingId = sourceByUrl.get(canonicalUrl)
+        ?? postingByUrl.get(canonicalUrl)
+        ?? (screenedCandidate.sourceJobId
+          ? sourceById.get(`${screenedCandidate.provider}:${screenedCandidate.sourceJobId}`)
+          : undefined);
       if (!existingId) {
         const fuzzy = await isFuzzyDuplicate(userId, screenedCandidate.title, screenedCandidate.company);
         existingId = fuzzy.matchedId;
@@ -443,6 +726,18 @@ export async function runOnlineDiscovery(userId: string) {
               sourcePostedAt: screenedCandidate.postedAt,
               location: screenedCandidate.location,
               remoteType: screenedCandidate.remote ? "remote" : "unknown",
+              availabilityStatus: availability.status,
+              availabilityCheckedAt: availability.checkedAt,
+              availabilityReason: availability.reason,
+              availabilityConfidence: availability.confidence,
+              availabilityEvidence: availability.evidence,
+              fieldEvidence: {
+                title: { source: screenedCandidate.provider.startsWith("brave:") ? "search_result" : "source_feed", confidence: 0.6 },
+                company: { source: screenedCandidate.provider.startsWith("brave:") ? "search_result_or_url" : "source_feed", confidence: 0.4 },
+                ...(screenedCandidate.location ? { location: { source: "source_feed", confidence: 0.8 } } : {}),
+                ...(screenedCandidate.postedAt ? { sourcePostedAt: { source: "source_feed", confidence: 0.8 } } : {}),
+                ...metadata?.fieldEvidence,
+              },
           }).returning();
           const claimed = await tx.insert(jobPostingSourcesTable).values({
             userId,
@@ -495,7 +790,15 @@ export async function runOnlineDiscovery(userId: string) {
       duplicates,
       sourceErrors,
     }, "online discovery completed");
-    return { ...toDiscoveryStatus(updatedProfile), fetched: feed.length, considered: screened, imported, duplicates, matchedExisting };
+    return {
+      ...toDiscoveryStatus(updatedProfile),
+      fetched: feed.length,
+      considered: screened,
+      imported,
+      duplicates,
+      matchedExisting,
+      availabilityChecks,
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Online discovery failed.";
     // Record the attempt even when it fails so scheduled discovery keeps the

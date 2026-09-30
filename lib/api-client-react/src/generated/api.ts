@@ -50,6 +50,8 @@ import type {
   OnlineDiscoverySourcesResponse,
   OnlineDiscoveryStatus,
   ParseResume200,
+  PostingFeedback,
+  PostingFeedbackInput,
   PostingWithReport,
   ReopenPosting200,
   RestorePosting200,
@@ -907,6 +909,177 @@ export const useDeletePosting = <
   TContext
 > => {
   return useMutation(getDeletePostingMutationOptions(options));
+};
+
+/**
+ * @summary Set feedback for one owned posting
+ */
+export const getSetPostingFeedbackUrl = (id: number) => {
+  return `/api/postings/${id}/feedback`;
+};
+
+export const setPostingFeedback = async (
+  id: number,
+  postingFeedbackInput: PostingFeedbackInput,
+  options?: RequestInit,
+): Promise<PostingFeedback> => {
+  return customFetch<PostingFeedback>(getSetPostingFeedbackUrl(id), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(postingFeedbackInput),
+  });
+};
+
+export const getSetPostingFeedbackMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setPostingFeedback>>,
+    TError,
+    { id: number; data: BodyType<PostingFeedbackInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setPostingFeedback>>,
+  TError,
+  { id: number; data: BodyType<PostingFeedbackInput> },
+  TContext
+> => {
+  const mutationKey = ["setPostingFeedback"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setPostingFeedback>>,
+    { id: number; data: BodyType<PostingFeedbackInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return setPostingFeedback(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetPostingFeedbackMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setPostingFeedback>>
+>;
+export type SetPostingFeedbackMutationBody = BodyType<PostingFeedbackInput>;
+export type SetPostingFeedbackMutationError = ErrorType<void>;
+
+/**
+ * @summary Set feedback for one owned posting
+ */
+export const useSetPostingFeedback = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setPostingFeedback>>,
+    TError,
+    { id: number; data: BodyType<PostingFeedbackInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setPostingFeedback>>,
+  TError,
+  { id: number; data: BodyType<PostingFeedbackInput> },
+  TContext
+> => {
+  return useMutation(getSetPostingFeedbackMutationOptions(options));
+};
+
+/**
+ * @summary Undo feedback for one owned posting
+ */
+export const getUndoPostingFeedbackUrl = (id: number) => {
+  return `/api/postings/${id}/feedback`;
+};
+
+export const undoPostingFeedback = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getUndoPostingFeedbackUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getUndoPostingFeedbackMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof undoPostingFeedback>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof undoPostingFeedback>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["undoPostingFeedback"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof undoPostingFeedback>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return undoPostingFeedback(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UndoPostingFeedbackMutationResult = NonNullable<
+  Awaited<ReturnType<typeof undoPostingFeedback>>
+>;
+
+export type UndoPostingFeedbackMutationError = ErrorType<void>;
+
+/**
+ * @summary Undo feedback for one owned posting
+ */
+export const useUndoPostingFeedback = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof undoPostingFeedback>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof undoPostingFeedback>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getUndoPostingFeedbackMutationOptions(options));
 };
 
 /**

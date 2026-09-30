@@ -175,6 +175,27 @@ export const ListPostingsResponseItem = zod.object({
     salaryMax: zod.number().nullish(),
     source: zod.string(),
     sourcePostedAt: zod.coerce.date().nullish(),
+    availabilityStatus: zod
+      .union([
+        zod.literal("open"),
+        zod.literal("closed"),
+        zod.literal("unverified"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    availabilityCheckedAt: zod.coerce.date().nullish(),
+    availabilityReason: zod.string().nullish(),
+    availabilityConfidence: zod.number().nullish(),
+    availabilityEvidence: zod.array(zod.string()).nullish(),
+    fieldEvidence: zod
+      .record(
+        zod.string(),
+        zod.object({
+          source: zod.string().optional(),
+          confidence: zod.number().optional(),
+        }),
+      )
+      .nullish(),
     gmailMessageId: zod.string().nullish(),
     senderName: zod.string().nullish(),
     appliedAt: zod.coerce.date().nullish(),
@@ -200,6 +221,20 @@ export const ListPostingsResponseItem = zod.object({
     }),
     zod.null(),
   ]),
+  feedback: zod
+    .union([
+      zod.object({
+        kind: zod.enum([
+          "not_my_role",
+          "wrong_location",
+          "already_closed",
+          "more_like_this",
+        ]),
+        createdAt: zod.coerce.date(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
   sourceName: zod
     .string()
     .nullish()
@@ -266,6 +301,27 @@ export const ListDeletedPostingsResponseItem = zod.object({
     salaryMax: zod.number().nullish(),
     source: zod.string(),
     sourcePostedAt: zod.coerce.date().nullish(),
+    availabilityStatus: zod
+      .union([
+        zod.literal("open"),
+        zod.literal("closed"),
+        zod.literal("unverified"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    availabilityCheckedAt: zod.coerce.date().nullish(),
+    availabilityReason: zod.string().nullish(),
+    availabilityConfidence: zod.number().nullish(),
+    availabilityEvidence: zod.array(zod.string()).nullish(),
+    fieldEvidence: zod
+      .record(
+        zod.string(),
+        zod.object({
+          source: zod.string().optional(),
+          confidence: zod.number().optional(),
+        }),
+      )
+      .nullish(),
     gmailMessageId: zod.string().nullish(),
     senderName: zod.string().nullish(),
     appliedAt: zod.coerce.date().nullish(),
@@ -291,6 +347,20 @@ export const ListDeletedPostingsResponseItem = zod.object({
     }),
     zod.null(),
   ]),
+  feedback: zod
+    .union([
+      zod.object({
+        kind: zod.enum([
+          "not_my_role",
+          "wrong_location",
+          "already_closed",
+          "more_like_this",
+        ]),
+        createdAt: zod.coerce.date(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
   sourceName: zod
     .string()
     .nullish()
@@ -349,6 +419,27 @@ export const GetPostingResponse = zod.object({
     salaryMax: zod.number().nullish(),
     source: zod.string(),
     sourcePostedAt: zod.coerce.date().nullish(),
+    availabilityStatus: zod
+      .union([
+        zod.literal("open"),
+        zod.literal("closed"),
+        zod.literal("unverified"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    availabilityCheckedAt: zod.coerce.date().nullish(),
+    availabilityReason: zod.string().nullish(),
+    availabilityConfidence: zod.number().nullish(),
+    availabilityEvidence: zod.array(zod.string()).nullish(),
+    fieldEvidence: zod
+      .record(
+        zod.string(),
+        zod.object({
+          source: zod.string().optional(),
+          confidence: zod.number().optional(),
+        }),
+      )
+      .nullish(),
     gmailMessageId: zod.string().nullish(),
     senderName: zod.string().nullish(),
     appliedAt: zod.coerce.date().nullish(),
@@ -374,6 +465,20 @@ export const GetPostingResponse = zod.object({
     }),
     zod.null(),
   ]),
+  feedback: zod
+    .union([
+      zod.object({
+        kind: zod.enum([
+          "not_my_role",
+          "wrong_location",
+          "already_closed",
+          "more_like_this",
+        ]),
+        createdAt: zod.coerce.date(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
   sourceName: zod
     .string()
     .nullish()
@@ -410,6 +515,39 @@ export const GetPostingResponse = zod.object({
  * @summary Delete a job posting
  */
 export const DeletePostingParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Set feedback for one owned posting
+ */
+export const SetPostingFeedbackParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const SetPostingFeedbackBody = zod.object({
+  kind: zod.enum([
+    "not_my_role",
+    "wrong_location",
+    "already_closed",
+    "more_like_this",
+  ]),
+});
+
+export const SetPostingFeedbackResponse = zod.object({
+  kind: zod.enum([
+    "not_my_role",
+    "wrong_location",
+    "already_closed",
+    "more_like_this",
+  ]),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Undo feedback for one owned posting
+ */
+export const UndoPostingFeedbackParams = zod.object({
   id: zod.coerce.number(),
 });
 
@@ -497,6 +635,7 @@ export const GetOnlineDiscoveryStatusResponse = zod.object({
   source: zod.string(),
   scheduleHours: zod.number().nullish(),
   minimumMatchScore: zod.number(),
+  freshnessWindow: zod.enum(["past_week", "past_month", "any_time"]),
   lastRunAt: zod.coerce.date().nullish(),
   nextRunAt: zod.coerce.date().nullish(),
   lastFound: zod.number(),
@@ -519,6 +658,7 @@ export const RunOnlineDiscoveryResponse = zod
     source: zod.string(),
     scheduleHours: zod.number().nullish(),
     minimumMatchScore: zod.number(),
+    freshnessWindow: zod.enum(["past_week", "past_month", "any_time"]),
     lastRunAt: zod.coerce.date().nullish(),
     nextRunAt: zod.coerce.date().nullish(),
     lastFound: zod.number(),
@@ -534,6 +674,37 @@ export const RunOnlineDiscoveryResponse = zod
   })
   .and(
     zod.object({
+      availabilityChecks: zod
+        .array(
+          zod.object({
+            provider: zod.string(),
+            url: zod.string(),
+            status: zod.enum(["open", "closed", "unverified"]),
+            checkedAt: zod.coerce.date(),
+            reason: zod.string(),
+            confidence: zod.number(),
+            evidence: zod.array(zod.string()),
+            sourcePostedAt: zod.coerce.date().nullish(),
+            listingMetadata: zod
+              .object({
+                title: zod.string().optional(),
+                company: zod.string().optional(),
+                location: zod.string().optional(),
+                remote: zod.boolean().optional(),
+              })
+              .nullish(),
+            fieldEvidence: zod
+              .record(
+                zod.string(),
+                zod.object({
+                  source: zod.string().optional(),
+                  confidence: zod.number().optional(),
+                }),
+              )
+              .optional(),
+          }),
+        )
+        .optional(),
       fetched: zod.number(),
       considered: zod.number(),
       imported: zod.number(),
@@ -553,12 +724,14 @@ export const UpdateOnlineDiscoverySettingsBody = zod.object({
     .number()
     .min(1)
     .max(updateOnlineDiscoverySettingsBodyMinimumMatchScoreMax),
+  freshnessWindow: zod.enum(["past_week", "past_month", "any_time"]),
 });
 
 export const UpdateOnlineDiscoverySettingsResponse = zod.object({
   source: zod.string(),
   scheduleHours: zod.number().nullish(),
   minimumMatchScore: zod.number(),
+  freshnessWindow: zod.enum(["past_week", "past_month", "any_time"]),
   lastRunAt: zod.coerce.date().nullish(),
   nextRunAt: zod.coerce.date().nullish(),
   lastFound: zod.number(),
@@ -952,6 +1125,27 @@ export const GetDashboardSummaryResponse = zod.object({
         salaryMax: zod.number().nullish(),
         source: zod.string(),
         sourcePostedAt: zod.coerce.date().nullish(),
+        availabilityStatus: zod
+          .union([
+            zod.literal("open"),
+            zod.literal("closed"),
+            zod.literal("unverified"),
+            zod.literal(null),
+          ])
+          .nullish(),
+        availabilityCheckedAt: zod.coerce.date().nullish(),
+        availabilityReason: zod.string().nullish(),
+        availabilityConfidence: zod.number().nullish(),
+        availabilityEvidence: zod.array(zod.string()).nullish(),
+        fieldEvidence: zod
+          .record(
+            zod.string(),
+            zod.object({
+              source: zod.string().optional(),
+              confidence: zod.number().optional(),
+            }),
+          )
+          .nullish(),
         gmailMessageId: zod.string().nullish(),
         senderName: zod.string().nullish(),
         appliedAt: zod.coerce.date().nullish(),
@@ -977,6 +1171,20 @@ export const GetDashboardSummaryResponse = zod.object({
         }),
         zod.null(),
       ]),
+      feedback: zod
+        .union([
+          zod.object({
+            kind: zod.enum([
+              "not_my_role",
+              "wrong_location",
+              "already_closed",
+              "more_like_this",
+            ]),
+            createdAt: zod.coerce.date(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
       sourceName: zod
         .string()
         .nullish()

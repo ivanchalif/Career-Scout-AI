@@ -244,6 +244,48 @@ paths:
         "204":
           description: Deleted
 
+  /postings/{id}/feedback:
+    put:
+      operationId: setPostingFeedback
+      tags: [postings]
+      summary: Set feedback for one owned posting
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostingFeedbackInput"
+      responses:
+        "200":
+          description: Saved feedback
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostingFeedback"
+        "404":
+          description: Posting not found
+    delete:
+      operationId: undoPostingFeedback
+      tags: [postings]
+      summary: Undo feedback for one owned posting
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Feedback removed
+        "404":
+          description: Posting not found
+
   /postings/{id}/restore:
     patch:
       operationId: restorePosting
@@ -1113,6 +1155,27 @@ components:
         sourcePostedAt:
           type: ["string", "null"]
           format: date-time
+        availabilityStatus:
+          type: ["string", "null"]
+          enum: [open, closed, unverified, null]
+        availabilityCheckedAt:
+          type: ["string", "null"]
+          format: date-time
+        availabilityReason:
+          type: ["string", "null"]
+        availabilityConfidence:
+          type: ["number", "null"]
+        availabilityEvidence:
+          type: ["array", "null"]
+          items:
+            type: string
+        fieldEvidence:
+          type: ["object", "null"]
+          additionalProperties:
+            type: object
+            properties:
+              source: { type: string }
+              confidence: { type: number }
         gmailMessageId:
           type: ["string", "null"]
         senderName:
@@ -1192,6 +1255,10 @@ components:
           oneOf:
             - $ref: "#/components/schemas/MatchReport"
             - type: "null"
+        feedback:
+          oneOf:
+            - $ref: "#/components/schemas/PostingFeedback"
+            - type: "null"
         sourceName:
           type: ["string", "null"]
           description: Display name of the configured online discovery source
@@ -1209,6 +1276,25 @@ components:
       required:
         - posting
         - report
+
+    PostingFeedback:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [not_my_role, wrong_location, already_closed, more_like_this]
+        createdAt:
+          type: string
+          format: date-time
+      required: [kind, createdAt]
+
+    PostingFeedbackInput:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [not_my_role, wrong_location, already_closed, more_like_this]
+      required: [kind]
         
     PostingFilterReason:
       type: object
@@ -1380,9 +1466,13 @@ components:
           type: integer
           minimum: 1
           maximum: 100
+        freshnessWindow:
+          type: string
+          enum: [past_week, past_month, any_time]
       required:
         - scheduleHours
         - minimumMatchScore
+        - freshnessWindow
 
     OnlineDiscoverySource:
       type: object
@@ -1506,6 +1596,9 @@ components:
           type: ["number", "null"]
         minimumMatchScore:
           type: integer
+        freshnessWindow:
+          type: string
+          enum: [past_week, past_month, any_time]
         lastRunAt:
           type: ["string", "null"]
           format: date-time
@@ -1525,6 +1618,7 @@ components:
       required:
         - source
         - minimumMatchScore
+        - freshnessWindow
         - lastFound
         - lastImported
         - lastDuplicates
@@ -1535,6 +1629,10 @@ components:
         - $ref: "#/components/schemas/OnlineDiscoveryStatus"
         - type: object
           properties:
+            availabilityChecks:
+              type: array
+              items:
+                $ref: "#/components/schemas/DiscoveryAvailabilityCheck"
             fetched:
               type: integer
             considered:
@@ -1551,6 +1649,41 @@ components:
             - imported
             - duplicates
             - matchedExisting
+
+    DiscoveryAvailabilityCheck:
+      type: object
+      properties:
+        provider: { type: string }
+        url: { type: string }
+        status:
+          type: string
+          enum: [open, closed, unverified]
+        checkedAt:
+          type: string
+          format: date-time
+        reason: { type: string }
+        confidence: { type: number }
+        evidence:
+          type: array
+          items: { type: string }
+        sourcePostedAt:
+          type: ["string", "null"]
+          format: date-time
+        listingMetadata:
+          type: ["object", "null"]
+          properties:
+            title: { type: string }
+            company: { type: string }
+            location: { type: string }
+            remote: { type: boolean }
+        fieldEvidence:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              source: { type: string }
+              confidence: { type: number }
+      required: [provider, url, status, checkedAt, reason, confidence, evidence]
 
     CreatePostingBody:
       type: object

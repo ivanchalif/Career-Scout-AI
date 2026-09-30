@@ -1,4 +1,4 @@
-import { pgTable, text, integer, timestamp, serial, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, timestamp, serial, unique, jsonb, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -19,6 +19,12 @@ export const jobPostingsTable = pgTable("job_postings", {
   salaryMax: integer("salary_max"),
   source: text("source").notNull().default("manual"),
   sourcePostedAt: timestamp("source_posted_at", { withTimezone: true }),
+  availabilityStatus: text("availability_status"),
+  availabilityCheckedAt: timestamp("availability_checked_at", { withTimezone: true }),
+  availabilityReason: text("availability_reason"),
+  availabilityConfidence: real("availability_confidence"),
+  availabilityEvidence: jsonb("availability_evidence").$type<string[]>(),
+  fieldEvidence: jsonb("field_evidence").$type<Record<string, { source: string; confidence: number }>>(),
   senderName: text("sender_name"),
   gmailMessageId: text("gmail_message_id"),
   appliedAt: timestamp("applied_at", { withTimezone: true }),

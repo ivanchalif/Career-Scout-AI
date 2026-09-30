@@ -4,6 +4,7 @@ import {
   db,
   jobPostingsTable,
   matchReportsTable,
+  jobPostingFeedbackTable,
   userProfilesTable,
   gmailConnectionsTable,
   onlineDiscoverySourcesTable,
@@ -17,6 +18,10 @@ import {
   GetPostingResponse,
   ListPostingsResponse,
   AnalyzePostingResponse,
+  SetPostingFeedbackParams,
+  SetPostingFeedbackBody,
+  SetPostingFeedbackResponse,
+  UndoPostingFeedbackParams,
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
 import { scorePosting, scorePostingBackground, extractJobListings } from "../lib/scoringService";
@@ -81,6 +86,11 @@ async function getPostingWithReport(postingId: number, userId: string) {
     .from(matchReportsTable)
     .where(and(eq(matchReportsTable.jobPostingId, postingId), eq(matchReportsTable.userId, userId)));
 
+  const [feedbackRow] = await db
+    .select({ kind: jobPostingFeedbackTable.kind, createdAt: jobPostingFeedbackTable.createdAt })
+    .from(jobPostingFeedbackTable)
+    .where(and(eq(jobPostingFeedbackTable.jobPostingId, postingId), eq(jobPostingFeedbackTable.userId, userId)));
+
   const [profile] = await db
     .select({
       experienceHistory: userProfilesTable.experienceHistory,
@@ -106,6 +116,7 @@ async function getPostingWithReport(postingId: number, userId: string) {
   return {
     posting,
     report: report ?? null,
+    feedback: feedbackRow ?? null,
     sourceName,
     onlineMatchScore: getOnlineMatchScore(posting, profile),
   };
@@ -230,10 +241,15 @@ router.get("/postings", requireAuth, async (req, res): Promise<void> => {
         .select()
         .from(matchReportsTable)
         .where(and(eq(matchReportsTable.jobPostingId, posting.id), eq(matchReportsTable.userId, userId)));
+      const [feedback] = await db
+        .select({ kind: jobPostingFeedbackTable.kind, createdAt: jobPostingFeedbackTable.createdAt })
+        .from(jobPostingFeedbackTable)
+        .where(and(eq(jobPostingFeedbackTable.jobPostingId, posting.id), eq(jobPostingFeedbackTable.userId, userId)));
       const filterReason = hidden ? (getFilterReason(posting) ?? undefined) : undefined;
       return {
         posting,
         report: report ?? null,
+        feedback: feedback ?? null,
         sourceName: sourceNames.get(posting.source) ?? null,
         onlineMatchScore: getOnlineMatchScore(posting, userProfile),
         ...(filterReason !== undefined ? { filterReason } : {}),
@@ -319,9 +335,14 @@ router.get("/postings/deleted", requireAuth, async (req, res): Promise<void> => 
         .select()
         .from(matchReportsTable)
         .where(and(eq(matchReportsTable.jobPostingId, posting.id), eq(matchReportsTable.userId, userId)));
+      const [feedback] = await db
+        .select({ kind: jobPostingFeedbackTable.kind, createdAt: jobPostingFeedbackTable.createdAt })
+        .from(jobPostingFeedbackTable)
+        .where(and(eq(jobPostingFeedbackTable.jobPostingId, posting.id), eq(jobPostingFeedbackTable.userId, userId)));
       return {
         posting,
         report: report ?? null,
+        feedback: feedback ?? null,
         sourceName: sourceNames.get(posting.source) ?? null,
         onlineMatchScore: getOnlineMatchScore(posting, profile),
       };
@@ -688,6 +709,66 @@ router.get("/postings/:id", requireAuth, async (req, res): Promise<void> => {
   }
 
   res.json(GetPostingResponse.parse(result));
+});
+
+router.put("/postings/:id/feedback", requireAuth, async (req, res): Promise<void> => {
+  const params = SetPostingFeedbackParams.safeParse(req.params);
+  const body = SetPostingFeedbackBody.safeParse(req.body);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+
+  const [ownedPosting] = await db
+    .select({ id: jobPostingsTable.id })
+    .from(jobPostingsTable)
+    .where(and(eq(jobPostingsTable.id, params.data.id), eq(jobPostingsTable.userId, req.userId)));
+  if (!ownedPosting) {
+    res.status(404).json({ error: "Posting not found" });
+    return;
+  }
+
+  const [feedback] = await db
+    .insert(jobPostingFeedbackTable)
+    .values({
+      userId: req.userId,
+      jobPostingId: ownedPosting.id,
+      kind: body.data.kind,
+    })
+    .onConflictDoUpdate({
+      target: [jobPostingFeedbackTable.userId, jobPostingFeedbackTable.jobPostingId],
+      set: { kind: body.data.kind, createdAt: new Date() },
+    })
+    .returning({ kind: jobPostingFeedbackTable.kind, createdAt: jobPostingFeedbackTable.createdAt });
+
+  res.json(SetPostingFeedbackResponse.parse(feedback));
+});
+
+router.delete("/postings/:id/feedback", requireAuth, async (req, res): Promise<void> => {
+  const params = UndoPostingFeedbackParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [ownedPosting] = await db
+    .select({ id: jobPostingsTable.id })
+    .from(jobPostingsTable)
+    .where(and(eq(jobPostingsTable.id, params.data.id), eq(jobPostingsTable.userId, req.userId)));
+  if (!ownedPosting) {
+    res.status(404).json({ error: "Posting not found" });
+    return;
+  }
+
+  await db.delete(jobPostingFeedbackTable).where(and(
+    eq(jobPostingFeedbackTable.userId, req.userId),
+    eq(jobPostingFeedbackTable.jobPostingId, ownedPosting.id),
+  ));
+  res.sendStatus(204);
 });
 
 router.delete("/postings/:id", requireAuth, async (req, res): Promise<void> => {

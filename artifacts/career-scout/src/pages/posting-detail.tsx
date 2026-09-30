@@ -7,9 +7,13 @@ import {
 import {
   useGetPosting,
   useAnalyzePosting,
+  useSetPostingFeedback,
+  useUndoPostingFeedback,
   getGetPostingQueryKey,
   getListPostingsQueryKey,
   getGetDashboardSummaryQueryKey,
+  getListDeletedPostingsQueryKey,
+  type PostingFeedbackKind,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -17,6 +21,25 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import Layout from "@/components/layout";
+
+const feedbackOptions: Array<{ kind: PostingFeedbackKind; label: string }> = [
+  { kind: "not_my_role", label: "Not my role" },
+  { kind: "wrong_location", label: "Wrong location" },
+  { kind: "already_closed", label: "Already closed" },
+  { kind: "more_like_this", label: "More like this" },
+];
+
+function humanizeAvailabilityReason(reason: string): string {
+  const known: Record<string, string> = {
+    job_details_and_active_listing_evidence: "Job details and signs of an active listing were found.",
+    no_active_listing_evidence: "The page did not provide clear signs that the listing is still active.",
+    page_fetch_failed: "The listing page could not be reached for a status check.",
+    insufficient_rendered_content: "The page did not show enough readable content to verify the listing.",
+    timeout: "The page took too long to respond.",
+    fetch_error: "A connection issue prevented the page from being checked.",
+  };
+  return known[reason] ?? `${reason.replace(/[_-]+/g, " ").replace(/^\w/, (letter) => letter.toUpperCase())}${/[.!?]$/.test(reason) ? "" : "."}`;
+}
 
 function ScoreRingLarge({ score }: { score: number | null }) {
   if (score === null) {
@@ -77,6 +100,8 @@ export default function PostingDetailPage({ id }: { id: number }) {
     },
   });
   const analyzeMutation = useAnalyzePosting();
+  const setFeedbackMutation = useSetPostingFeedback();
+  const undoFeedbackMutation = useUndoPostingFeedback();
 
   const data = postingQ.data;
 
@@ -93,6 +118,26 @@ export default function PostingDetailPage({ id }: { id: number }) {
         onError: () => toast({ title: "Error", description: "Analysis failed.", variant: "destructive" }),
       }
     );
+  }
+
+  function refreshFeedbackQueries() {
+    qc.invalidateQueries({ queryKey: getGetPostingQueryKey(id) });
+    qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
+    qc.invalidateQueries({ queryKey: getListDeletedPostingsQueryKey() });
+  }
+
+  function setFeedback(kind: PostingFeedbackKind) {
+    setFeedbackMutation.mutate({ id, data: { kind } }, {
+      onSuccess: refreshFeedbackQueries,
+      onError: () => toast({ title: "Could not save feedback", description: "Please try again.", variant: "destructive" }),
+    });
+  }
+
+  function undoFeedback() {
+    undoFeedbackMutation.mutate({ id }, {
+      onSuccess: refreshFeedbackQueries,
+      onError: () => toast({ title: "Could not undo feedback", description: "Please try again.", variant: "destructive" }),
+    });
   }
 
   if (postingQ.isLoading) {
@@ -141,8 +186,18 @@ export default function PostingDetailPage({ id }: { id: number }) {
     );
   }
 
-  const { posting, report } = data;
+  const { posting, report, feedback } = data;
   const score = report?.fitScore ?? null;
+  const availability = posting;
+  const availabilityLabel = availability.availabilityStatus === "open"
+    ? "Reported open"
+    : availability.availabilityStatus === "closed"
+      ? "Reported closed"
+      : availability.availabilityStatus === "unverified"
+        ? "Availability unverified"
+        : availability.availabilityStatus === null
+          ? "Availability not checked"
+        : null;
 
   return (
     <Layout>
@@ -222,8 +277,14 @@ export default function PostingDetailPage({ id }: { id: number }) {
               <div className="flex flex-wrap gap-4 mt-4 text-sm text-muted-foreground">
                 <div className="flex items-center gap-1.5">
                   <Calendar className="w-3.5 h-3.5" />
-                  <span>{new Date(posting.createdAt).toLocaleDateString()}</span>
+                  <span>Discovered {new Date(posting.createdAt).toLocaleDateString()}</span>
                 </div>
+                {posting.sourcePostedAt && (
+                  <div className="flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>Posted {new Date(posting.sourcePostedAt).toLocaleDateString()} (source date)</span>
+                  </div>
+                )}
                 {(posting.salaryMin || posting.salaryMax) && (
                   <div className="flex items-center gap-1.5">
                     <DollarSign className="w-3.5 h-3.5" />
@@ -245,6 +306,92 @@ export default function PostingDetailPage({ id }: { id: number }) {
                   <p className="text-sm text-foreground/80" data-testid="ai-reasoning">{report.reasoning}</p>
                 </div>
               )}
+
+              {availabilityLabel && (
+                <div className="mt-4 rounded-lg border border-border bg-muted/20 p-3" data-testid="posting-availability">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge
+                      variant="outline"
+                      className={availability.availabilityStatus === "open"
+                        ? "text-emerald-400 border-emerald-800/50"
+                        : availability.availabilityStatus === "closed"
+                          ? "text-amber-400 border-amber-800/50"
+                          : "text-muted-foreground"}
+                    >
+                      {availabilityLabel}
+                    </Badge>
+                    {availability.availabilityCheckedAt && (
+                      <span className="text-xs text-muted-foreground">
+                        Checked {new Date(availability.availabilityCheckedAt).toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {(availability.availabilityReason && humanizeAvailabilityReason(availability.availabilityReason)) || (availability.availabilityStatus === "open"
+                      ? "The latest availability check indicates this role is open."
+                      : availability.availabilityStatus === "closed"
+                        ? "The latest availability check indicates this role may no longer be open."
+                        : availability.availabilityStatus === "unverified"
+                          ? "We could not confirm whether this role is still open."
+                          : "Availability has not been checked yet.")}
+                  </p>
+                  {posting.availabilityEvidence && posting.availabilityEvidence.length > 0 && (
+                    <div className="mt-2 border-t border-border/70 pt-2">
+                      <p className="text-xs font-medium text-muted-foreground mb-1">Availability sources</p>
+                      <ul className="space-y-1">
+                        {posting.availabilityEvidence.map((evidence, index) => (
+                          <li key={`${evidence}-${index}`} className="text-xs text-muted-foreground break-all">
+                            {evidence.startsWith("https://") || evidence.startsWith("http://") ? (
+                              <a href={evidence} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-foreground">
+                                {evidence}
+                              </a>
+                            ) : evidence}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="mt-4 rounded-lg border border-border p-3" data-testid="posting-feedback">
+                <p className="text-sm font-medium text-foreground">Was this recommendation useful?</p>
+                {feedback && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {feedback.kind === "already_closed"
+                      ? "Reported closed based on your feedback; this is not an independent availability check."
+                      : `Your feedback: ${feedbackOptions.find((option) => option.kind === feedback.kind)?.label ?? feedback.kind}`}
+                    {" · "}sent {new Date(feedback.createdAt).toLocaleDateString()}
+                  </p>
+                )}
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {feedbackOptions.map(({ kind, label }) => (
+                    <Button
+                      key={kind}
+                      type="button"
+                      variant={feedback?.kind === kind ? "secondary" : "outline"}
+                      size="sm"
+                      onClick={() => setFeedback(kind)}
+                      disabled={setFeedbackMutation.isPending || undoFeedbackMutation.isPending}
+                      data-testid={`posting-feedback-${kind}`}
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                  {feedback && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={undoFeedback}
+                      disabled={setFeedbackMutation.isPending || undoFeedbackMutation.isPending}
+                      data-testid="undo-posting-feedback"
+                    >
+                      Undo
+                    </Button>
+                  )}
+                </div>
+              </div>
 
               {/* Compensation gap */}
               {report?.compensationGap != null && (

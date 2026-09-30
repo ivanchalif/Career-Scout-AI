@@ -32,15 +32,22 @@ import {
   useRestorePosting,
   useClosePosting,
   useReopenPosting,
+  useSetPostingFeedback,
+  useUndoPostingFeedback,
   getListPostingsQueryKey,
   getListDeletedPostingsQueryKey,
+  getGetPostingQueryKey,
   getGetDashboardSummaryQueryKey,
   getGetGmailStatusQueryKey,
   getGetCompanyFilterSettingsQueryKey,
   getGetOnlineDiscoveryStatusQueryKey,
   getGetOnlineDiscoverySourcesQueryKey,
   type CreatePostingBody,
+  type JobPosting,
   type OnlineDiscoverySource,
+  type OnlineDiscoverySettingsFreshnessWindow,
+  type DiscoveryAvailabilityCheck,
+  type PostingFeedbackKind,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -129,6 +136,52 @@ function formatAdded(date: Date | string): string {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
 }
 
+function availabilityLabel(posting: JobPosting): string | null {
+  switch (posting.availabilityStatus) {
+    case "open": return "Reported open";
+    case "closed": return "Reported closed";
+    case "unverified": return "Availability unverified";
+    case null: return "Availability not checked";
+    default: return null;
+  }
+}
+
+const feedbackOptions: Array<{ kind: PostingFeedbackKind; label: string }> = [
+  { kind: "not_my_role", label: "Not my role" },
+  { kind: "wrong_location", label: "Wrong location" },
+  { kind: "already_closed", label: "Already closed" },
+  { kind: "more_like_this", label: "More like this" },
+];
+
+function feedbackLabel(kind: PostingFeedbackKind): string {
+  return feedbackOptions.find((option) => option.kind === kind)?.label ?? kind;
+}
+
+function humanizeAvailabilityReason(reason: string): string {
+  const known: Record<string, string> = {
+    job_details_and_active_listing_evidence: "Job details and signs of an active listing were found.",
+    no_active_listing_evidence: "The page did not provide clear signs that the listing is still active.",
+    page_fetch_failed: "The listing page could not be reached for a status check.",
+    insufficient_rendered_content: "The page did not show enough readable content to verify the listing.",
+    timeout: "The page took too long to respond.",
+    fetch_error: "A connection issue prevented the page from being checked.",
+  };
+  return known[reason] ?? `${reason.replace(/[_-]+/g, " ").replace(/^\w/, (letter) => letter.toUpperCase())}${/[.!?]$/.test(reason) ? "" : "."}`;
+}
+
+function humanizeEvidence(value: string): string {
+  const known: Record<string, string> = {
+    jsonld_job_posting: "Structured job listing found",
+    application_invitation: "Application invitation found",
+    job_details: "Job details found",
+  };
+  return known[value] ?? value.replace(/[_-]+/g, " ").replace(/^\w/, (letter) => letter.toUpperCase());
+}
+
+function formatDate(date: string): string {
+  return new Date(date).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
 let _dedupSweepInFlight = false;
 
 export default function DashboardPage() {
@@ -181,6 +234,7 @@ export default function DashboardPage() {
   const [sourceEditError, setSourceEditError] = useState<string | null>(null);
   const [gmailProcessing, setGmailProcessing] = useState(false);
   const [onlineProcessing, setOnlineProcessing] = useState(false);
+  const [latestAvailabilityChecks, setLatestAvailabilityChecks] = useState<DiscoveryAvailabilityCheck[] | null>(null);
 
   useEffect(() => {
     const SESSION_KEY = "dedup-sweep-done";
@@ -356,6 +410,8 @@ export default function DashboardPage() {
   const discoverySourcesQ = useGetOnlineDiscoverySources();
   const createMutation = useCreatePosting();
   const deleteMutation = useDeletePosting();
+  const setFeedbackMutation = useSetPostingFeedback();
+  const undoFeedbackMutation = useUndoPostingFeedback();
   const markAppliedMutation = useMarkApplied();
   const restoreMutation = useRestorePosting();
   const closeMutation = useClosePosting();
@@ -485,9 +541,13 @@ export default function DashboardPage() {
     });
   }
 
-  function saveDiscoverySettings(scheduleHours: number | null, minimumMatchScore = discoveryMinScore) {
+  function saveDiscoverySettings(
+    scheduleHours: number | null,
+    minimumMatchScore = discoveryMinScore,
+    freshnessWindow: OnlineDiscoverySettingsFreshnessWindow = discoveryStatus?.freshnessWindow ?? "past_month",
+  ) {
     updateDiscoveryMutation.mutate(
-      { data: { scheduleHours, minimumMatchScore } },
+      { data: { scheduleHours, minimumMatchScore, freshnessWindow } },
       {
         onSuccess: () => {
           qc.invalidateQueries({ queryKey: getGetOnlineDiscoveryStatusQueryKey() });
@@ -498,10 +558,33 @@ export default function DashboardPage() {
     );
   }
 
+  function invalidatePostingFeedback(postingId: number) {
+    qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
+    qc.invalidateQueries({ queryKey: getListDeletedPostingsQueryKey() });
+    qc.invalidateQueries({ queryKey: getGetPostingQueryKey(postingId) });
+  }
+
+  function setPostingFeedback(postingId: number, kind: PostingFeedbackKind) {
+    setFeedbackMutation.mutate({ id: postingId, data: { kind } }, {
+      onSuccess: () => invalidatePostingFeedback(postingId),
+      onError: () => toast({ title: "Could not save feedback", description: "Please try again.", variant: "destructive" }),
+    });
+  }
+
+  function undoPostingFeedback(postingId: number) {
+    undoFeedbackMutation.mutate({ id: postingId }, {
+      onSuccess: () => invalidatePostingFeedback(postingId),
+      onError: () => toast({ title: "Could not undo feedback", description: "Please try again.", variant: "destructive" }),
+    });
+  }
+
   function onDiscoverOnline() {
     setOnlineProcessing(true);
     runDiscoveryMutation.mutate(undefined, {
       onSuccess: async (result) => {
+        setLatestAvailabilityChecks((result.availabilityChecks ?? [])
+          .sort((a, b) => new Date(b.checkedAt).getTime() - new Date(a.checkedAt).getTime())
+          .slice(0, 5));
         await Promise.all([
           qc.invalidateQueries({ queryKey: getGetOnlineDiscoveryStatusQueryKey() }),
           qc.invalidateQueries({ queryKey: getListPostingsQueryKey() }),
@@ -1169,6 +1252,26 @@ export default function DashboardPage() {
                   <option value="24">Daily</option>
                   <option value="72">Every 3 days</option>
                 </select>
+                <label className="text-xs text-violet-300/80 ml-1" htmlFor="discovery-freshness-select">Posted</label>
+                <select
+                  id="discovery-freshness-select"
+                  className="h-8 rounded-md border border-violet-700/50 bg-background px-2 text-xs"
+                  value={discoveryStatus?.freshnessWindow ?? "past_month"}
+                  onChange={(event) => saveDiscoverySettings(
+                    discoveryStatus?.scheduleHours ?? null,
+                    discoveryMinScore,
+                    event.target.value as OnlineDiscoverySettingsFreshnessWindow,
+                  )}
+                  disabled={updateDiscoveryMutation.isPending}
+                  data-testid="discovery-freshness-select"
+                >
+                  <option value="past_week">Past week</option>
+                  <option value="past_month">Past month</option>
+                  <option value="any_time">Any time</option>
+                </select>
+                <p className="basis-full text-[11px] text-violet-300/60">
+                  Freshness is a ranking preference; listings without a posted date remain eligible.
+                </p>
                 <label className="text-xs text-violet-300/80 ml-1">Minimum match</label>
                 <Input
                   type="number"
@@ -1382,6 +1485,53 @@ export default function DashboardPage() {
                 </div>
                 <p className="text-[11px] text-violet-300/50">Use a public HTTPS RSS, Atom, JSON, or Google Search URL. Search URLs run through Brave, preserving operators such as site: and quoted phrases.</p>
               </div>
+              {latestAvailabilityChecks !== null && (
+                <div className="border-t border-violet-800/30 pt-3 space-y-2" data-testid="latest-availability-checks">
+                  <div>
+                    <p className="text-xs font-medium text-violet-200">Latest checks this session</p>
+                    <p className="text-[11px] text-violet-300/60">Confirmed closed listings are checked but not imported.</p>
+                  </div>
+                  {latestAvailabilityChecks.length === 0 ? (
+                    <p className="text-xs text-violet-300/60">No availability checks were returned by the latest run.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {latestAvailabilityChecks.map((check, index) => (
+                        <div key={`${check.url}-${index}`} className="rounded-lg border border-violet-800/40 bg-background/30 px-3 py-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge
+                              variant="outline"
+                              className={check.status === "open"
+                                ? "text-emerald-300 border-emerald-800/50"
+                                : check.status === "closed"
+                                ? "text-red-300 border-red-800/50"
+                                : "text-amber-300 border-amber-800/50"}
+                            >
+                              {check.status === "open" ? "Open" : check.status === "closed" ? "Closed · skipped" : "Unverified"}
+                            </Badge>
+                            <span className="text-xs text-violet-100">{humanizeEvidence(check.provider)}</span>
+                            <span className="text-[11px] text-violet-300/50">Checked {formatAdded(check.checkedAt)}</span>
+                            <span className="text-[11px] text-violet-300/50">{Math.round(check.confidence * 100)}% confidence</span>
+                          </div>
+                          <p className="mt-1 text-xs text-violet-200/80">{humanizeAvailabilityReason(check.reason)}</p>
+                          {check.evidence.length > 0 && (
+                            <p className="mt-1 text-[11px] text-violet-300/60">
+                              Evidence: {check.evidence.map(humanizeEvidence).join(", ")}
+                            </p>
+                          )}
+                          <a
+                            href={check.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-1 block truncate text-[11px] text-violet-300 underline underline-offset-2 hover:text-violet-100"
+                          >
+                            {check.url}
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               {discoveryStatus?.lastError && <p className="text-xs text-destructive">{discoveryStatus.lastError}</p>}
             </>
           )}
@@ -1748,7 +1898,8 @@ export default function DashboardPage() {
                           </span>
                         )}
                         <span className="text-xs text-muted-foreground/60">
-                          Added {formatAdded(posting.createdAt)}
+                          {posting.sourcePostedAt && `Posted ${formatDate(posting.sourcePostedAt)} · `}
+                          Discovered {formatAdded(posting.createdAt)}
                         </span>
                       </p>
                     </div>
@@ -1830,6 +1981,7 @@ export default function DashboardPage() {
             {postings.map((item) => {
               const { posting, report } = item;
               const score = report?.fitScore ?? null;
+              const availability = posting;
               return (
                 <div key={posting.id} className="flex flex-col">
                 <div
@@ -1880,10 +2032,37 @@ export default function DashboardPage() {
                               : `up to $${(posting.salaryMax! / 1000).toFixed(0)}k`}
                           </span>
                         )}
-                        <span className="text-xs text-muted-foreground/60">
-                          {formatAdded(posting.createdAt)}
+                        {posting.sourcePostedAt && (
+                          <span className="text-xs text-muted-foreground/60" title="Date listed by the original source">
+                            Posted {formatDate(posting.sourcePostedAt)}
+                          </span>
+                        )}
+                        <span className="text-xs text-muted-foreground/60" title="Date discovered and added to Career Scout">
+                          Discovered {formatAdded(posting.createdAt)}
                         </span>
                       </p>
+                      {availabilityLabel(availability) && (
+                        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs" data-testid={`availability-${posting.id}`}>
+                          <Badge
+                            variant="outline"
+                            className={availability.availabilityStatus === "open"
+                              ? "text-emerald-400 border-emerald-800/50"
+                              : availability.availabilityStatus === "closed"
+                                ? "text-amber-400 border-amber-800/50"
+                                : "text-muted-foreground"}
+                          >
+                            {availabilityLabel(availability)}
+                          </Badge>
+                          {availability.availabilityReason && (
+                            <span className="text-muted-foreground">{humanizeAvailabilityReason(availability.availabilityReason)}</span>
+                          )}
+                          {availability.availabilityCheckedAt && (
+                            <span className="text-muted-foreground/60">
+                              Checked {formatAdded(availability.availabilityCheckedAt)}
+                            </span>
+                          )}
+                        </div>
+                      )}
                       {report?.matchedSkills && report.matchedSkills.length > 0 && (
                         <div className="hidden sm:flex flex-wrap gap-1 mt-2">
                           {report.matchedSkills.slice(0, 4).map((skill) => (
@@ -1893,6 +2072,54 @@ export default function DashboardPage() {
                           ))}
                         </div>
                       )}
+                      <div
+                        className="mt-2 flex flex-wrap items-center gap-1.5"
+                        onClick={(event) => event.stopPropagation()}
+                        data-testid={`posting-feedback-${posting.id}`}
+                      >
+                        <span className="mr-1 text-[11px] text-muted-foreground">
+                          {item.feedback?.kind === "already_closed"
+                            ? "Your feedback:"
+                            : item.feedback ? `Feedback: ${feedbackLabel(item.feedback.kind)}` : "Help improve matches:"}
+                        </span>
+                        {item.feedback?.kind === "already_closed" && (
+                          <Badge
+                            variant="outline"
+                            className="h-6 border-amber-800/50 px-2 text-[10px] text-amber-300"
+                            title="This is your feedback, not an independent availability check."
+                          >
+                            Reported closed
+                          </Badge>
+                        )}
+                        {feedbackOptions.map(({ kind, label }) => (
+                          <Button
+                            key={kind}
+                            type="button"
+                            variant={item.feedback?.kind === kind ? "secondary" : "ghost"}
+                            size="sm"
+                            className="h-7 px-2 text-[11px]"
+                            onClick={() => setPostingFeedback(posting.id, kind)}
+                            disabled={setFeedbackMutation.isPending || undoFeedbackMutation.isPending}
+                            data-testid={`posting-feedback-${kind}-${posting.id}`}
+                          >
+                            {label}
+                          </Button>
+                        ))}
+                        {item.feedback && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 gap-1 px-2 text-[11px] text-muted-foreground"
+                            onClick={() => undoPostingFeedback(posting.id)}
+                            disabled={setFeedbackMutation.isPending || undoFeedbackMutation.isPending}
+                            data-testid={`undo-posting-feedback-${posting.id}`}
+                          >
+                            <Undo2 className="h-3 w-3" />
+                            Undo
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </div>
                   {/* Action buttons — spread full-width on mobile, compact row on desktop */}
@@ -1900,6 +2127,18 @@ export default function DashboardPage() {
                     className="flex items-center justify-around sm:justify-start sm:gap-1 sm:shrink-0 sm:pr-2 border-t sm:border-t-0 border-border/40 px-1 py-1 sm:px-0 sm:py-0"
                     onClick={(e) => e.stopPropagation()}
                   >
+                    <Link href={`/postings/${posting.id}`}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 px-2 text-xs text-indigo-300 hover:text-indigo-200"
+                        title="View posting details"
+                        data-testid={`posting-details-${posting.id}`}
+                      >
+                        View details
+                      </Button>
+                    </Link>
                     {!posting.link && posting.source === "gmail" && (
                       <Button
                         variant="ghost"

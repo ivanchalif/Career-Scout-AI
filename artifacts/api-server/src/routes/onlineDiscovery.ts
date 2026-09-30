@@ -40,11 +40,13 @@ router.put("/online-discovery/settings", requireAuth, async (req, res): Promise<
     userId: req.userId,
     onlineDiscoveryScheduleHours: parsed.data.scheduleHours,
     onlineDiscoveryMinMatchScore: parsed.data.minimumMatchScore,
+    onlineDiscoveryFreshnessWindow: parsed.data.freshnessWindow,
   }).onConflictDoUpdate({
     target: userProfilesTable.userId,
     set: {
       onlineDiscoveryScheduleHours: parsed.data.scheduleHours,
       onlineDiscoveryMinMatchScore: parsed.data.minimumMatchScore,
+      onlineDiscoveryFreshnessWindow: parsed.data.freshnessWindow,
       updatedAt: new Date(),
     },
   }).returning();

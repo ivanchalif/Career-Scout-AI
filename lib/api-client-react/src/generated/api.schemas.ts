@@ -83,6 +83,29 @@ export interface UpsertProfileBody {
   onlineDiscoveryMinMatchScore?: number;
 }
 
+/**
+ * @nullable
+ */
+export type JobPostingAvailabilityStatus =
+  | (typeof JobPostingAvailabilityStatus)[keyof typeof JobPostingAvailabilityStatus]
+  | null;
+
+export const JobPostingAvailabilityStatus = {
+  open: "open",
+  closed: "closed",
+  unverified: "unverified",
+} as const;
+
+/**
+ * @nullable
+ */
+export type JobPostingFieldEvidence = {
+  [key: string]: {
+    source?: string;
+    confidence?: number;
+  };
+} | null;
+
 export interface JobPosting {
   id: number;
   userId: string;
@@ -99,6 +122,18 @@ export interface JobPosting {
   source: string;
   /** @nullable */
   sourcePostedAt?: string | null;
+  /** @nullable */
+  availabilityStatus?: JobPostingAvailabilityStatus;
+  /** @nullable */
+  availabilityCheckedAt?: string | null;
+  /** @nullable */
+  availabilityReason?: string | null;
+  /** @nullable */
+  availabilityConfidence?: number | null;
+  /** @nullable */
+  availabilityEvidence?: string[] | null;
+  /** @nullable */
+  fieldEvidence?: JobPostingFieldEvidence;
   /** @nullable */
   gmailMessageId?: string | null;
   /** @nullable */
@@ -134,6 +169,21 @@ export interface MatchReport {
   updatedAt: string;
 }
 
+export type PostingFeedbackKind =
+  (typeof PostingFeedbackKind)[keyof typeof PostingFeedbackKind];
+
+export const PostingFeedbackKind = {
+  not_my_role: "not_my_role",
+  wrong_location: "wrong_location",
+  already_closed: "already_closed",
+  more_like_this: "more_like_this",
+} as const;
+
+export interface PostingFeedback {
+  kind: PostingFeedbackKind;
+  createdAt: string;
+}
+
 export interface PostingFilterReason {
   byCompany: boolean;
   /** @nullable */
@@ -155,6 +205,7 @@ export interface PostingSource {
 export interface PostingWithReport {
   posting: JobPosting;
   report: MatchReport | null;
+  feedback?: PostingFeedback | null;
   /**
    * Display name of the configured online discovery source
    * @nullable
@@ -169,6 +220,20 @@ export interface PostingWithReport {
   onlineMatchScore?: number | null;
   filterReason?: PostingFilterReason;
   sources?: PostingSource[];
+}
+
+export type PostingFeedbackInputKind =
+  (typeof PostingFeedbackInputKind)[keyof typeof PostingFeedbackInputKind];
+
+export const PostingFeedbackInputKind = {
+  not_my_role: "not_my_role",
+  wrong_location: "wrong_location",
+  already_closed: "already_closed",
+  more_like_this: "more_like_this",
+} as const;
+
+export interface PostingFeedbackInput {
+  kind: PostingFeedbackInputKind;
 }
 
 export type EmailSyncLogItemOutcome =
@@ -275,6 +340,15 @@ export interface FilterStats {
   totalSkippedApplied: number;
 }
 
+export type OnlineDiscoverySettingsFreshnessWindow =
+  (typeof OnlineDiscoverySettingsFreshnessWindow)[keyof typeof OnlineDiscoverySettingsFreshnessWindow];
+
+export const OnlineDiscoverySettingsFreshnessWindow = {
+  past_week: "past_week",
+  past_month: "past_month",
+  any_time: "any_time",
+} as const;
+
 export interface OnlineDiscoverySettings {
   /** @nullable */
   scheduleHours: number | null;
@@ -283,6 +357,7 @@ export interface OnlineDiscoverySettings {
    * @maximum 100
    */
   minimumMatchScore: number;
+  freshnessWindow: OnlineDiscoverySettingsFreshnessWindow;
 }
 
 export type OnlineDiscoverySourceKind =
@@ -343,11 +418,21 @@ export interface OnlineDiscoveryCriteria {
   remotePreferences: string[];
 }
 
+export type OnlineDiscoveryStatusFreshnessWindow =
+  (typeof OnlineDiscoveryStatusFreshnessWindow)[keyof typeof OnlineDiscoveryStatusFreshnessWindow];
+
+export const OnlineDiscoveryStatusFreshnessWindow = {
+  past_week: "past_week",
+  past_month: "past_month",
+  any_time: "any_time",
+} as const;
+
 export interface OnlineDiscoveryStatus {
   source: string;
   /** @nullable */
   scheduleHours?: number | null;
   minimumMatchScore: number;
+  freshnessWindow: OnlineDiscoveryStatusFreshnessWindow;
   /** @nullable */
   lastRunAt?: string | null;
   /** @nullable */
@@ -360,7 +445,49 @@ export interface OnlineDiscoveryStatus {
   criteria: OnlineDiscoveryCriteria;
 }
 
+export type DiscoveryAvailabilityCheckStatus =
+  (typeof DiscoveryAvailabilityCheckStatus)[keyof typeof DiscoveryAvailabilityCheckStatus];
+
+export const DiscoveryAvailabilityCheckStatus = {
+  open: "open",
+  closed: "closed",
+  unverified: "unverified",
+} as const;
+
+/**
+ * @nullable
+ */
+export type DiscoveryAvailabilityCheckListingMetadata = {
+  title?: string;
+  company?: string;
+  location?: string;
+  remote?: boolean;
+} | null;
+
+export type DiscoveryAvailabilityCheckFieldEvidence = {
+  [key: string]: {
+    source?: string;
+    confidence?: number;
+  };
+};
+
+export interface DiscoveryAvailabilityCheck {
+  provider: string;
+  url: string;
+  status: DiscoveryAvailabilityCheckStatus;
+  checkedAt: string;
+  reason: string;
+  confidence: number;
+  evidence: string[];
+  /** @nullable */
+  sourcePostedAt?: string | null;
+  /** @nullable */
+  listingMetadata?: DiscoveryAvailabilityCheckListingMetadata;
+  fieldEvidence?: DiscoveryAvailabilityCheckFieldEvidence;
+}
+
 export type OnlineDiscoveryRunResult = OnlineDiscoveryStatus & {
+  availabilityChecks?: DiscoveryAvailabilityCheck[];
   fetched: number;
   considered: number;
   imported: number;
