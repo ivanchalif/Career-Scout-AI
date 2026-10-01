@@ -1,4 +1,4 @@
-import { sql, and, eq, inArray } from "drizzle-orm";
+import { sql, and, eq, inArray, isNull } from "drizzle-orm";
 import { db, jobPostingsTable } from "@workspace/db";
 
 // Common job-title abbreviations expanded before similarity comparison so that
@@ -254,10 +254,19 @@ export async function runDedupSweep(userId: string): Promise<number> {
   const toDelete = (rows.rows as { id: number }[]).map((r) => r.id);
 
   if (toDelete.length > 0) {
-    await db
+    const removed = await db
       .update(jobPostingsTable)
       .set({ deletedAt: new Date(), deletedBy: "sweep", fullDescription: "" })
-      .where(and(eq(jobPostingsTable.userId, userId), inArray(jobPostingsTable.id, toDelete)));
+      .where(and(
+        eq(jobPostingsTable.userId, userId),
+        inArray(jobPostingsTable.id, toDelete),
+        isNull(jobPostingsTable.deletedAt),
+        isNull(jobPostingsTable.closedAt),
+        isNull(jobPostingsTable.appliedAt),
+        isNull(jobPostingsTable.dismissalUndoToken),
+      ))
+      .returning({ id: jobPostingsTable.id });
+    return removed.length;
   }
 
   return toDelete.length;
@@ -319,10 +328,18 @@ export async function sweepDuplicatesOf(
 
   const ids = (rows.rows as { id: number }[]).map((r) => r.id);
 
-  await db
+  const removed = await db
     .update(jobPostingsTable)
     .set({ deletedAt: new Date(), deletedBy: "sweep", fullDescription: "" })
-    .where(and(eq(jobPostingsTable.userId, userId), inArray(jobPostingsTable.id, ids)));
+    .where(and(
+      eq(jobPostingsTable.userId, userId),
+      inArray(jobPostingsTable.id, ids),
+      isNull(jobPostingsTable.deletedAt),
+      isNull(jobPostingsTable.closedAt),
+      isNull(jobPostingsTable.appliedAt),
+      isNull(jobPostingsTable.dismissalUndoToken),
+    ))
+    .returning({ id: jobPostingsTable.id });
 
-  return ids.length;
+  return removed.length;
 }

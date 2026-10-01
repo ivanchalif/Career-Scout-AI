@@ -5,7 +5,7 @@ import {
   Plus, Search, SlidersHorizontal, Mail, TrendingUp,
   BriefcaseBusiness, Star, Trash2, X,
   RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2, CheckCircle2, Undo2, MapPin, Ban, RotateCcw, Layers, Copy, Archive,
-  ChevronDown, ChevronUp, ExternalLink, SearchCode, Download, Upload, Pencil, Check, Loader2,
+  ChevronDown, ChevronUp, MoreHorizontal, ExternalLink, SearchCode, Download, Upload, Pencil, Check, Loader2,
 } from "lucide-react";
 import {
   useGetDashboardSummary,
@@ -32,8 +32,6 @@ import {
   useRestorePosting,
   useClosePosting,
   useReopenPosting,
-  useSetPostingFeedback,
-  useUndoPostingFeedback,
   getListPostingsQueryKey,
   getListDeletedPostingsQueryKey,
   getGetPostingQueryKey,
@@ -47,7 +45,6 @@ import {
   type OnlineDiscoverySource,
   type OnlineDiscoverySettingsFreshnessWindow,
   type DiscoveryAvailabilityCheck,
-  type PostingFeedbackKind,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -67,6 +64,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import Layout from "@/components/layout";
+import { PostingDecisionControls } from "@/components/posting-decision-controls";
+import { usePostingDecision, dismissReasons, reasonLabel } from "@/hooks/use-posting-decision";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
+  DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
+} from "@/components/ui/dropdown-menu";
 
 function ScoreBadge({ score }: { score: number | null }) {
   if (score === null) {
@@ -144,17 +147,6 @@ function availabilityLabel(posting: JobPosting): string | null {
     case null: return "Availability not checked";
     default: return null;
   }
-}
-
-const feedbackOptions: Array<{ kind: PostingFeedbackKind; label: string }> = [
-  { kind: "not_my_role", label: "Not my role" },
-  { kind: "wrong_location", label: "Wrong location" },
-  { kind: "already_closed", label: "Already closed" },
-  { kind: "more_like_this", label: "More like this" },
-];
-
-function feedbackLabel(kind: PostingFeedbackKind): string {
-  return feedbackOptions.find((option) => option.kind === kind)?.label ?? kind;
 }
 
 function humanizeAvailabilityReason(reason: string): string {
@@ -410,8 +402,7 @@ export default function DashboardPage() {
   const discoverySourcesQ = useGetOnlineDiscoverySources();
   const createMutation = useCreatePosting();
   const deleteMutation = useDeletePosting();
-  const setFeedbackMutation = useSetPostingFeedback();
-  const undoFeedbackMutation = useUndoPostingFeedback();
+  const decision = usePostingDecision();
   const markAppliedMutation = useMarkApplied();
   const restoreMutation = useRestorePosting();
   const closeMutation = useClosePosting();
@@ -556,26 +547,6 @@ export default function DashboardPage() {
         onError: () => toast({ title: "Could not save discovery preferences", variant: "destructive" }),
       },
     );
-  }
-
-  function invalidatePostingFeedback(postingId: number) {
-    qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
-    qc.invalidateQueries({ queryKey: getListDeletedPostingsQueryKey() });
-    qc.invalidateQueries({ queryKey: getGetPostingQueryKey(postingId) });
-  }
-
-  function setPostingFeedback(postingId: number, kind: PostingFeedbackKind) {
-    setFeedbackMutation.mutate({ id: postingId, data: { kind } }, {
-      onSuccess: () => invalidatePostingFeedback(postingId),
-      onError: () => toast({ title: "Could not save feedback", description: "Please try again.", variant: "destructive" }),
-    });
-  }
-
-  function undoPostingFeedback(postingId: number) {
-    undoFeedbackMutation.mutate({ id: postingId }, {
-      onSuccess: () => invalidatePostingFeedback(postingId),
-      onError: () => toast({ title: "Could not undo feedback", description: "Please try again.", variant: "destructive" }),
-    });
   }
 
   function onDiscoverOnline() {
@@ -1073,14 +1044,14 @@ export default function DashboardPage() {
 
   return (
     <Layout>
-      <div className="px-6 py-8 max-w-5xl mx-auto" data-testid="dashboard-page">
+      <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto min-w-0" data-testid="dashboard-page">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+          <div className="min-w-0">
             <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
             <p className="text-sm text-muted-foreground mt-0.5">Your job opportunities, ranked by fit</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 min-w-0">
             {/* Utility buttons — icon-only on small screens, full label on sm+ */}
             <Button
               variant="outline"
@@ -1627,9 +1598,9 @@ export default function DashboardPage() {
 
         {/* Auto-sweep banner */}
         {autoSweepCount != null && (
-          <div className="flex items-center gap-3 mb-4 px-4 py-2.5 bg-amber-950/40 border border-amber-800/50 rounded-lg text-sm text-amber-300">
+          <div className="flex items-start gap-3 mb-4 px-3 sm:px-4 py-2.5 bg-amber-950/40 border border-amber-800/50 rounded-lg text-sm text-amber-300">
             <Layers className="w-4 h-4 shrink-0" />
-            <span className="flex-1">
+            <span className="flex-1 min-w-0 break-words">
               <strong>{autoSweepCount}</strong> duplicate job{autoSweepCount === 1 ? " was" : "s were"} automatically removed this session.{" "}
               <button
                 className="underline underline-offset-2 hover:text-amber-200 transition-colors"
@@ -1882,6 +1853,11 @@ export default function DashboardPage() {
                             Removed automatically
                           </Badge>
                         )}
+                        {item.feedback && item.feedback.kind !== "more_like_this" && (
+                          <span className="text-[11px] text-muted-foreground" data-testid={`deleted-reason-${posting.id}`}>
+                            Reason: {reasonLabel(item.feedback.kind)}
+                          </span>
+                        )}
                         {isClosed && (
                           <Badge variant="outline" className="text-xs text-orange-400 border-orange-800/50 gap-1">
                             <Archive className="w-3 h-3" />
@@ -1915,6 +1891,18 @@ export default function DashboardPage() {
                         >
                           <RotateCcw className="w-3.5 h-3.5" />
                           Reopen
+                        </Button>
+                      ) : posting.dismissalUndoToken ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5 text-sky-400 border-sky-800/50 hover:bg-sky-950/30 hover:text-sky-300"
+                          onClick={() => void decision.undoDismissal(posting.id, posting.dismissalUndoToken!)}
+                          disabled={decision.pending}
+                          data-testid={`posting-undo-dismissal-${posting.id}`}
+                        >
+                          <Undo2 className="w-3.5 h-3.5" />
+                          Undo
                         </Button>
                       ) : (
                         <Button
@@ -2072,54 +2060,6 @@ export default function DashboardPage() {
                           ))}
                         </div>
                       )}
-                      <div
-                        className="mt-2 flex flex-wrap items-center gap-1.5"
-                        onClick={(event) => event.stopPropagation()}
-                        data-testid={`posting-feedback-${posting.id}`}
-                      >
-                        <span className="mr-1 text-[11px] text-muted-foreground">
-                          {item.feedback?.kind === "already_closed"
-                            ? "Your feedback:"
-                            : item.feedback ? `Feedback: ${feedbackLabel(item.feedback.kind)}` : "Help improve matches:"}
-                        </span>
-                        {item.feedback?.kind === "already_closed" && (
-                          <Badge
-                            variant="outline"
-                            className="h-6 border-amber-800/50 px-2 text-[10px] text-amber-300"
-                            title="This is your feedback, not an independent availability check."
-                          >
-                            Reported closed
-                          </Badge>
-                        )}
-                        {feedbackOptions.map(({ kind, label }) => (
-                          <Button
-                            key={kind}
-                            type="button"
-                            variant={item.feedback?.kind === kind ? "secondary" : "ghost"}
-                            size="sm"
-                            className="h-7 px-2 text-[11px]"
-                            onClick={() => setPostingFeedback(posting.id, kind)}
-                            disabled={setFeedbackMutation.isPending || undoFeedbackMutation.isPending}
-                            data-testid={`posting-feedback-${kind}-${posting.id}`}
-                          >
-                            {label}
-                          </Button>
-                        ))}
-                        {item.feedback && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 gap-1 px-2 text-[11px] text-muted-foreground"
-                            onClick={() => undoPostingFeedback(posting.id)}
-                            disabled={setFeedbackMutation.isPending || undoFeedbackMutation.isPending}
-                            data-testid={`undo-posting-feedback-${posting.id}`}
-                          >
-                            <Undo2 className="h-3 w-3" />
-                            Undo
-                          </Button>
-                        )}
-                      </div>
                     </div>
                   </div>
                   {/* Action buttons — spread full-width on mobile, compact row on desktop */}
@@ -2127,35 +2067,6 @@ export default function DashboardPage() {
                     className="flex items-center justify-around sm:justify-start sm:gap-1 sm:shrink-0 sm:pr-2 border-t sm:border-t-0 border-border/40 px-1 py-1 sm:px-0 sm:py-0"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <Link href={`/postings/${posting.id}`}>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 px-2 text-xs text-indigo-300 hover:text-indigo-200"
-                        title="View posting details"
-                        data-testid={`posting-details-${posting.id}`}
-                      >
-                        View details
-                      </Button>
-                    </Link>
-                    {!posting.link && posting.source === "gmail" && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="w-9 h-9 sm:w-8 sm:h-8 text-muted-foreground hover:text-indigo-400 hover:bg-indigo-950/20"
-                        onClick={() => onRetryLink(posting.id)}
-                        disabled={retryingLinks.has(posting.id)}
-                        title="Find link from original email"
-                        data-testid={`posting-retry-link-${posting.id}`}
-                      >
-                        {retryingLinks.has(posting.id) ? (
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <SearchCode className="w-3.5 h-3.5" />
-                        )}
-                      </Button>
-                    )}
                     <Button
                       variant="ghost"
                       size="icon"
@@ -2167,47 +2078,44 @@ export default function DashboardPage() {
                     >
                       {posting.appliedAt ? <Undo2 className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="w-9 h-9 sm:w-8 sm:h-8 text-muted-foreground hover:text-amber-400 hover:bg-amber-950/20"
-                      onClick={() => flagAsDuplicate(posting.id)}
-                      title="Flag as duplicate"
-                      data-testid={`posting-flag-dupe-${posting.id}`}
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="w-9 h-9 sm:w-8 sm:h-8 text-muted-foreground hover:text-red-400 hover:bg-red-950/20"
-                      onClick={() => blockCompany(posting.company)}
-                      disabled={updateCompanyFilterMutation.isPending}
-                      title={`Block all jobs from ${posting.company}`}
-                      data-testid={`posting-block-company-${posting.id}`}
-                    >
-                      <Ban className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="w-9 h-9 sm:w-8 sm:h-8 text-muted-foreground hover:text-orange-400 hover:bg-orange-950/20"
-                      onClick={() => onClose(posting.id)}
-                      disabled={closeMutation.isPending}
-                      title="Mark as closed"
-                      data-testid={`posting-close-${posting.id}`}
-                    >
-                      <Archive className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="w-9 h-9 sm:w-8 sm:h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => onDelete(posting.id)}
-                      data-testid={`posting-delete-${posting.id}`}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
+                    <PostingDecisionControls postingId={posting.id} feedback={item.feedback} />
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button type="button" variant="ghost" size="icon" className="w-9 h-9 sm:w-8 sm:h-8 text-muted-foreground" aria-label="More actions" data-testid={`posting-more-actions-${posting.id}`}>
+                          <MoreHorizontal className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger data-testid={`posting-dismiss-with-reason-${posting.id}`}>Dismiss with reason</DropdownMenuSubTrigger>
+                          <DropdownMenuSubContent>
+                            {dismissReasons.map((r) => (
+                              <DropdownMenuItem key={r.kind} onSelect={() => void decision.dismiss(posting.id, r.kind)}>{r.label}</DropdownMenuItem>
+                            ))}
+                          </DropdownMenuSubContent>
+                        </DropdownMenuSub>
+                        <DropdownMenuItem asChild>
+                          <Link href={`/postings/${posting.id}`} data-testid={`posting-details-${posting.id}`}>
+                            <ExternalLink className="w-3.5 h-3.5 mr-2" />View details
+                          </Link>
+                        </DropdownMenuItem>
+                        {!posting.link && posting.source === "gmail" && (
+                          <DropdownMenuItem onSelect={() => onRetryLink(posting.id)} disabled={retryingLinks.has(posting.id)} data-testid={`posting-retry-link-${posting.id}`}>
+                            <SearchCode className="w-3.5 h-3.5 mr-2" />Find link from email
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onSelect={() => flagAsDuplicate(posting.id)} data-testid={`posting-flag-dupe-${posting.id}`}>
+                          <Copy className="w-3.5 h-3.5 mr-2" />Flag as duplicate
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => blockCompany(posting.company)} disabled={updateCompanyFilterMutation.isPending} data-testid={`posting-block-company-${posting.id}`}>
+                          <Ban className="w-3.5 h-3.5 mr-2" />Block {posting.company}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => onClose(posting.id)} disabled={closeMutation.isPending} data-testid={`posting-close-${posting.id}`}>
+                          <Archive className="w-3.5 h-3.5 mr-2" />Mark as closed
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
                 {nearDupMap.has(posting.id) && !dismissedNearDups.has(posting.id) && (() => {

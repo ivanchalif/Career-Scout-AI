@@ -6,10 +6,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Rows returned by db.execute — set per-test
 let mockSelectRows: { id: number }[] = [];
+let mockAffectedRows: { id: number }[] | null = null;
 // Fields captured by the UPDATE .set() call
 let capturedUpdateFields: Record<string, unknown> = {};
 // IDs captured from the UPDATE .where() / inArray condition
 let capturedUpdateIds: number[] = [];
+let capturedUpdateCondition: unknown = null;
 // Last SQL args passed to db.execute
 let lastExecuteArg: unknown = null;
 
@@ -26,10 +28,18 @@ vi.mock("drizzle-orm", () => ({
   and: (...conds: unknown[]) => ({ _type: "and", conds }),
   eq: (col: unknown, val: unknown) => ({ _type: "eq", col, val }),
   inArray: (col: unknown, vals: unknown) => ({ _type: "inArray", col, vals }),
+  isNull: (col: unknown) => ({ _type: "isNull", col }),
 }));
 
 vi.mock("@workspace/db", () => {
-  const fakeTable = new Proxy({}, { get: () => fakeTable });
+  const fakeTable = {
+    id: "posting.id",
+    userId: "posting.userId",
+    deletedAt: "posting.deletedAt",
+    closedAt: "posting.closedAt",
+    appliedAt: "posting.appliedAt",
+    dismissalUndoToken: "posting.dismissalUndoToken",
+  };
 
   return {
     db: {
@@ -43,11 +53,14 @@ vi.mock("@workspace/db", () => {
           return {
             where: (cond: unknown) => {
               const c = cond as { _type: string; conds?: Array<{ _type: string; vals?: number[] }> };
+              capturedUpdateCondition = cond;
               if (c._type === "and") {
                 const ia = c.conds?.find((x) => x._type === "inArray");
                 capturedUpdateIds = ia?.vals ?? [];
               }
-              return Promise.resolve();
+              return {
+                returning: vi.fn().mockResolvedValue(mockAffectedRows ?? mockSelectRows),
+              };
             },
           };
         },
@@ -72,8 +85,10 @@ function findDateArg(sqlArg: unknown): Date | undefined {
 
 beforeEach(() => {
   mockSelectRows = [];
+  mockAffectedRows = null;
   capturedUpdateFields = {};
   capturedUpdateIds = [];
+  capturedUpdateCondition = null;
   lastExecuteArg = null;
   vi.clearAllMocks();
 });
@@ -100,6 +115,22 @@ describe("runDedupSweep", () => {
       fullDescription: "",
     });
     expect(capturedUpdateFields.deletedAt).toBeInstanceOf(Date);
+  });
+
+  it("rechecks active untokened state and returns the actual affected count", async () => {
+    mockSelectRows = [{ id: 10 }, { id: 20 }];
+    mockAffectedRows = [{ id: 10 }];
+
+    const removed = await runDedupSweep("user-1");
+
+    expect(removed).toBe(1);
+    const conditions = (capturedUpdateCondition as { conds: Array<{ _type: string; col?: unknown }> }).conds;
+    expect(conditions.filter((condition) => condition._type === "isNull").map((condition) => condition.col)).toEqual([
+      "posting.deletedAt",
+      "posting.closedAt",
+      "posting.appliedAt",
+      "posting.dismissalUndoToken",
+    ]);
   });
 
   it("passes a grace-cutoff date ~4 hours ago in the SQL query", async () => {
@@ -137,6 +168,22 @@ describe("sweepDuplicatesOf", () => {
       fullDescription: "",
     });
     expect(capturedUpdateFields.deletedAt).toBeInstanceOf(Date);
+  });
+
+  it("rechecks active untokened state and counts only rows actually updated", async () => {
+    mockSelectRows = [{ id: 30 }, { id: 40 }];
+    mockAffectedRows = [{ id: 30 }];
+
+    const removed = await sweepDuplicatesOf("user-1", "VP Engineering", "Acme Corp", 99);
+
+    expect(removed).toBe(1);
+    const conditions = (capturedUpdateCondition as { conds: Array<{ _type: string; col?: unknown }> }).conds;
+    expect(conditions.filter((condition) => condition._type === "isNull").map((condition) => condition.col)).toEqual([
+      "posting.deletedAt",
+      "posting.closedAt",
+      "posting.appliedAt",
+      "posting.dismissalUndoToken",
+    ]);
   });
 
   it("returns 0 without querying when title or company normalises to empty string", async () => {

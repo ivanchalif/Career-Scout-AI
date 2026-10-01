@@ -149,6 +149,8 @@ export interface JobPosting {
   /** @nullable */
   deletedBy?: string | null;
   /** @nullable */
+  dismissalUndoToken?: string | null;
+  /** @nullable */
   closedAt?: string | null;
   createdAt: string;
 }
@@ -234,6 +236,50 @@ export const PostingFeedbackInputKind = {
 
 export interface PostingFeedbackInput {
   kind: PostingFeedbackInputKind;
+}
+
+/**
+ * @nullable
+ */
+export type PostingDismissalInputReason =
+  | (typeof PostingDismissalInputReason)[keyof typeof PostingDismissalInputReason]
+  | null;
+
+export const PostingDismissalInputReason = {
+  not_my_role: "not_my_role",
+  wrong_location: "wrong_location",
+  already_closed: "already_closed",
+} as const;
+
+export interface PostingDismissalInput {
+  /** @nullable */
+  reason?: PostingDismissalInputReason;
+}
+
+export interface PostingDismissal {
+  id: number;
+  undoToken: string;
+  feedback: PostingFeedback | null;
+}
+
+export type DismissalReasonInputReason =
+  (typeof DismissalReasonInputReason)[keyof typeof DismissalReasonInputReason];
+
+export const DismissalReasonInputReason = {
+  not_my_role: "not_my_role",
+  wrong_location: "wrong_location",
+  already_closed: "already_closed",
+} as const;
+
+export interface DismissalReasonInput {
+  /** @minLength 1 */
+  undoToken: string;
+  reason: DismissalReasonInputReason;
+}
+
+export interface DismissalUndoInput {
+  /** @minLength 1 */
+  undoToken: string;
 }
 
 export type EmailSyncLogItemOutcome =

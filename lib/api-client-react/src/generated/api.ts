@@ -21,6 +21,8 @@ import type {
   ConnectImapBody,
   CreatePostingBody,
   DashboardSummary,
+  DismissalReasonInput,
+  DismissalUndoInput,
   EmailFilterSettings,
   EmailSyncLogItem,
   ErrorEnvelope,
@@ -50,6 +52,8 @@ import type {
   OnlineDiscoverySourcesResponse,
   OnlineDiscoveryStatus,
   ParseResume200,
+  PostingDismissal,
+  PostingDismissalInput,
   PostingFeedback,
   PostingFeedbackInput,
   PostingWithReport,
@@ -1080,6 +1084,267 @@ export const useUndoPostingFeedback = <
   TContext
 > => {
   return useMutation(getUndoPostingFeedbackMutationOptions(options));
+};
+
+/**
+ * @summary Reversibly dismiss a job with an optional feedback reason
+ */
+export const getDismissPostingUrl = (id: number) => {
+  return `/api/postings/${id}/dismiss`;
+};
+
+export const dismissPosting = async (
+  id: number,
+  postingDismissalInput: PostingDismissalInput,
+  options?: RequestInit,
+): Promise<PostingDismissal> => {
+  return customFetch<PostingDismissal>(getDismissPostingUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(postingDismissalInput),
+  });
+};
+
+export const getDismissPostingMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof dismissPosting>>,
+    TError,
+    { id: number; data: BodyType<PostingDismissalInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof dismissPosting>>,
+  TError,
+  { id: number; data: BodyType<PostingDismissalInput> },
+  TContext
+> => {
+  const mutationKey = ["dismissPosting"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof dismissPosting>>,
+    { id: number; data: BodyType<PostingDismissalInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return dismissPosting(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DismissPostingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof dismissPosting>>
+>;
+export type DismissPostingMutationBody = BodyType<PostingDismissalInput>;
+export type DismissPostingMutationError = ErrorType<void>;
+
+/**
+ * @summary Reversibly dismiss a job with an optional feedback reason
+ */
+export const useDismissPosting = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof dismissPosting>>,
+    TError,
+    { id: number; data: BodyType<PostingDismissalInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof dismissPosting>>,
+  TError,
+  { id: number; data: BodyType<PostingDismissalInput> },
+  TContext
+> => {
+  return useMutation(getDismissPostingMutationOptions(options));
+};
+
+/**
+ * @summary Add a reason to the current dismissal
+ */
+export const getSetDismissalReasonUrl = (id: number) => {
+  return `/api/postings/${id}/dismissal-reason`;
+};
+
+export const setDismissalReason = async (
+  id: number,
+  dismissalReasonInput: DismissalReasonInput,
+  options?: RequestInit,
+): Promise<PostingDismissal> => {
+  return customFetch<PostingDismissal>(getSetDismissalReasonUrl(id), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(dismissalReasonInput),
+  });
+};
+
+export const getSetDismissalReasonMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setDismissalReason>>,
+    TError,
+    { id: number; data: BodyType<DismissalReasonInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setDismissalReason>>,
+  TError,
+  { id: number; data: BodyType<DismissalReasonInput> },
+  TContext
+> => {
+  const mutationKey = ["setDismissalReason"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setDismissalReason>>,
+    { id: number; data: BodyType<DismissalReasonInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return setDismissalReason(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetDismissalReasonMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setDismissalReason>>
+>;
+export type SetDismissalReasonMutationBody = BodyType<DismissalReasonInput>;
+export type SetDismissalReasonMutationError = ErrorType<void>;
+
+/**
+ * @summary Add a reason to the current dismissal
+ */
+export const useSetDismissalReason = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setDismissalReason>>,
+    TError,
+    { id: number; data: BodyType<DismissalReasonInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setDismissalReason>>,
+  TError,
+  { id: number; data: BodyType<DismissalReasonInput> },
+  TContext
+> => {
+  return useMutation(getSetDismissalReasonMutationOptions(options));
+};
+
+/**
+ * @summary Restore a dismissed job and its previous feedback
+ */
+export const getUndoPostingDismissalUrl = (id: number) => {
+  return `/api/postings/${id}/undo-dismissal`;
+};
+
+export const undoPostingDismissal = async (
+  id: number,
+  dismissalUndoInput: DismissalUndoInput,
+  options?: RequestInit,
+): Promise<PostingWithReport> => {
+  return customFetch<PostingWithReport>(getUndoPostingDismissalUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(dismissalUndoInput),
+  });
+};
+
+export const getUndoPostingDismissalMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof undoPostingDismissal>>,
+    TError,
+    { id: number; data: BodyType<DismissalUndoInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof undoPostingDismissal>>,
+  TError,
+  { id: number; data: BodyType<DismissalUndoInput> },
+  TContext
+> => {
+  const mutationKey = ["undoPostingDismissal"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof undoPostingDismissal>>,
+    { id: number; data: BodyType<DismissalUndoInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return undoPostingDismissal(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UndoPostingDismissalMutationResult = NonNullable<
+  Awaited<ReturnType<typeof undoPostingDismissal>>
+>;
+export type UndoPostingDismissalMutationBody = BodyType<DismissalUndoInput>;
+export type UndoPostingDismissalMutationError = ErrorType<void>;
+
+/**
+ * @summary Restore a dismissed job and its previous feedback
+ */
+export const useUndoPostingDismissal = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof undoPostingDismissal>>,
+    TError,
+    { id: number; data: BodyType<DismissalUndoInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof undoPostingDismissal>>,
+  TError,
+  { id: number; data: BodyType<DismissalUndoInput> },
+  TContext
+> => {
+  return useMutation(getUndoPostingDismissalMutationOptions(options));
 };
 
 /**

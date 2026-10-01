@@ -1,19 +1,15 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   ArrowLeft, Zap, ExternalLink, RotateCcw,
   Building2, Calendar, DollarSign, CheckCircle, XCircle,
-  Lightbulb, BookOpen, ClipboardList, MapPin
+  Lightbulb, BookOpen, ClipboardList, MapPin, MoreHorizontal
 } from "lucide-react";
 import {
   useGetPosting,
   useAnalyzePosting,
-  useSetPostingFeedback,
-  useUndoPostingFeedback,
   getGetPostingQueryKey,
   getListPostingsQueryKey,
   getGetDashboardSummaryQueryKey,
-  getListDeletedPostingsQueryKey,
-  type PostingFeedbackKind,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -21,13 +17,9 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import Layout from "@/components/layout";
-
-const feedbackOptions: Array<{ kind: PostingFeedbackKind; label: string }> = [
-  { kind: "not_my_role", label: "Not my role" },
-  { kind: "wrong_location", label: "Wrong location" },
-  { kind: "already_closed", label: "Already closed" },
-  { kind: "more_like_this", label: "More like this" },
-];
+import { PostingDecisionControls } from "@/components/posting-decision-controls";
+import { usePostingDecision, dismissReasons } from "@/hooks/use-posting-decision";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 function humanizeAvailabilityReason(reason: string): string {
   const known: Record<string, string> = {
@@ -100,8 +92,8 @@ export default function PostingDetailPage({ id }: { id: number }) {
     },
   });
   const analyzeMutation = useAnalyzePosting();
-  const setFeedbackMutation = useSetPostingFeedback();
-  const undoFeedbackMutation = useUndoPostingFeedback();
+  const decision = usePostingDecision();
+  const [, setLocation] = useLocation();
 
   const data = postingQ.data;
 
@@ -118,26 +110,6 @@ export default function PostingDetailPage({ id }: { id: number }) {
         onError: () => toast({ title: "Error", description: "Analysis failed.", variant: "destructive" }),
       }
     );
-  }
-
-  function refreshFeedbackQueries() {
-    qc.invalidateQueries({ queryKey: getGetPostingQueryKey(id) });
-    qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
-    qc.invalidateQueries({ queryKey: getListDeletedPostingsQueryKey() });
-  }
-
-  function setFeedback(kind: PostingFeedbackKind) {
-    setFeedbackMutation.mutate({ id, data: { kind } }, {
-      onSuccess: refreshFeedbackQueries,
-      onError: () => toast({ title: "Could not save feedback", description: "Please try again.", variant: "destructive" }),
-    });
-  }
-
-  function undoFeedback() {
-    undoFeedbackMutation.mutate({ id }, {
-      onSuccess: refreshFeedbackQueries,
-      onError: () => toast({ title: "Could not undo feedback", description: "Please try again.", variant: "destructive" }),
-    });
   }
 
   if (postingQ.isLoading) {
@@ -201,7 +173,7 @@ export default function PostingDetailPage({ id }: { id: number }) {
 
   return (
     <Layout>
-      <div className="px-6 py-8 max-w-4xl mx-auto" data-testid="posting-detail-page">
+      <div className="px-4 sm:px-6 py-8 max-w-4xl mx-auto min-w-0" data-testid="posting-detail-page">
         {/* Back */}
         <Link href="/dashboard">
           <Button variant="ghost" size="sm" className="mb-6 gap-2 -ml-2 text-muted-foreground" data-testid="back-button">
@@ -211,7 +183,7 @@ export default function PostingDetailPage({ id }: { id: number }) {
         </Link>
 
         {/* Header card */}
-        <div className="bg-card border border-border rounded-xl p-6 mb-6">
+        <div className="bg-card border border-border rounded-xl p-4 sm:p-6 mb-6">
           <div className="flex flex-col md:flex-row md:items-start gap-6">
             {/* Score ring */}
             <div className="shrink-0">
@@ -220,8 +192,8 @@ export default function PostingDetailPage({ id }: { id: number }) {
 
             {/* Job info */}
             <div className="flex-1 min-w-0">
-              <div className="flex items-start justify-between gap-4">
-                <div>
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
+                <div className="min-w-0">
                   <h1 className="text-xl font-bold text-foreground" data-testid="posting-title">
                     {posting.title}
                   </h1>
@@ -242,7 +214,7 @@ export default function PostingDetailPage({ id }: { id: number }) {
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 sm:shrink-0 min-w-0">
                   {posting.link && (
                     <a href={posting.link} target="_blank" rel="noopener noreferrer">
                       <Button variant="outline" size="sm" className="gap-1.5" data-testid="posting-external-link">
@@ -251,6 +223,21 @@ export default function PostingDetailPage({ id }: { id: number }) {
                       </Button>
                     </a>
                   )}
+                  <PostingDecisionControls postingId={id} feedback={feedback} onDismissed={() => setLocation("/dashboard")} />
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button type="button" variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground" aria-label="More actions" data-testid="posting-more-actions">
+                        <MoreHorizontal className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {dismissReasons.map((r) => (
+                        <DropdownMenuItem key={r.kind} onSelect={async () => { if (await decision.dismiss(id, r.kind)) setLocation("/dashboard"); }}>
+                          Dismiss: {r.label}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   <Button
                     onClick={handleAnalyze}
                     size="sm"
@@ -353,45 +340,6 @@ export default function PostingDetailPage({ id }: { id: number }) {
                   )}
                 </div>
               )}
-
-              <div className="mt-4 rounded-lg border border-border p-3" data-testid="posting-feedback">
-                <p className="text-sm font-medium text-foreground">Was this recommendation useful?</p>
-                {feedback && (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {feedback.kind === "already_closed"
-                      ? "Reported closed based on your feedback; this is not an independent availability check."
-                      : `Your feedback: ${feedbackOptions.find((option) => option.kind === feedback.kind)?.label ?? feedback.kind}`}
-                    {" · "}sent {new Date(feedback.createdAt).toLocaleDateString()}
-                  </p>
-                )}
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {feedbackOptions.map(({ kind, label }) => (
-                    <Button
-                      key={kind}
-                      type="button"
-                      variant={feedback?.kind === kind ? "secondary" : "outline"}
-                      size="sm"
-                      onClick={() => setFeedback(kind)}
-                      disabled={setFeedbackMutation.isPending || undoFeedbackMutation.isPending}
-                      data-testid={`posting-feedback-${kind}`}
-                    >
-                      {label}
-                    </Button>
-                  ))}
-                  {feedback && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={undoFeedback}
-                      disabled={setFeedbackMutation.isPending || undoFeedbackMutation.isPending}
-                      data-testid="undo-posting-feedback"
-                    >
-                      Undo
-                    </Button>
-                  )}
-                </div>
-              </div>
 
               {/* Compensation gap */}
               {report?.compensationGap != null && (

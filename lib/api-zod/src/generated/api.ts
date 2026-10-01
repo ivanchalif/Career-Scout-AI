@@ -203,6 +203,7 @@ export const ListPostingsResponseItem = zod.object({
     remoteType: zod.string().nullish(),
     deletedAt: zod.coerce.date().nullish(),
     deletedBy: zod.string().nullish(),
+    dismissalUndoToken: zod.string().nullish(),
     closedAt: zod.coerce.date().nullish(),
     createdAt: zod.coerce.date(),
   }),
@@ -329,6 +330,7 @@ export const ListDeletedPostingsResponseItem = zod.object({
     remoteType: zod.string().nullish(),
     deletedAt: zod.coerce.date().nullish(),
     deletedBy: zod.string().nullish(),
+    dismissalUndoToken: zod.string().nullish(),
     closedAt: zod.coerce.date().nullish(),
     createdAt: zod.coerce.date(),
   }),
@@ -447,6 +449,7 @@ export const GetPostingResponse = zod.object({
     remoteType: zod.string().nullish(),
     deletedAt: zod.coerce.date().nullish(),
     deletedBy: zod.string().nullish(),
+    dismissalUndoToken: zod.string().nullish(),
     closedAt: zod.coerce.date().nullish(),
     createdAt: zod.coerce.date(),
   }),
@@ -549,6 +552,190 @@ export const SetPostingFeedbackResponse = zod.object({
  */
 export const UndoPostingFeedbackParams = zod.object({
   id: zod.coerce.number(),
+});
+
+/**
+ * @summary Reversibly dismiss a job with an optional feedback reason
+ */
+export const DismissPostingParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const DismissPostingBody = zod.object({
+  reason: zod
+    .union([
+      zod.literal("not_my_role"),
+      zod.literal("wrong_location"),
+      zod.literal("already_closed"),
+      zod.literal(null),
+    ])
+    .nullish(),
+});
+
+export const DismissPostingResponse = zod.object({
+  id: zod.number(),
+  undoToken: zod.string(),
+  feedback: zod.union([
+    zod.object({
+      kind: zod.enum([
+        "not_my_role",
+        "wrong_location",
+        "already_closed",
+        "more_like_this",
+      ]),
+      createdAt: zod.coerce.date(),
+    }),
+    zod.null(),
+  ]),
+});
+
+/**
+ * @summary Add a reason to the current dismissal
+ */
+export const SetDismissalReasonParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const SetDismissalReasonBody = zod.object({
+  undoToken: zod.string().min(1),
+  reason: zod.enum(["not_my_role", "wrong_location", "already_closed"]),
+});
+
+export const SetDismissalReasonResponse = zod.object({
+  id: zod.number(),
+  undoToken: zod.string(),
+  feedback: zod.union([
+    zod.object({
+      kind: zod.enum([
+        "not_my_role",
+        "wrong_location",
+        "already_closed",
+        "more_like_this",
+      ]),
+      createdAt: zod.coerce.date(),
+    }),
+    zod.null(),
+  ]),
+});
+
+/**
+ * @summary Restore a dismissed job and its previous feedback
+ */
+export const UndoPostingDismissalParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UndoPostingDismissalBody = zod.object({
+  undoToken: zod.string().min(1),
+});
+
+export const undoPostingDismissalResponseOnlineMatchScoreMin = 0;
+export const undoPostingDismissalResponseOnlineMatchScoreMax = 100;
+
+export const UndoPostingDismissalResponse = zod.object({
+  posting: zod.object({
+    id: zod.number(),
+    userId: zod.string(),
+    title: zod.string(),
+    company: zod.string(),
+    link: zod.string().nullish(),
+    fullDescription: zod.string(),
+    extractedSkills: zod.array(zod.string()),
+    salaryMin: zod.number().nullish(),
+    salaryMax: zod.number().nullish(),
+    source: zod.string(),
+    sourcePostedAt: zod.coerce.date().nullish(),
+    availabilityStatus: zod
+      .union([
+        zod.literal("open"),
+        zod.literal("closed"),
+        zod.literal("unverified"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    availabilityCheckedAt: zod.coerce.date().nullish(),
+    availabilityReason: zod.string().nullish(),
+    availabilityConfidence: zod.number().nullish(),
+    availabilityEvidence: zod.array(zod.string()).nullish(),
+    fieldEvidence: zod
+      .record(
+        zod.string(),
+        zod.object({
+          source: zod.string().optional(),
+          confidence: zod.number().optional(),
+        }),
+      )
+      .nullish(),
+    gmailMessageId: zod.string().nullish(),
+    senderName: zod.string().nullish(),
+    appliedAt: zod.coerce.date().nullish(),
+    location: zod.string().nullish(),
+    remoteType: zod.string().nullish(),
+    deletedAt: zod.coerce.date().nullish(),
+    deletedBy: zod.string().nullish(),
+    dismissalUndoToken: zod.string().nullish(),
+    closedAt: zod.coerce.date().nullish(),
+    createdAt: zod.coerce.date(),
+  }),
+  report: zod.union([
+    zod.object({
+      id: zod.number(),
+      jobPostingId: zod.number(),
+      userId: zod.string(),
+      fitScore: zod.number().nullish(),
+      reasoning: zod.string().nullish(),
+      compensationGap: zod.number().nullish(),
+      matchedSkills: zod.array(zod.string()),
+      missingSkills: zod.array(zod.string()),
+      createdAt: zod.coerce.date(),
+      updatedAt: zod.coerce.date(),
+    }),
+    zod.null(),
+  ]),
+  feedback: zod
+    .union([
+      zod.object({
+        kind: zod.enum([
+          "not_my_role",
+          "wrong_location",
+          "already_closed",
+          "more_like_this",
+        ]),
+        createdAt: zod.coerce.date(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  sourceName: zod
+    .string()
+    .nullish()
+    .describe("Display name of the configured online discovery source"),
+  onlineMatchScore: zod
+    .number()
+    .min(undoPostingDismissalResponseOnlineMatchScoreMin)
+    .max(undoPostingDismissalResponseOnlineMatchScoreMax)
+    .nullish()
+    .describe("Profile match score used by online discovery"),
+  filterReason: zod
+    .object({
+      byCompany: zod.boolean(),
+      companyReason: zod.string().nullable(),
+      byTitle: zod.boolean(),
+      titleReasons: zod.array(zod.string()),
+    })
+    .optional(),
+  sources: zod
+    .array(
+      zod.object({
+        provider: zod.string(),
+        url: zod.string().url(),
+        sourceJobId: zod.string().nullish(),
+        isPrimary: zod.boolean(),
+        firstSeenAt: zod.coerce.date(),
+        lastSeenAt: zod.coerce.date(),
+      }),
+    )
+    .optional(),
 });
 
 /**
@@ -1153,6 +1340,7 @@ export const GetDashboardSummaryResponse = zod.object({
         remoteType: zod.string().nullish(),
         deletedAt: zod.coerce.date().nullish(),
         deletedBy: zod.string().nullish(),
+        dismissalUndoToken: zod.string().nullish(),
         closedAt: zod.coerce.date().nullish(),
         createdAt: zod.coerce.date(),
       }),

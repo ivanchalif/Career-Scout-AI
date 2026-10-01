@@ -73,7 +73,7 @@ function getOnlineMatchScore(
   }, buildDiscoveryCriteria(profile), profile);
 }
 
-async function getPostingWithReport(postingId: number, userId: string) {
+export async function getPostingWithReport(postingId: number, userId: string) {
   const [posting] = await db
     .select()
     .from(jobPostingsTable)
@@ -598,10 +598,26 @@ router.patch("/postings/:id/restore", requireAuth, async (req, res): Promise<voi
   const [posting] = await db
     .update(jobPostingsTable)
     .set({ deletedAt: null })
-    .where(and(eq(jobPostingsTable.id, params.data.id), eq(jobPostingsTable.userId, userId), isNotNull(jobPostingsTable.deletedAt)))
+    .where(and(
+      eq(jobPostingsTable.id, params.data.id),
+      eq(jobPostingsTable.userId, userId),
+      isNotNull(jobPostingsTable.deletedAt),
+      isNull(jobPostingsTable.dismissalUndoToken),
+    ))
     .returning();
 
   if (!posting) {
+    const [current] = await db
+      .select({ dismissalUndoToken: jobPostingsTable.dismissalUndoToken })
+      .from(jobPostingsTable)
+      .where(and(
+        eq(jobPostingsTable.id, params.data.id),
+        eq(jobPostingsTable.userId, userId),
+      ));
+    if (current?.dismissalUndoToken) {
+      res.status(409).json({ error: "Use undo-dismissal to restore this posting" });
+      return;
+    }
     res.status(404).json({ error: "Posting not found" });
     return;
   }
@@ -723,29 +739,37 @@ router.put("/postings/:id/feedback", requireAuth, async (req, res): Promise<void
     return;
   }
 
-  const [ownedPosting] = await db
-    .select({ id: jobPostingsTable.id })
-    .from(jobPostingsTable)
-    .where(and(eq(jobPostingsTable.id, params.data.id), eq(jobPostingsTable.userId, req.userId)));
-  if (!ownedPosting) {
-    res.status(404).json({ error: "Posting not found" });
+  const result = await db.transaction(async (tx) => {
+    const [ownedPosting] = await tx
+      .select({ id: jobPostingsTable.id, deletedAt: jobPostingsTable.deletedAt })
+      .from(jobPostingsTable)
+      .where(and(eq(jobPostingsTable.id, params.data.id), eq(jobPostingsTable.userId, req.userId)))
+      .for("update");
+    if (!ownedPosting) return { status: 404 as const };
+    if (ownedPosting.deletedAt) return { status: 409 as const };
+
+    const [feedback] = await tx
+      .insert(jobPostingFeedbackTable)
+      .values({
+        userId: req.userId,
+        jobPostingId: ownedPosting.id,
+        kind: body.data.kind,
+      })
+      .onConflictDoUpdate({
+        target: [jobPostingFeedbackTable.userId, jobPostingFeedbackTable.jobPostingId],
+        set: { kind: body.data.kind, createdAt: new Date() },
+      })
+      .returning({ kind: jobPostingFeedbackTable.kind, createdAt: jobPostingFeedbackTable.createdAt });
+    return { status: 200 as const, feedback };
+  });
+
+  if (result.status !== 200) {
+    res.status(result.status).json({
+      error: result.status === 404 ? "Posting not found" : "Cannot edit feedback for a dismissed posting",
+    });
     return;
   }
-
-  const [feedback] = await db
-    .insert(jobPostingFeedbackTable)
-    .values({
-      userId: req.userId,
-      jobPostingId: ownedPosting.id,
-      kind: body.data.kind,
-    })
-    .onConflictDoUpdate({
-      target: [jobPostingFeedbackTable.userId, jobPostingFeedbackTable.jobPostingId],
-      set: { kind: body.data.kind, createdAt: new Date() },
-    })
-    .returning({ kind: jobPostingFeedbackTable.kind, createdAt: jobPostingFeedbackTable.createdAt });
-
-  res.json(SetPostingFeedbackResponse.parse(feedback));
+  res.json(SetPostingFeedbackResponse.parse(result.feedback));
 });
 
 router.delete("/postings/:id/feedback", requireAuth, async (req, res): Promise<void> => {
@@ -755,19 +779,27 @@ router.delete("/postings/:id/feedback", requireAuth, async (req, res): Promise<v
     return;
   }
 
-  const [ownedPosting] = await db
-    .select({ id: jobPostingsTable.id })
-    .from(jobPostingsTable)
-    .where(and(eq(jobPostingsTable.id, params.data.id), eq(jobPostingsTable.userId, req.userId)));
-  if (!ownedPosting) {
-    res.status(404).json({ error: "Posting not found" });
+  const result = await db.transaction(async (tx) => {
+    const [ownedPosting] = await tx
+      .select({ id: jobPostingsTable.id, deletedAt: jobPostingsTable.deletedAt })
+      .from(jobPostingsTable)
+      .where(and(eq(jobPostingsTable.id, params.data.id), eq(jobPostingsTable.userId, req.userId)))
+      .for("update");
+    if (!ownedPosting) return 404 as const;
+    if (ownedPosting.deletedAt) return 409 as const;
+
+    await tx.delete(jobPostingFeedbackTable).where(and(
+      eq(jobPostingFeedbackTable.userId, req.userId),
+      eq(jobPostingFeedbackTable.jobPostingId, ownedPosting.id),
+    ));
+    return 204 as const;
+  });
+  if (result !== 204) {
+    res.status(result).json({
+      error: result === 404 ? "Posting not found" : "Cannot edit feedback for a dismissed posting",
+    });
     return;
   }
-
-  await db.delete(jobPostingFeedbackTable).where(and(
-    eq(jobPostingFeedbackTable.userId, req.userId),
-    eq(jobPostingFeedbackTable.jobPostingId, ownedPosting.id),
-  ));
   res.sendStatus(204);
 });
 
@@ -781,11 +813,33 @@ router.delete("/postings/:id", requireAuth, async (req, res): Promise<void> => {
 
   const [posting] = await db
     .update(jobPostingsTable)
-    .set({ deletedAt: new Date(), deletedBy: "user", fullDescription: "" })
-    .where(and(eq(jobPostingsTable.id, params.data.id), eq(jobPostingsTable.userId, userId), isNull(jobPostingsTable.deletedAt)))
+    .set({
+      deletedAt: new Date(),
+      deletedBy: "user",
+      fullDescription: "",
+      dismissalUndoToken: null,
+      dismissalPreviousFeedback: null,
+    })
+    .where(and(
+      eq(jobPostingsTable.id, params.data.id),
+      eq(jobPostingsTable.userId, userId),
+      isNull(jobPostingsTable.deletedAt),
+      isNull(jobPostingsTable.dismissalUndoToken),
+    ))
     .returning();
 
   if (!posting) {
+    const [current] = await db
+      .select({ dismissalUndoToken: jobPostingsTable.dismissalUndoToken })
+      .from(jobPostingsTable)
+      .where(and(
+        eq(jobPostingsTable.id, params.data.id),
+        eq(jobPostingsTable.userId, userId),
+      ));
+    if (current?.dismissalUndoToken) {
+      res.status(409).json({ error: "Posting is in a reversible dismissal" });
+      return;
+    }
     res.status(404).json({ error: "Posting not found" });
     return;
   }
@@ -1068,23 +1122,61 @@ router.post("/postings/:id/flag-duplicate", requireAuth, async (req, res): Promi
     return;
   }
 
-  // Idempotent — if already deleted, just return success
+  if (posting.dismissalUndoToken) {
+    res.status(409).json({ error: "Use undo-dismissal to restore this posting" });
+    return;
+  }
+
+  // Idempotent — if already deleted without a reversible dismissal, just return success
   if (posting.deletedAt) {
     res.status(204).end();
     return;
   }
 
-  await db
+  const [updated] = await db
     .update(jobPostingsTable)
-    .set({ deletedAt: new Date(), deletedBy: "user", fullDescription: "" })
-    .where(and(eq(jobPostingsTable.id, id), eq(jobPostingsTable.userId, userId)));
+    .set({
+      deletedAt: new Date(),
+      deletedBy: "user",
+      fullDescription: "",
+      dismissalUndoToken: null,
+      dismissalPreviousFeedback: null,
+    })
+    .where(and(
+      eq(jobPostingsTable.id, id),
+      eq(jobPostingsTable.userId, userId),
+      isNull(jobPostingsTable.deletedAt),
+      isNull(jobPostingsTable.dismissalUndoToken),
+    ))
+    .returning();
+
+  if (!updated) {
+    const [current] = await db
+      .select()
+      .from(jobPostingsTable)
+      .where(and(eq(jobPostingsTable.id, id), eq(jobPostingsTable.userId, userId)));
+    if (!current) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    if (current.dismissalUndoToken) {
+      res.status(409).json({ error: "Use undo-dismissal to restore this posting" });
+      return;
+    }
+    if (current.deletedAt) {
+      res.sendStatus(204);
+      return;
+    }
+    res.status(409).json({ error: "Posting state changed; retry the duplicate action" });
+    return;
+  }
 
   logger.info(
-    { userId, postingId: id, title: posting.title, company: posting.company },
+    { userId, postingId: id, title: updated.title, company: updated.company },
     "postings: user flagged posting as duplicate",
   );
 
-  sweepDuplicatesOf(userId, posting.title, posting.company, id).catch((err) => {
+  sweepDuplicatesOf(userId, updated.title, updated.company, id).catch((err) => {
     logger.warn({ err, id }, "flag-duplicate: background sweep failed");
   });
 

@@ -14,3 +14,9 @@ Freshness and relevance feedback are ranking preferences, not permission to crea
 **Why:** The user requested personalization without a single feedback click silently excluding whole roles, regions, or companies; undated postings remain eligible.
 
 **How to apply:** Keep feedback adjustments modest and reversible, rank using final page facts, and do not introduce historical mass-rechecks or provider changes without a separate request.
+
+Dismissal alone is not negative match feedback. Reasons are optional and coupled to dismissal; reversing a dismissal must restore the prior preference rather than simply erase the latest reason.
+
+**Why:** The user approved reducing cognitive load by making removal a one-click action and asking for a reason only when the user wants to provide one. An accidental removal must not alter future matches permanently.
+
+**How to apply:** Keep ordinary dismissals neutral, preserve job content for recovery, and treat Undo as reversal of the entire dismissal operation.

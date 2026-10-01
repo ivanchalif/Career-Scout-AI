@@ -161,25 +161,25 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Mobile bottom nav */}
         <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-sidebar border-t border-sidebar-border" data-testid="mobile-bottom-nav">
-          <div className="flex items-center justify-around px-2 py-1.5">
+          <div className="grid grid-cols-6 items-center px-1 py-1.5">
             {navItems.map(({ href, icon: Icon, label }) => {
               const active = location.startsWith(href);
               return (
-                <Link key={href} href={href}>
-                  <div className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-lg transition-colors ${active ? "text-indigo-400" : "text-sidebar-foreground hover:text-foreground"}`}>
+                <Link key={href} href={href} className="min-w-0">
+                  <div className={`flex min-w-0 flex-col items-center gap-0.5 px-0.5 py-1.5 rounded-lg transition-colors ${active ? "text-indigo-400" : "text-sidebar-foreground hover:text-foreground"}`}>
                     <Icon className="w-5 h-5" />
-                    <span className="text-xs font-medium">{label}</span>
+                    <span className="text-[10px] font-medium">{label}</span>
                   </div>
                 </Link>
               );
             })}
             <button
               onClick={() => signOut({ redirectUrl: "/" })}
-              className="flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-lg text-muted-foreground hover:text-destructive transition-colors"
+              className="flex min-w-0 flex-col items-center gap-0.5 px-0.5 py-1.5 rounded-lg text-muted-foreground hover:text-destructive transition-colors"
               data-testid="mobile-sign-out"
             >
               <LogOut className="w-5 h-5" />
-              <span className="text-xs font-medium">Sign out</span>
+              <span className="text-[10px] font-medium">Sign out</span>
             </button>
           </div>
         </nav>

@@ -155,14 +155,15 @@ function toast({ ...props }: Toast) {
     toast: {
       ...props,
       id,
+      duration: props.duration ?? TOAST_AUTO_DISMISS_DELAY,
       open: true,
       onOpenChange: (open) => {
+        props.onOpenChange?.(open)
+        if (props.onOpenChange) return
         if (!open) dismiss()
       },
     },
   })
-
-  setTimeout(dismiss, TOAST_AUTO_DISMISS_DELAY)
 
   return {
     id: id,

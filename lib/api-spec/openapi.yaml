@@ -270,6 +270,7 @@ paths:
                 $ref: "#/components/schemas/PostingFeedback"
         "404":
           description: Posting not found
+
     delete:
       operationId: undoPostingFeedback
       tags: [postings]
@@ -286,6 +287,89 @@ paths:
         "404":
           description: Posting not found
 
+  /postings/{id}/dismiss:
+    post:
+      operationId: dismissPosting
+      tags: [postings]
+      summary: Reversibly dismiss a job with an optional feedback reason
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostingDismissalInput"
+      responses:
+        "200":
+          description: Dismissed with durable undo snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostingDismissal"
+        "404":
+          description: Posting not found
+        "409":
+          description: Posting is already dismissed
+
+  /postings/{id}/dismissal-reason:
+    put:
+      operationId: setDismissalReason
+      tags: [postings]
+      summary: Add a reason to the current dismissal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DismissalReasonInput"
+      responses:
+        "200":
+          description: Reason saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostingDismissal"
+        "404":
+          description: Posting not found
+        "409":
+          description: Dismissal is no longer current
+
+  /postings/{id}/undo-dismissal:
+    post:
+      operationId: undoPostingDismissal
+      tags: [postings]
+      summary: Restore a dismissed job and its previous feedback
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DismissalUndoInput"
+      responses:
+        "200":
+          description: Job and previous feedback restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostingWithReport"
+        "404":
+          description: Posting not found
+        "409":
+          description: Dismissal is no longer current
   /postings/{id}/restore:
     patch:
       operationId: restorePosting
@@ -1192,6 +1276,8 @@ components:
           format: date-time
         deletedBy:
           type: ["string", "null"]
+        dismissalUndoToken:
+          type: ["string", "null"]
         closedAt:
           type: ["string", "null"]
           format: date-time
@@ -1295,6 +1381,39 @@ components:
           type: string
           enum: [not_my_role, wrong_location, already_closed, more_like_this]
       required: [kind]
+
+    PostingDismissalInput:
+      type: object
+      properties:
+        reason:
+          type: ["string", "null"]
+          enum: [not_my_role, wrong_location, already_closed, null]
+
+    PostingDismissal:
+      type: object
+      properties:
+        id: { type: integer }
+        undoToken: { type: string }
+        feedback:
+          oneOf:
+            - $ref: "#/components/schemas/PostingFeedback"
+            - type: "null"
+      required: [id, undoToken, feedback]
+
+    DismissalReasonInput:
+      type: object
+      properties:
+        undoToken: { type: string, minLength: 1 }
+        reason:
+          type: string
+          enum: [not_my_role, wrong_location, already_closed]
+      required: [undoToken, reason]
+
+    DismissalUndoInput:
+      type: object
+      properties:
+        undoToken: { type: string, minLength: 1 }
+      required: [undoToken]
         
     PostingFilterReason:
       type: object
