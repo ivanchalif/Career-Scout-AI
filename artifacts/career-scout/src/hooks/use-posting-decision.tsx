@@ -111,7 +111,7 @@ function DismissToastBody({
             {reason ? "Change reason" : "Add reason"}
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
+        <DropdownMenuContent align="start" className="z-[110]">
           {dismissReasons.map((r) => (
             <DropdownMenuItem key={r.kind} onSelect={() => void pick(r.kind)} data-testid={`dismiss-reason-${r.kind}-${id}`}>
               {r.label}
