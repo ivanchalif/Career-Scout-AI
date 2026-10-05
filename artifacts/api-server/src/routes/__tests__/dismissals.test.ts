@@ -169,31 +169,31 @@ describe("reversible posting dismissals", () => {
     expect(updateValues[0]).not.toHaveProperty("fullDescription");
   });
 
-  it("snapshots feedback before setting an optional reason", async () => {
+  it.each(["wrong_location", "workday"])("snapshots feedback before setting optional reason %s", async (reason) => {
     const priorCreatedAt = new Date("2024-11-10T11:12:13.000Z");
     const newCreatedAt = new Date("2026-01-05T06:07:08.000Z");
     const tx = makeTransaction(
       [[activePosting], [{ kind: "more_like_this", createdAt: priorCreatedAt }]],
       {
-        insertReturnedRows: [[{ kind: "wrong_location", createdAt: newCreatedAt }]],
+        insertReturnedRows: [[{ kind: reason, createdAt: newCreatedAt }]],
       },
     );
 
     const app = await makeApp();
     const response = await request(app)
       .post("/postings/7/dismiss")
-      .send({ reason: "wrong_location" });
+      .send({ reason });
 
     expect(response.status).toBe(200);
     expect(response.body.feedback).toEqual({
-      kind: "wrong_location",
+      kind: reason,
       createdAt: newCreatedAt.toISOString(),
     });
     expect(tx.insert).toHaveBeenCalledTimes(1);
     expect(tx.update).toHaveBeenCalledTimes(1);
   });
 
-  it("sets a dismissal reason only for the current token and preserves the original snapshot", async () => {
+  it.each(["wrong_location", "workday"])("sets dismissal reason %s only for the current token and preserves the original snapshot", async (reason) => {
     const snapshot = { kind: "more_like_this", createdAt: "2024-11-10T11:12:13.000Z" };
     const lockCalls: string[] = [];
     const insertValues: Record<string, unknown>[] = [];
@@ -208,7 +208,7 @@ describe("reversible posting dismissals", () => {
       lockCalls,
       insertValues,
       insertReturnedRows: [[{
-        kind: "wrong_location",
+        kind: reason,
         createdAt: new Date("2026-01-05T06:07:08.000Z"),
       }]],
     });
@@ -216,12 +216,12 @@ describe("reversible posting dismissals", () => {
     const app = await makeApp();
     const response = await request(app)
       .put("/postings/7/dismissal-reason")
-      .send({ undoToken: "active-token", reason: "wrong_location" });
+      .send({ undoToken: "active-token", reason });
 
     expect(response.status).toBe(200);
     expect(response.body.undoToken).toBe("active-token");
     expect(lockCalls).toEqual(["update"]);
-    expect(insertValues[0]).toMatchObject({ kind: "wrong_location", jobPostingId: 7 });
+    expect(insertValues[0]).toMatchObject({ kind: reason, jobPostingId: 7 });
     expect(tx.update).not.toHaveBeenCalled();
     expect(tx.delete).not.toHaveBeenCalled();
   });

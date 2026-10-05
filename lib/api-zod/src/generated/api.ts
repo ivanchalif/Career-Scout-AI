@@ -229,6 +229,7 @@ export const ListPostingsResponseItem = zod.object({
           "not_my_role",
           "wrong_location",
           "already_closed",
+          "workday",
           "more_like_this",
         ]),
         createdAt: zod.coerce.date(),
@@ -356,6 +357,7 @@ export const ListDeletedPostingsResponseItem = zod.object({
           "not_my_role",
           "wrong_location",
           "already_closed",
+          "workday",
           "more_like_this",
         ]),
         createdAt: zod.coerce.date(),
@@ -475,6 +477,7 @@ export const GetPostingResponse = zod.object({
           "not_my_role",
           "wrong_location",
           "already_closed",
+          "workday",
           "more_like_this",
         ]),
         createdAt: zod.coerce.date(),
@@ -533,6 +536,7 @@ export const SetPostingFeedbackBody = zod.object({
     "not_my_role",
     "wrong_location",
     "already_closed",
+    "workday",
     "more_like_this",
   ]),
 });
@@ -542,6 +546,7 @@ export const SetPostingFeedbackResponse = zod.object({
     "not_my_role",
     "wrong_location",
     "already_closed",
+    "workday",
     "more_like_this",
   ]),
   createdAt: zod.coerce.date(),
@@ -567,6 +572,7 @@ export const DismissPostingBody = zod.object({
       zod.literal("not_my_role"),
       zod.literal("wrong_location"),
       zod.literal("already_closed"),
+      zod.literal("workday"),
       zod.literal(null),
     ])
     .nullish(),
@@ -581,6 +587,7 @@ export const DismissPostingResponse = zod.object({
         "not_my_role",
         "wrong_location",
         "already_closed",
+        "workday",
         "more_like_this",
       ]),
       createdAt: zod.coerce.date(),
@@ -598,7 +605,12 @@ export const SetDismissalReasonParams = zod.object({
 
 export const SetDismissalReasonBody = zod.object({
   undoToken: zod.string().min(1),
-  reason: zod.enum(["not_my_role", "wrong_location", "already_closed"]),
+  reason: zod.enum([
+    "not_my_role",
+    "wrong_location",
+    "already_closed",
+    "workday",
+  ]),
 });
 
 export const SetDismissalReasonResponse = zod.object({
@@ -610,6 +622,7 @@ export const SetDismissalReasonResponse = zod.object({
         "not_my_role",
         "wrong_location",
         "already_closed",
+        "workday",
         "more_like_this",
       ]),
       createdAt: zod.coerce.date(),
@@ -699,6 +712,7 @@ export const UndoPostingDismissalResponse = zod.object({
           "not_my_role",
           "wrong_location",
           "already_closed",
+          "workday",
           "more_like_this",
         ]),
         createdAt: zod.coerce.date(),
@@ -1366,6 +1380,7 @@ export const GetDashboardSummaryResponse = zod.object({
               "not_my_role",
               "wrong_location",
               "already_closed",
+              "workday",
               "more_like_this",
             ]),
             createdAt: zod.coerce.date(),

@@ -21,12 +21,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "@/hooks/use-toast";
 
-export type DismissReason = "not_my_role" | "wrong_location" | "already_closed";
+export type DismissReason = "not_my_role" | "wrong_location" | "already_closed" | "workday";
 
 export const dismissReasons: Array<{ kind: DismissReason; label: string }> = [
   { kind: "not_my_role", label: "Not my role" },
   { kind: "wrong_location", label: "Wrong location" },
   { kind: "already_closed", label: "Already closed" },
+  { kind: "workday", label: "Workday" },
 ];
 
 export function reasonLabel(kind: string): string {

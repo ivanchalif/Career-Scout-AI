@@ -178,6 +178,7 @@ export const PostingFeedbackKind = {
   not_my_role: "not_my_role",
   wrong_location: "wrong_location",
   already_closed: "already_closed",
+  workday: "workday",
   more_like_this: "more_like_this",
 } as const;
 
@@ -231,6 +232,7 @@ export const PostingFeedbackInputKind = {
   not_my_role: "not_my_role",
   wrong_location: "wrong_location",
   already_closed: "already_closed",
+  workday: "workday",
   more_like_this: "more_like_this",
 } as const;
 
@@ -249,6 +251,7 @@ export const PostingDismissalInputReason = {
   not_my_role: "not_my_role",
   wrong_location: "wrong_location",
   already_closed: "already_closed",
+  workday: "workday",
 } as const;
 
 export interface PostingDismissalInput {
@@ -269,6 +272,7 @@ export const DismissalReasonInputReason = {
   not_my_role: "not_my_role",
   wrong_location: "wrong_location",
   already_closed: "already_closed",
+  workday: "workday",
 } as const;
 
 export interface DismissalReasonInput {
