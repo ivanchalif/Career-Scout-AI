@@ -7,3 +7,4 @@
 - [Online discovery source lifecycle](online-discovery-source-lifecycle.md) — suppress pauses a configured source; remove deletes only its config and never imported job history.
 - [Discovery evidence and feedback](discovery-evidence-feedback.md) — uncertain facts stay uncertain; freshness and feedback rank results without broad exclusions.
 - [Interactive toast timing](interactive-toast-timing.md) — portaled menus can defeat duration-only pauses; hold automatic dismissal while controls are in use.
+- [Cold-start regression tests](cold-start-tests.md) — initial router imports can exceed a test’s timeout; keep expensive imports in setup.

@@ -7,6 +7,8 @@ import { scorePostingBackground, sweepUnscoredPostings } from "./scoringService"
 import { isFuzzyDuplicate, runDedupSweep } from "./dedup";
 import { fetchJobPageContent } from "./pageScraper";
 import { logger } from "./logger";
+import { isGmailSyncRunning, runGmailSync, type SyncUserResult } from "./gmailSyncState";
+export type { SyncUserResult } from "./gmailSyncState";
 
 /** Extracts the display name from a raw "From" header value. */
 function parseSenderName(sender: string): string {
@@ -96,37 +98,23 @@ function isApplicationResponseEmail(subject: string, body: string): boolean {
   return APPLICATION_RESPONSE_PHRASES.some((phrase) => combined.includes(phrase));
 }
 
-export interface SyncUserResult {
-  synced: number;
-  lastSyncedAt: Date;
-}
-
-/** Per-user lock: prevents concurrent syncUser calls for the same userId. */
-const activeSyncs = new Set<string>();
-
 /**
  * Sync a single user's Gmail inbox.
  * @param conn             The user's Gmail connection row.
- * @param emailsPreFilter  Pre-computed estimate of matching emails before fetch
- *                         (pass 0 when calling from the scheduler).
+ * @param options          Manual syncs estimate matching emails inside the shared lock.
  */
 export async function syncUser(
   conn: typeof gmailConnectionsTable.$inferSelect,
-  emailsPreFilter = 0,
+  options: { estimateMatchingEmails?: boolean } = {},
 ): Promise<SyncUserResult> {
-  // Guard: skip if a sync is already in progress for this user.
-  if (activeSyncs.has(conn.userId)) {
-    logger.warn({ userId: conn.userId }, "gmailScheduler: sync already in progress for user — skipping concurrent call");
-    const lastSyncedAt = conn.lastSyncedAt ? new Date(conn.lastSyncedAt) : new Date();
-    return { synced: 0, lastSyncedAt };
-  }
-  activeSyncs.add(conn.userId);
-
-  try {
-    return await _syncUserInner(conn, emailsPreFilter);
-  } finally {
-    activeSyncs.delete(conn.userId);
-  }
+  return runGmailSync(conn.userId, async () => {
+    let emailsPreFilter = 0;
+    if (options.estimateMatchingEmails) {
+      const [profile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, conn.userId));
+      emailsPreFilter = await estimateEmailCount(conn.accessToken, conn.refreshToken, profile?.emailFilterSettings ?? undefined);
+    }
+    return _syncUserInner(conn, emailsPreFilter);
+  });
 }
 
 async function _syncUserInner(
@@ -396,6 +384,7 @@ async function checkAndSyncUsers(): Promise<void> {
 
   for (const conn of connections) {
     try {
+      if (isGmailSyncRunning(conn.userId)) continue;
       const [profile] = await db
         .select({ syncScheduleHours: userProfilesTable.syncScheduleHours })
         .from(userProfilesTable)

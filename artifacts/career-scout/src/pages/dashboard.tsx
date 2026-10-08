@@ -397,7 +397,14 @@ export default function DashboardPage() {
   const activeCountQ = useListPostings({ applied: false });
   const appliedCountQ = useListPostings({ applied: true });
   const deletedQ = useListDeletedPostings();
-  const gmailStatusQ = useGetGmailStatus();
+  const gmailStatusQ = useGetGmailStatus({
+    query: {
+      queryKey: getGetGmailStatusQueryKey(),
+      refetchInterval: (query) => query.state.data?.connected
+        ? (query.state.data.syncing ? 1500 : 5000)
+        : false,
+    },
+  });
   const discoveryQ = useGetOnlineDiscoveryStatus();
   const discoverySourcesQ = useGetOnlineDiscoverySources();
   const createMutation = useCreatePosting();
@@ -428,6 +435,25 @@ export default function DashboardPage() {
   const summary = dashboardQ.data;
   const rawPostings = postingsQ.data ?? [];
   const gmailStatus = gmailStatusQ.data;
+  const gmailSyncing = gmailProcessing || syncMutation.isPending || gmailStatus?.syncing === true;
+  const previousGmailStatus = useRef<{ syncing: boolean; lastSyncedAt?: string | null } | null>(null);
+  useEffect(() => {
+    if (!gmailStatus) return;
+    const previous = previousGmailStatus.current;
+    const finished = previous && (
+      (previous.syncing && !gmailStatus.syncing)
+      || previous.lastSyncedAt !== gmailStatus.lastSyncedAt
+    );
+    previousGmailStatus.current = {
+      syncing: gmailStatus.syncing,
+      lastSyncedAt: gmailStatus.lastSyncedAt,
+    };
+    if (finished) {
+      qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
+      qc.invalidateQueries({ queryKey: getListDeletedPostingsQueryKey() });
+      qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+    }
+  }, [gmailStatus, qc]);
   const discoveryStatus = discoveryQ.data;
   const discoverySources = discoverySourcesQ.data?.sources ?? [];
   const availableDiscoverySources = discoverySourcesQ.data?.availableSources ?? [];
@@ -727,9 +753,10 @@ export default function DashboardPage() {
     }
   }
 
-  async function onSyncGmail() {
+  function onSyncGmail() {
+    if (gmailSyncing) return;
     setGmailProcessing(true);
-    await syncMutation.mutateAsync(
+    syncMutation.mutate(
       undefined,
       {
         onSuccess: async (data) => {
@@ -743,7 +770,7 @@ export default function DashboardPage() {
             title: "Gmail synced",
             description: data.synced > 0
               ? `Imported ${data.synced} new job${data.synced === 1 ? "" : "s"} from Gmail.`
-              : "No new job emails found.",
+              : "No new jobs added from Gmail.",
           });
           getToken().then((token) => {
             fetch("/api/postings/dedup-sweep", {
@@ -1150,14 +1177,14 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {(gmailProcessing || onlineProcessing) && (
+        {(gmailSyncing || onlineProcessing) && (
           <div
             className="mb-4 flex flex-col gap-2 rounded-xl border border-indigo-800/40 bg-indigo-950/25 px-4 py-3"
             role="status"
             aria-live="polite"
             data-testid="job-processing-status"
           >
-            {gmailProcessing && (
+            {gmailSyncing && (
               <div className="flex items-center gap-2 text-sm text-indigo-200" data-testid="gmail-processing-indicator">
                 <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
                 <span>Processing Gmail jobs. New matches will appear here when ready.</span>
@@ -1528,12 +1555,13 @@ export default function DashboardPage() {
                   variant="outline"
                   size="sm"
                   onClick={onSyncGmail}
-                  disabled={syncMutation.isPending}
+                  disabled={gmailSyncing}
+                  aria-busy={gmailSyncing}
                   className="text-emerald-400 border-emerald-700 hover:bg-emerald-950/50 gap-1.5"
                   data-testid="gmail-sync-button"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${syncMutation.isPending ? "animate-spin" : ""}`} />
-                  {syncMutation.isPending ? "Syncing..." : "Sync now"}
+                  <RefreshCw className={`w-3.5 h-3.5 ${gmailSyncing ? "animate-spin" : ""}`} />
+                  {gmailSyncing ? "Syncing..." : "Sync now"}
                 </Button>
                 <Button
                   variant="ghost"

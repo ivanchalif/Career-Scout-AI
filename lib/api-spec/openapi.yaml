@@ -1866,6 +1866,9 @@ components:
       properties:
         connected:
           type: boolean
+        syncing:
+          type: boolean
+          description: Whether a manual or scheduled Gmail sync is currently running for this user
         email:
           type: ["string", "null"]
         lastSyncedAt:
@@ -1875,6 +1878,7 @@ components:
           type: integer
       required:
         - connected
+        - syncing
         - postingCount
 
     GmailSyncResult:

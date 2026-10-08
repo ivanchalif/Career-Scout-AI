@@ -580,6 +580,8 @@ export interface ErrorEnvelope {
 
 export interface GmailStatus {
   connected: boolean;
+  /** Whether a manual or scheduled Gmail sync is currently running for this user */
+  syncing: boolean;
   /** @nullable */
   email?: string | null;
   /** @nullable */

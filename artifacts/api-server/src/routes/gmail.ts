@@ -9,7 +9,6 @@ import {
   revokeTokens,
   fetchJobEmails,
   fetchSingleEmail,
-  estimateEmailCount,
   markEmailAsRead,
   signState,
   verifyState,
@@ -19,6 +18,7 @@ import { isFuzzyDuplicate } from "../lib/dedup";
 import { fetchJobPageContent } from "../lib/pageScraper";
 import { logger } from "../lib/logger";
 import { syncUser } from "../lib/gmailScheduler";
+import { isGmailSyncRunning } from "../lib/gmailSyncState";
 
 /** Extracts the display name from a raw "From" header value. */
 function parseSenderName(sender: string): string {
@@ -91,7 +91,7 @@ router.get("/gmail/status", requireAuth, async (req: Request, res: Response): Pr
     .where(eq(gmailConnectionsTable.userId, userId));
 
   if (!conn) {
-    res.json({ connected: false, postingCount: 0 });
+    res.json({ connected: false, syncing: isGmailSyncRunning(userId), postingCount: 0 });
     return;
   }
 
@@ -104,6 +104,7 @@ router.get("/gmail/status", requireAuth, async (req: Request, res: Response): Pr
 
   res.json({
     connected: true,
+    syncing: isGmailSyncRunning(userId),
     email: conn.email,
     lastSyncedAt: conn.lastSyncedAt?.toISOString() ?? null,
     postingCount,
@@ -141,19 +142,13 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
     return;
   }
 
-  const [userProfile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, userId));
-  const filterCriteria = userProfile?.emailFilterSettings ?? undefined;
-
-  // Estimate matching email count before fetch (for sync event logging).
-  const emailsPreFilter = await estimateEmailCount(conn.accessToken, conn.refreshToken, filterCriteria);
-
   // Delegate to the shared syncUser function — this ensures the manual sync
   // and the background scheduler use exactly the same processing logic, and
   // that only one sync can run at a time for a given user.
   let synced: number;
   let lastSyncedAt: Date;
   try {
-    ({ synced, lastSyncedAt } = await syncUser(conn, emailsPreFilter));
+    ({ synced, lastSyncedAt } = await syncUser(conn, { estimateMatchingEmails: true }));
   } catch (err) {
     if ((err as Error)?.message?.includes("invalid_grant")) {
       logger.warn({ userId }, "gmail sync: invalid_grant — removing stale connection");

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
 import request from "supertest";
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
@@ -139,6 +139,11 @@ async function getRouter() {
   app.use(postingsRouter);
   return app;
 }
+
+// Cold module transformation belongs to setup, not a handler's response-time budget.
+beforeAll(async () => {
+  await import("../postings");
+}, 15000);
 
 describe("POST /postings/:id/analyze — integration", () => {
   beforeEach(() => {

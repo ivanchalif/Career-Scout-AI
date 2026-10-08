@@ -1290,6 +1290,11 @@ export const GmailCallbackQueryParams = zod.object({
  */
 export const GetGmailStatusResponse = zod.object({
   connected: zod.boolean(),
+  syncing: zod
+    .boolean()
+    .describe(
+      "Whether a manual or scheduled Gmail sync is currently running for this user",
+    ),
   email: zod.string().nullish(),
   lastSyncedAt: zod.coerce.date().nullish(),
   postingCount: zod.number(),
