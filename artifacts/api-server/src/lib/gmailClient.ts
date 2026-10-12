@@ -1,6 +1,7 @@
 import { createHmac } from "crypto";
 import { OAuth2Client } from "google-auth-library";
 import { gmail_v1, google } from "googleapis";
+import { isGmailAuthorizationExpired } from "./gmailAuthError";
 
 const GMAIL_SCOPES = [
   "https://www.googleapis.com/auth/gmail.modify",
@@ -175,7 +176,8 @@ export async function markEmailAsRead(
       id: messageId,
       requestBody: { removeLabelIds: ["UNREAD"] },
     });
-  } catch {
+  } catch (err) {
+    if (isGmailAuthorizationExpired(err)) throw err;
     // Silently ignore — may fail for tokens that only have gmail.readonly scope
     // until the user reconnects with the updated permissions
   }
@@ -204,7 +206,7 @@ export async function fetchSingleEmail(
 /**
  * Returns Gmail's resultSizeEstimate for the subject/from filter criteria only
  * (body keywords excluded — not filterable at the list stage).
- * Used to compute pre-filter suppression. Non-fatal on failure.
+ * Used to compute pre-filter suppression. Non-fatal except for expired access.
  */
 export async function estimateEmailCount(
   accessToken: string,
@@ -223,7 +225,8 @@ export async function estimateEmailCount(
       maxResults: 1,
     });
     return res.data.resultSizeEstimate ?? 0;
-  } catch {
+  } catch (err) {
+    if (isGmailAuthorizationExpired(err)) throw err;
     return 0;
   }
 }
@@ -270,8 +273,9 @@ export async function fetchJobEmails(
       const body = extractBody(detail.data.payload);
 
       results.push({ messageId: msg.id, subject, sender, body });
-    } catch {
-      // Skip individual message failures
+    } catch (err) {
+      if (isGmailAuthorizationExpired(err)) throw err;
+      // Skip individual message failures, but never hide expired authorization.
     }
   }
 

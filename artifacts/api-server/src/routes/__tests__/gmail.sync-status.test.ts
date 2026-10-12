@@ -33,6 +33,7 @@ vi.mock("../../lib/gmailScheduler", () => ({ syncUser: vi.fn() }));
 
 import { db } from "@workspace/db";
 import { syncUser } from "../../lib/gmailScheduler";
+import { GmailAuthorizationExpiredError } from "../../lib/gmailAuthError";
 import { estimateEmailCount } from "../../lib/gmailClient";
 import { isGmailSyncRunning, runGmailSync } from "../../lib/gmailSyncState";
 import router from "../gmail";
@@ -99,5 +100,32 @@ describe("Gmail sync status and manual sync", () => {
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ synced: 26, lastSyncedAt: "2026-10-08T17:00:00.000Z" });
     expect(isGmailSyncRunning("status-user")).toBe(false);
+  });
+
+  it("returns a reconnect error, not a successful empty sync, when shared fetching expires", async () => {
+    vi.mocked(syncUser).mockImplementation((conn) => runGmailSync(conn.userId, async () => {
+      throw new GmailAuthorizationExpiredError();
+    }));
+    select.mockReturnValueOnce(selectRows([connection]));
+    const response = await request(app).post("/gmail/sync");
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({
+      error: "gmail_token_expired",
+      message: "Gmail authorization has expired. Please reconnect your Gmail account.",
+    });
+    expect(response.body).not.toHaveProperty("synced");
+    expect(response.body).not.toHaveProperty("lastSyncedAt");
+    expect(isGmailSyncRunning("status-user")).toBe(false);
+    select.mockReturnValueOnce(selectRows([]));
+    const status = await request(app).get("/gmail/status");
+    expect(status.body).toEqual({ connected: false, syncing: false, progress: null, postingCount: 0 });
+  });
+
+  it("does not label unrelated failures as expired access", async () => {
+    vi.mocked(syncUser).mockRejectedValueOnce(new Error("network failure"));
+    select.mockReturnValueOnce(selectRows([connection]));
+    const response = await request(app).post("/gmail/sync");
+    expect(response.status).toBe(500);
+    expect(response.body.error).not.toBe("gmail_token_expired");
   });
 });

@@ -30,6 +30,7 @@ import type {
   FilterStats,
   FilteredEmail,
   GetFilterStatsParams,
+  GmailAuthorizationError,
   GmailCallbackParams,
   GmailStatus,
   GmailSyncResult,
@@ -4181,7 +4182,7 @@ export const syncGmail = async (
 };
 
 export const getSyncGmailMutationOptions = <
-  TError = ErrorType<ErrorResponse>,
+  TError = ErrorType<ErrorResponse | GmailAuthorizationError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -4220,13 +4221,15 @@ export type SyncGmailMutationResult = NonNullable<
   Awaited<ReturnType<typeof syncGmail>>
 >;
 
-export type SyncGmailMutationError = ErrorType<ErrorResponse>;
+export type SyncGmailMutationError = ErrorType<
+  ErrorResponse | GmailAuthorizationError
+>;
 
 /**
  * @summary Trigger a manual Gmail sync
  */
 export const useSyncGmail = <
-  TError = ErrorType<ErrorResponse>,
+  TError = ErrorType<ErrorResponse | GmailAuthorizationError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<

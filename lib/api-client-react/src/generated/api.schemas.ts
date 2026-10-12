@@ -13,6 +13,18 @@ export interface ErrorResponse {
   error: string;
 }
 
+export type GmailAuthorizationErrorError =
+  (typeof GmailAuthorizationErrorError)[keyof typeof GmailAuthorizationErrorError];
+
+export const GmailAuthorizationErrorError = {
+  gmail_token_expired: "gmail_token_expired",
+} as const;
+
+export interface GmailAuthorizationError {
+  error: GmailAuthorizationErrorError;
+  message: string;
+}
+
 export interface ImportSummary {
   /** Number of rows successfully imported */
   imported: number;

@@ -225,6 +225,7 @@ export default function DashboardPage() {
   const [editingSourceUrl, setEditingSourceUrl] = useState("");
   const [sourceEditError, setSourceEditError] = useState<string | null>(null);
   const [gmailProcessing, setGmailProcessing] = useState(false);
+  const [gmailReconnectRequired, setGmailReconnectRequired] = useState(false);
   const [onlineProcessing, setOnlineProcessing] = useState(false);
   const [latestAvailabilityChecks, setLatestAvailabilityChecks] = useState<DiscoveryAvailabilityCheck[] | null>(null);
 
@@ -446,15 +447,21 @@ export default function DashboardPage() {
       ? ` ${gmailProgress.emailsProcessed}/${gmailProgress.emailsTotal} emails processed ·`
       : ""} ${gmailProgress.jobsImported} job${gmailProgress.jobsImported === 1 ? "" : "s"} imported`
     : "Starting Gmail sync…";
-  const previousGmailStatus = useRef<{ syncing: boolean; lastSyncedAt?: string | null } | null>(null);
+  const previousGmailStatus = useRef<{ connected: boolean; syncing: boolean; lastSyncedAt?: string | null } | null>(null);
   useEffect(() => {
     if (!gmailStatus) return;
     const previous = previousGmailStatus.current;
+    if (gmailStatus.connected) {
+      setGmailReconnectRequired(false);
+    } else if (previous?.connected) {
+      setGmailReconnectRequired(true);
+    }
     const finished = previous && (
       (previous.syncing && !gmailStatus.syncing)
       || previous.lastSyncedAt !== gmailStatus.lastSyncedAt
     );
     previousGmailStatus.current = {
+      connected: gmailStatus.connected,
       syncing: gmailStatus.syncing,
       lastSyncedAt: gmailStatus.lastSyncedAt,
     };
@@ -797,9 +804,18 @@ export default function DashboardPage() {
               .catch(() => {});
           }).catch(() => {});
         },
-        onError: () => {
+        onError: async (error) => {
           setGmailProcessing(false);
-          toast({ title: "Sync failed", description: "Could not sync Gmail.", variant: "destructive" });
+          const expired = error.data?.error === "gmail_token_expired";
+          if (expired) setGmailReconnectRequired(true);
+          await qc.invalidateQueries({ queryKey: getGetGmailStatusQueryKey() });
+          toast({
+            title: expired ? "Reconnect Gmail" : "Sync failed",
+            description: expired
+              ? "Gmail access has expired. Use Reconnect Gmail below to resume importing jobs."
+              : "Could not sync Gmail. Please try again.",
+            variant: "destructive",
+          });
         },
       }
     );
@@ -975,6 +991,8 @@ export default function DashboardPage() {
       undefined,
       {
         onSuccess: () => {
+          previousGmailStatus.current = null;
+          setGmailReconnectRequired(false);
           qc.invalidateQueries({ queryKey: getGetGmailStatusQueryKey() });
           qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
           toast({ title: "Gmail disconnected" });
@@ -1548,7 +1566,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Gmail banner */}
-        {gmailStatus?.connected ? (
+        {gmailStatus?.connected && !gmailReconnectRequired ? (
           <div className="flex flex-col bg-emerald-950/30 border border-emerald-800/30 rounded-xl px-5 pt-4 pb-3 mb-6 gap-3" data-testid="gmail-connected-banner">
             {/* Title row */}
             <div className="flex items-start gap-3">
@@ -1598,8 +1616,10 @@ export default function DashboardPage() {
           <div className="flex items-center gap-3 bg-indigo-950/40 border border-indigo-800/40 rounded-xl px-5 py-3.5 mb-6" data-testid="gmail-connect-banner">
             <Mail className="w-5 h-5 text-indigo-400 shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-indigo-300">Connect Gmail to auto-import jobs</p>
-              <p className="text-xs text-indigo-400/70 mt-0.5">Automatically import job emails and score them against your profile</p>
+              <p className="text-sm font-medium text-indigo-300">{gmailReconnectRequired ? "Gmail access has expired" : "Connect Gmail to auto-import jobs"}</p>
+              <p className="text-xs text-indigo-400/70 mt-0.5">{gmailReconnectRequired
+                ? "Reconnect your Gmail account to resume importing jobs. Your existing jobs are safe."
+                : "Automatically import job emails and score them against your profile"}</p>
             </div>
             <Button
               variant="outline"
@@ -1609,7 +1629,7 @@ export default function DashboardPage() {
               onClick={handleConnectGmail}
             >
               <Mail className="w-3.5 h-3.5" />
-              Connect Gmail
+              {gmailReconnectRequired ? "Reconnect Gmail" : "Connect Gmail"}
             </Button>
           </div>
         )}

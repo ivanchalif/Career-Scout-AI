@@ -7,6 +7,7 @@ import { scorePostingBackground, sweepUnscoredPostings } from "./scoringService"
 import { isFuzzyDuplicate, runDedupSweep } from "./dedup";
 import { fetchJobPageContent } from "./pageScraper";
 import { logger } from "./logger";
+import { GmailAuthorizationExpiredError, isGmailAuthorizationExpired } from "./gmailAuthError";
 import { isGmailSyncRunning, runGmailSync, type ReportGmailSyncProgress, type SyncUserResult } from "./gmailSyncState";
 export type { SyncUserResult } from "./gmailSyncState";
 
@@ -108,12 +109,19 @@ export async function syncUser(
   options: { estimateMatchingEmails?: boolean } = {},
 ): Promise<SyncUserResult> {
   return runGmailSync(conn.userId, async (reportProgress) => {
-    let emailsPreFilter = 0;
-    if (options.estimateMatchingEmails) {
-      const [profile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, conn.userId));
-      emailsPreFilter = await estimateEmailCount(conn.accessToken, conn.refreshToken, profile?.emailFilterSettings ?? undefined);
+    try {
+      let emailsPreFilter = 0;
+      if (options.estimateMatchingEmails) {
+        const [profile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, conn.userId));
+        emailsPreFilter = await estimateEmailCount(conn.accessToken, conn.refreshToken, profile?.emailFilterSettings ?? undefined);
+      }
+      return await _syncUserInner(conn, emailsPreFilter, reportProgress);
+    } catch (err) {
+      if (!isGmailAuthorizationExpired(err)) throw err;
+      logger.warn({ userId: conn.userId }, "Gmail sync: authorization expired — removing stale connection");
+      await db.delete(gmailConnectionsTable).where(eq(gmailConnectionsTable.userId, conn.userId));
+      throw new GmailAuthorizationExpiredError();
     }
-    return _syncUserInner(conn, emailsPreFilter, reportProgress);
   });
 }
 
@@ -125,17 +133,7 @@ async function _syncUserInner(
   const [userProfile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, conn.userId));
   const filterCriteria = userProfile?.emailFilterSettings ?? DEFAULT_EMAIL_FILTER_CRITERIA;
 
-  let emails: Awaited<ReturnType<typeof fetchJobEmails>>;
-  try {
-    emails = await fetchJobEmails(conn.accessToken, conn.refreshToken, filterCriteria);
-  } catch (err) {
-    if ((err as Error)?.message?.includes("invalid_grant")) {
-      logger.warn({ userId: conn.userId }, "gmailScheduler: invalid_grant — removing stale connection");
-      await db.delete(gmailConnectionsTable).where(eq(gmailConnectionsTable.userId, conn.userId));
-      return { synced: 0, lastSyncedAt: new Date() };
-    }
-    throw err;
-  }
+  const emails = await fetchJobEmails(conn.accessToken, conn.refreshToken, filterCriteria);
 
   const seenKeys = await db
     .select({ gmailKey: gmailSeenKeysTable.gmailKey })
@@ -427,7 +425,11 @@ async function checkAndSyncUsers(): Promise<void> {
       const { synced } = await syncUser(conn);
       logger.info({ userId: conn.userId, synced }, "Gmail scheduler: scheduled sync complete");
     } catch (err) {
-      logger.error({ userId: conn.userId, err }, "Gmail scheduler: failed to sync user");
+      if (err instanceof GmailAuthorizationExpiredError) {
+        logger.warn({ userId: conn.userId }, "Gmail scheduler: reconnect required");
+      } else {
+        logger.error({ userId: conn.userId, err }, "Gmail scheduler: failed to sync user");
+      }
     }
   }
 }

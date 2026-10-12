@@ -26,6 +26,7 @@ import { isFuzzyDuplicate, runDedupSweep } from "../dedup";
 import { fetchJobPageContent } from "../pageScraper";
 import { syncUser } from "../gmailScheduler";
 import { getGmailSyncProgress, isGmailSyncRunning } from "../gmailSyncState";
+import { GmailAuthorizationExpiredError } from "../gmailAuthError";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -69,6 +70,9 @@ describe("Gmail pipeline progress", () => {
     vi.mocked(db.update).mockImplementation(() => ({
       set: () => ({ where: () => finalize?.promise ?? Promise.resolve() }),
     }) as unknown as ReturnType<typeof db.update>);
+    vi.mocked(db.delete).mockReturnValue({
+      where: vi.fn().mockResolvedValue(undefined),
+    } as unknown as ReturnType<typeof db.delete>);
     vi.mocked(fetchJobEmails).mockResolvedValue([]);
     vi.mocked(estimateEmailCount).mockResolvedValue(200);
     vi.mocked(markEmailAsRead).mockResolvedValue(undefined);
@@ -165,6 +169,54 @@ describe("Gmail pipeline progress", () => {
     expect(getGmailSyncProgress(conn.userId)).toBeNull();
     expect(isGmailSyncRunning(conn.userId)).toBe(false);
     expect(markEmailAsRead).not.toHaveBeenCalled();
+    expect(db.delete).not.toHaveBeenCalled();
     expect(await syncUser(conn)).toMatchObject({ synced: 0 });
+  });
+
+  it.each(["manual-fetch", "scheduled-fetch", "estimate", "mark-read"])(
+    "rejects expired access during %s, removes the connection, and permits a reconnect retry",
+    async (stage) => {
+      const expired = { response: { data: { error: "invalid_grant" } } };
+      if (stage === "estimate") vi.mocked(estimateEmailCount).mockRejectedValueOnce(expired);
+      else if (stage === "mark-read") {
+        vi.mocked(fetchJobEmails).mockResolvedValueOnce([email("read-expiry")]);
+        vi.mocked(extractJobListings).mockResolvedValueOnce({ listings: [], hadError: false });
+        vi.mocked(markEmailAsRead).mockRejectedValueOnce(expired);
+      }
+      else vi.mocked(fetchJobEmails).mockRejectedValueOnce(expired);
+
+      await expect(syncUser(conn, { estimateMatchingEmails: stage !== "scheduled-fetch" }))
+        .rejects.toBeInstanceOf(GmailAuthorizationExpiredError);
+      expect(db.delete).toHaveBeenCalledExactlyOnceWith(gmailConnectionsTable);
+      expect(db.update).not.toHaveBeenCalled();
+      expect(saved.some((row) => row.table === syncEventsTable)).toBe(false);
+      if (stage !== "mark-read") {
+        expect(db.insert).not.toHaveBeenCalled();
+        expect(markEmailAsRead).not.toHaveBeenCalled();
+      }
+      expect(getGmailSyncProgress(conn.userId)).toBeNull();
+      expect(isGmailSyncRunning(conn.userId)).toBe(false);
+      expect(await syncUser(conn)).toMatchObject({ synced: 0 });
+    },
+  );
+
+  it("shares fetching expiry with a manual caller waiting on scheduled work", async () => {
+    const fetched = deferred<JobEmail[]>();
+    vi.mocked(fetchJobEmails).mockReturnValueOnce(fetched.promise);
+    const scheduled = syncUser(conn);
+    const manual = syncUser(conn, { estimateMatchingEmails: true });
+    const results = Promise.allSettled([scheduled, manual]);
+    await vi.waitFor(() => expect(fetchJobEmails).toHaveBeenCalledTimes(1));
+    fetched.reject(new Error("invalid_grant"));
+    for (const result of await results) {
+      expect(result.status).toBe("rejected");
+      if (result.status === "rejected") expect(result.reason).toBeInstanceOf(GmailAuthorizationExpiredError);
+    }
+    expect(db.delete).toHaveBeenCalledTimes(1);
+    expect(estimateEmailCount).not.toHaveBeenCalled();
+    expect(db.update).not.toHaveBeenCalled();
+    expect(db.insert).not.toHaveBeenCalled();
+    expect(getGmailSyncProgress(conn.userId)).toBeNull();
+    expect(isGmailSyncRunning(conn.userId)).toBe(false);
   });
 });

@@ -19,6 +19,7 @@ import { fetchJobPageContent } from "../lib/pageScraper";
 import { logger } from "../lib/logger";
 import { syncUser } from "../lib/gmailScheduler";
 import { getGmailSyncProgress } from "../lib/gmailSyncState";
+import { GmailAuthorizationExpiredError } from "../lib/gmailAuthError";
 
 /** Extracts the display name from a raw "From" header value. */
 function parseSenderName(sender: string): string {
@@ -153,12 +154,10 @@ router.post("/gmail/sync", requireAuth, async (req: Request, res: Response): Pro
   try {
     ({ synced, lastSyncedAt } = await syncUser(conn, { estimateMatchingEmails: true }));
   } catch (err) {
-    if ((err as Error)?.message?.includes("invalid_grant")) {
-      logger.warn({ userId }, "gmail sync: invalid_grant — removing stale connection");
-      await db.delete(gmailConnectionsTable).where(eq(gmailConnectionsTable.userId, userId));
+    if (err instanceof GmailAuthorizationExpiredError) {
       res.status(401).json({
-        error: "gmail_token_expired",
-        message: "Gmail authorization has expired. Please reconnect your Gmail account.",
+        error: err.code,
+        message: err.message,
       });
       return;
     }
