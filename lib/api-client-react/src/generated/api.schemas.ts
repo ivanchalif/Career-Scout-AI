@@ -578,10 +578,41 @@ export interface ErrorEnvelope {
   error: string;
 }
 
+export type GmailSyncProgressPhase =
+  (typeof GmailSyncProgressPhase)[keyof typeof GmailSyncProgressPhase];
+
+export const GmailSyncProgressPhase = {
+  fetching: "fetching",
+  processing: "processing",
+  finalizing: "finalizing",
+} as const;
+
+export interface GmailSyncProgress {
+  phase: GmailSyncProgressPhase;
+  /**
+   * Emails attempted, including filtered emails and extraction errors left unread for retry
+   * @minimum 0
+   */
+  emailsProcessed: number;
+  /**
+   * Unique unprocessed emails in this batch; null until fetching and deduplication finish
+   * @minimum 0
+   * @nullable
+   */
+  emailsTotal: number | null;
+  /**
+   * New jobs saved so far, independent of asynchronous AI scoring
+   * @minimum 0
+   */
+  jobsImported: number;
+}
+
 export interface GmailStatus {
   connected: boolean;
   /** Whether a manual or scheduled Gmail sync is currently running for this user */
   syncing: boolean;
+  /** Current per-user sync progress; null when no sync is running */
+  progress: GmailSyncProgress | null;
   /** @nullable */
   email?: string | null;
   /** @nullable */
@@ -590,6 +621,7 @@ export interface GmailStatus {
 }
 
 export interface GmailSyncResult {
+  /** Total new jobs imported, not the number that have finished AI scoring */
   synced: number;
   /** @nullable */
   lastSyncedAt: string | null;

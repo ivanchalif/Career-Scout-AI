@@ -1288,6 +1288,12 @@ export const GmailCallbackQueryParams = zod.object({
 /**
  * @summary Get Gmail connection status
  */
+export const getGmailStatusResponseProgressOneEmailsProcessedMin = 0;
+
+export const getGmailStatusResponseProgressOneEmailsTotalMin = 0;
+
+export const getGmailStatusResponseProgressOneJobsImportedMin = 0;
+
 export const GetGmailStatusResponse = zod.object({
   connected: zod.boolean(),
   syncing: zod
@@ -1295,6 +1301,33 @@ export const GetGmailStatusResponse = zod.object({
     .describe(
       "Whether a manual or scheduled Gmail sync is currently running for this user",
     ),
+  progress: zod
+    .union([
+      zod.object({
+        phase: zod.enum(["fetching", "processing", "finalizing"]),
+        emailsProcessed: zod
+          .number()
+          .min(getGmailStatusResponseProgressOneEmailsProcessedMin)
+          .describe(
+            "Emails attempted, including filtered emails and extraction errors left unread for retry",
+          ),
+        emailsTotal: zod
+          .number()
+          .min(getGmailStatusResponseProgressOneEmailsTotalMin)
+          .nullable()
+          .describe(
+            "Unique unprocessed emails in this batch; null until fetching and deduplication finish",
+          ),
+        jobsImported: zod
+          .number()
+          .min(getGmailStatusResponseProgressOneJobsImportedMin)
+          .describe(
+            "New jobs saved so far, independent of asynchronous AI scoring",
+          ),
+      }),
+      zod.null(),
+    ])
+    .describe("Current per-user sync progress; null when no sync is running"),
   email: zod.string().nullish(),
   lastSyncedAt: zod.coerce.date().nullish(),
   postingCount: zod.number(),
@@ -1304,7 +1337,11 @@ export const GetGmailStatusResponse = zod.object({
  * @summary Trigger a manual Gmail sync
  */
 export const SyncGmailResponse = zod.object({
-  synced: zod.number(),
+  synced: zod
+    .number()
+    .describe(
+      "Total new jobs imported, not the number that have finished AI scoring",
+    ),
   lastSyncedAt: zod.coerce.date().nullable(),
 });
 

@@ -1869,6 +1869,11 @@ components:
         syncing:
           type: boolean
           description: Whether a manual or scheduled Gmail sync is currently running for this user
+        progress:
+          oneOf:
+            - $ref: "#/components/schemas/GmailSyncProgress"
+            - type: "null"
+          description: Current per-user sync progress; null when no sync is running
         email:
           type: ["string", "null"]
         lastSyncedAt:
@@ -1879,13 +1884,35 @@ components:
       required:
         - connected
         - syncing
+        - progress
         - postingCount
+
+    GmailSyncProgress:
+      type: object
+      required: [phase, emailsProcessed, emailsTotal, jobsImported]
+      properties:
+        phase:
+          type: string
+          enum: [fetching, processing, finalizing]
+        emailsProcessed:
+          type: integer
+          minimum: 0
+          description: Emails attempted, including filtered emails and extraction errors left unread for retry
+        emailsTotal:
+          type: ["integer", "null"]
+          minimum: 0
+          description: Unique unprocessed emails in this batch; null until fetching and deduplication finish
+        jobsImported:
+          type: integer
+          minimum: 0
+          description: New jobs saved so far, independent of asynchronous AI scoring
 
     GmailSyncResult:
       type: object
       properties:
         synced:
           type: integer
+          description: Total new jobs imported, not the number that have finished AI scoring
         lastSyncedAt:
           type: ["string", "null"]
           format: date-time

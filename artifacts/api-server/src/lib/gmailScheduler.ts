@@ -7,7 +7,7 @@ import { scorePostingBackground, sweepUnscoredPostings } from "./scoringService"
 import { isFuzzyDuplicate, runDedupSweep } from "./dedup";
 import { fetchJobPageContent } from "./pageScraper";
 import { logger } from "./logger";
-import { isGmailSyncRunning, runGmailSync, type SyncUserResult } from "./gmailSyncState";
+import { isGmailSyncRunning, runGmailSync, type ReportGmailSyncProgress, type SyncUserResult } from "./gmailSyncState";
 export type { SyncUserResult } from "./gmailSyncState";
 
 /** Extracts the display name from a raw "From" header value. */
@@ -107,19 +107,20 @@ export async function syncUser(
   conn: typeof gmailConnectionsTable.$inferSelect,
   options: { estimateMatchingEmails?: boolean } = {},
 ): Promise<SyncUserResult> {
-  return runGmailSync(conn.userId, async () => {
+  return runGmailSync(conn.userId, async (reportProgress) => {
     let emailsPreFilter = 0;
     if (options.estimateMatchingEmails) {
       const [profile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, conn.userId));
       emailsPreFilter = await estimateEmailCount(conn.accessToken, conn.refreshToken, profile?.emailFilterSettings ?? undefined);
     }
-    return _syncUserInner(conn, emailsPreFilter);
+    return _syncUserInner(conn, emailsPreFilter, reportProgress);
   });
 }
 
 async function _syncUserInner(
   conn: typeof gmailConnectionsTable.$inferSelect,
   emailsPreFilter: number,
+  reportProgress: ReportGmailSyncProgress,
 ): Promise<SyncUserResult> {
   const [userProfile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, conn.userId));
   const filterCriteria = userProfile?.emailFilterSettings ?? DEFAULT_EMAIL_FILTER_CRITERIA;
@@ -150,6 +151,7 @@ async function _syncUserInner(
     seenInBatch.add(e.messageId);
     return true;
   });
+  reportProgress({ phase: "processing", emailsTotal: newEmails.length });
 
   let synced = 0;
   let jobsExtracted = 0;
@@ -158,7 +160,8 @@ async function _syncUserInner(
   let jobsSkippedUserDeleted = 0;
   let jobsSkippedApplied = 0;
 
-  for (const email of newEmails) {
+  for (const [index, email] of newEmails.entries()) {
+    try {
     if (!email.body.trim()) continue;
 
     const _emailMeta = {
@@ -307,9 +310,10 @@ async function _syncUserInner(
         .returning();
 
       if (newPosting) {
-        scorePostingBackground(newPosting.id, conn.userId);
         emailImported++;
         synced++;
+        reportProgress({ jobsImported: synced });
+        scorePostingBackground(newPosting.id, conn.userId);
       }
     }
 
@@ -340,8 +344,13 @@ async function _syncUserInner(
     } else {
       logger.warn({ messageId: email.messageId }, "gmailScheduler: extraction errored — leaving email unread for retry");
     }
+    } finally {
+      // Every attempted email counts, even empty/filtered emails and failures.
+      reportProgress({ emailsProcessed: index + 1 });
+    }
   }
 
+  reportProgress({ phase: "finalizing" });
   const lastSyncedAt = new Date();
   await db
     .update(gmailConnectionsTable)

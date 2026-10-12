@@ -436,6 +436,16 @@ export default function DashboardPage() {
   const rawPostings = postingsQ.data ?? [];
   const gmailStatus = gmailStatusQ.data;
   const gmailSyncing = gmailProcessing || syncMutation.isPending || gmailStatus?.syncing === true;
+  const gmailProgress = gmailStatus?.syncing ? gmailStatus.progress : null;
+  const gmailProgressText = gmailProgress
+    ? `${gmailProgress.phase === "fetching"
+      ? "Fetching emails…"
+      : gmailProgress.phase === "finalizing"
+        ? "Finishing sync…"
+        : "Processing emails…"}${gmailProgress.emailsTotal !== null
+      ? ` ${gmailProgress.emailsProcessed}/${gmailProgress.emailsTotal} emails processed ·`
+      : ""} ${gmailProgress.jobsImported} job${gmailProgress.jobsImported === 1 ? "" : "s"} imported`
+    : "Starting Gmail sync…";
   const previousGmailStatus = useRef<{ syncing: boolean; lastSyncedAt?: string | null } | null>(null);
   useEffect(() => {
     if (!gmailStatus) return;
@@ -1187,7 +1197,9 @@ export default function DashboardPage() {
             {gmailSyncing && (
               <div className="flex items-center gap-2 text-sm text-indigo-200" data-testid="gmail-processing-indicator">
                 <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-                <span>Processing Gmail jobs. New matches will appear here when ready.</span>
+                <span data-testid="gmail-sync-progress">
+                  {gmailProgressText}. AI scoring runs separately.
+                </span>
               </div>
             )}
             {onlineProcessing && (

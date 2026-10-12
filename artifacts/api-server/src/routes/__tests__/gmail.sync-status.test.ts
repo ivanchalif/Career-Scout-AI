@@ -53,25 +53,28 @@ describe("Gmail sync status and manual sync", () => {
   it("returns syncing false for a disconnected user", async () => {
     select.mockReturnValueOnce(selectRows([]));
     const response = await request(app).get("/gmail/status");
-    expect(response.body).toEqual({ connected: false, syncing: false, postingCount: 0 });
+    expect(response.body).toEqual({ connected: false, syncing: false, progress: null, postingCount: 0 });
     expect(GetGmailStatusResponse.safeParse(response.body).success).toBe(true);
   });
 
   it("reports an ongoing scheduled sync and clears the spinner state when it finishes", async () => {
     let finish!: () => void;
-    const ongoing = runGmailSync("status-user", () => new Promise((resolve) => {
+    const ongoing = runGmailSync("status-user", (report) => new Promise((resolve) => {
+      report({ phase: "processing", emailsTotal: 12, emailsProcessed: 3, jobsImported: 4 });
       finish = () => resolve({ synced: 4, lastSyncedAt: new Date() });
     }));
     await Promise.resolve();
     select.mockReturnValueOnce(selectRows([connection])).mockReturnValueOnce(selectRows([]));
     const busy = await request(app).get("/gmail/status");
     expect(busy.body.syncing).toBe(true);
+    expect(busy.body.progress).toEqual({ phase: "processing", emailsTotal: 12, emailsProcessed: 3, jobsImported: 4 });
     expect(GetGmailStatusResponse.safeParse(busy.body).success).toBe(true);
     finish();
     await ongoing;
     select.mockReturnValueOnce(selectRows([connection])).mockReturnValueOnce(selectRows([]));
     const idle = await request(app).get("/gmail/status");
     expect(idle.body.syncing).toBe(false);
+    expect(idle.body.progress).toBeNull();
     expect(GetGmailStatusResponse.safeParse(idle.body).success).toBe(true);
   });
 

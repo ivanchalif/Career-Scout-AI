@@ -18,7 +18,7 @@ import { isFuzzyDuplicate } from "../lib/dedup";
 import { fetchJobPageContent } from "../lib/pageScraper";
 import { logger } from "../lib/logger";
 import { syncUser } from "../lib/gmailScheduler";
-import { isGmailSyncRunning } from "../lib/gmailSyncState";
+import { getGmailSyncProgress } from "../lib/gmailSyncState";
 
 /** Extracts the display name from a raw "From" header value. */
 function parseSenderName(sender: string): string {
@@ -91,7 +91,8 @@ router.get("/gmail/status", requireAuth, async (req: Request, res: Response): Pr
     .where(eq(gmailConnectionsTable.userId, userId));
 
   if (!conn) {
-    res.json({ connected: false, syncing: isGmailSyncRunning(userId), postingCount: 0 });
+    const progress = getGmailSyncProgress(userId);
+    res.json({ connected: false, syncing: progress !== null, progress, postingCount: 0 });
     return;
   }
 
@@ -101,10 +102,12 @@ router.get("/gmail/status", requireAuth, async (req: Request, res: Response): Pr
     .where(eq(jobPostingsTable.userId, userId));
 
   const postingCount = postings.filter((r) => r.gmailMessageId !== null).length;
+  const progress = getGmailSyncProgress(userId);
 
   res.json({
     connected: true,
-    syncing: isGmailSyncRunning(userId),
+    syncing: progress !== null,
+    progress,
     email: conn.email,
     lastSyncedAt: conn.lastSyncedAt?.toISOString() ?? null,
     postingCount,
