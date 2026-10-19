@@ -34,7 +34,7 @@ export function reasonLabel(kind: string): string {
   return dismissReasons.find((r) => r.kind === kind)?.label ?? (kind === "more_like_this" ? "More like this" : kind);
 }
 
-const TOAST_MS = 5000;
+const TOAST_MS = 3000;
 
 function refreshAll(qc: QueryClient, id: number) {
   qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
