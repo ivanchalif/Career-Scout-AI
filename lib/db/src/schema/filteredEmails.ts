@@ -6,7 +6,8 @@ export type FilteredEmailReason =
   | "body_keyword"
   | "duplicate"
   | "duplicate_dismissed"
-  | "duplicate_applied";
+  | "duplicate_applied"
+  | "learned_preference";
 
 export const filteredEmailsTable = pgTable("filtered_emails", {
   id: serial("id").primaryKey(),

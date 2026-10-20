@@ -15,6 +15,9 @@ import {
 } from "../lib/gmailClient";
 import { scorePostingBackground, sweepUnscoredPostings, extractJobListings } from "../lib/scoringService";
 import { isFuzzyDuplicate } from "../lib/dedup";
+import { filteredEmailsTable } from "@workspace/db";
+import { loadResponseHistory } from "../lib/responseHistory";
+import { evaluateResponses } from "../lib/responseLearning";
 import { fetchJobPageContent } from "../lib/pageScraper";
 import { logger } from "../lib/logger";
 import { syncUser } from "../lib/gmailScheduler";
@@ -207,6 +210,7 @@ router.post("/gmail/reprocess", requireAuth, async (req: Request, res: Response)
   const processedBaseIds = new Set(seenKeys.map((r) => r.gmailKey.split(":")[0]));
 
   const results: Array<{ messageId: string; status: string; imported: number }> = [];
+  const responseHistory = await loadResponseHistory(userId);
 
   for (const messageId of messageIds.slice(0, 20)) {
     if (processedBaseIds.has(messageId)) {
@@ -263,6 +267,20 @@ router.post("/gmail/reprocess", requireAuth, async (req: Request, res: Response)
         if (hit) continue;
       }
 
+      const preference = evaluateResponses({ title, company, link: resolvedUrl }, responseHistory);
+      if (preference.suppress) {
+        await db.insert(filteredEmailsTable).values({
+          userId,
+          gmailMessageId: messageId,
+          subject: email.subject,
+          senderEmail: email.sender,
+          reason: "learned_preference",
+          blockedKeyword: preference.reasons.join("; "),
+          listingTitle: title,
+          listingCompany: company,
+        }).onConflictDoNothing();
+        continue;
+      }
       const [newPosting] = await db
         .insert(jobPostingsTable)
         .values({
@@ -275,6 +293,8 @@ router.post("/gmail/reprocess", requireAuth, async (req: Request, res: Response)
           senderName: parseSenderName(email.sender),
           gmailMessageId: gmailKey,
           extractedSkills: [],
+          preferenceAdjustment: preference.adjustment,
+          preferenceReasons: preference.reasons,
         })
         .onConflictDoNothing()
         .returning();

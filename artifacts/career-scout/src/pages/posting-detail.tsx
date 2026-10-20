@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import Layout from "@/components/layout";
 import { PostingDecisionControls } from "@/components/posting-decision-controls";
+import { PreferenceBadge } from "@/components/preference-badge";
 import { usePostingDecision, dismissReasons } from "@/hooks/use-posting-decision";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
@@ -207,6 +208,7 @@ export default function PostingDetailPage({ id }: { id: number }) {
                       </span>
                     )}
                     <Badge variant="secondary" className="text-xs">{posting.senderName ?? data.sourceName ?? posting.source}</Badge>
+                    <PreferenceBadge posting={posting} />
                     {data.onlineMatchScore != null && (
                       <Badge variant="outline" className="text-xs text-violet-300 border-violet-800/50" title="Online discovery match score">
                         Match {data.onlineMatchScore}

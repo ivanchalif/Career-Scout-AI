@@ -204,6 +204,13 @@ export const ListPostingsResponseItem = zod.object({
     deletedAt: zod.coerce.date().nullish(),
     deletedBy: zod.string().nullish(),
     dismissalUndoToken: zod.string().nullish(),
+    preferenceAdjustment: zod
+      .number()
+      .optional()
+      .describe(
+        "Bounded response-based ranking adjustment, separate from the AI fit score",
+      ),
+    preferenceReasons: zod.array(zod.string()).optional(),
     closedAt: zod.coerce.date().nullish(),
     createdAt: zod.coerce.date(),
   }),
@@ -332,6 +339,13 @@ export const ListDeletedPostingsResponseItem = zod.object({
     deletedAt: zod.coerce.date().nullish(),
     deletedBy: zod.string().nullish(),
     dismissalUndoToken: zod.string().nullish(),
+    preferenceAdjustment: zod
+      .number()
+      .optional()
+      .describe(
+        "Bounded response-based ranking adjustment, separate from the AI fit score",
+      ),
+    preferenceReasons: zod.array(zod.string()).optional(),
     closedAt: zod.coerce.date().nullish(),
     createdAt: zod.coerce.date(),
   }),
@@ -452,6 +466,13 @@ export const GetPostingResponse = zod.object({
     deletedAt: zod.coerce.date().nullish(),
     deletedBy: zod.string().nullish(),
     dismissalUndoToken: zod.string().nullish(),
+    preferenceAdjustment: zod
+      .number()
+      .optional()
+      .describe(
+        "Bounded response-based ranking adjustment, separate from the AI fit score",
+      ),
+    preferenceReasons: zod.array(zod.string()).optional(),
     closedAt: zod.coerce.date().nullish(),
     createdAt: zod.coerce.date(),
   }),
@@ -687,6 +708,13 @@ export const UndoPostingDismissalResponse = zod.object({
     deletedAt: zod.coerce.date().nullish(),
     deletedBy: zod.string().nullish(),
     dismissalUndoToken: zod.string().nullish(),
+    preferenceAdjustment: zod
+      .number()
+      .optional()
+      .describe(
+        "Bounded response-based ranking adjustment, separate from the AI fit score",
+      ),
+    preferenceReasons: zod.array(zod.string()).optional(),
     closedAt: zod.coerce.date().nullish(),
     createdAt: zod.coerce.date(),
   }),
@@ -1076,6 +1104,7 @@ export const ListFilteredEmailsResponseItem = zod.object({
     "duplicate",
     "duplicate_dismissed",
     "duplicate_applied",
+    "learned_preference",
   ]),
   blockedKeyword: zod.string().nullish(),
   listingTitle: zod.string().nullish(),
@@ -1397,6 +1426,13 @@ export const GetDashboardSummaryResponse = zod.object({
         deletedAt: zod.coerce.date().nullish(),
         deletedBy: zod.string().nullish(),
         dismissalUndoToken: zod.string().nullish(),
+        preferenceAdjustment: zod
+          .number()
+          .optional()
+          .describe(
+            "Bounded response-based ranking adjustment, separate from the AI fit score",
+          ),
+        preferenceReasons: zod.array(zod.string()).optional(),
         closedAt: zod.coerce.date().nullish(),
         createdAt: zod.coerce.date(),
       }),

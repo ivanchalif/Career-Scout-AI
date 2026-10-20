@@ -1137,7 +1137,7 @@ router.post("/postings/:id/flag-duplicate", requireAuth, async (req, res): Promi
     .update(jobPostingsTable)
     .set({
       deletedAt: new Date(),
-      deletedBy: "user",
+      deletedBy: "duplicate",
       fullDescription: "",
       dismissalUndoToken: null,
       dismissalPreviousFeedback: null,

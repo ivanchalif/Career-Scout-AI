@@ -20,3 +20,9 @@ Dismissal alone is not negative match feedback. Reasons are optional and coupled
 **Why:** The user approved reducing cognitive load by making removal a one-click action and asking for a reason only when the user wants to provide one. An accidental removal must not alter future matches permanently.
 
 **How to apply:** Keep ordinary dismissals neutral, preserve job content for recovery, and treat Undo as reversal of the entire dismissal operation.
+
+Learning from job responses must apply consistently to future email and online imports. Applications and explicit likes are positive examples; generic dismissals and duplicate reports suppress repeated listings without implying dislike of the role or company. Filtering a broader pattern requires repeated independent, specific negative responses, with matching positive evidence preventing that exclusion.
+
+**Why:** The user requested using applied, dismissed, duplicate, and other responses to improve future filtering. A neutral action or mirrored listing must not accidentally eliminate relevant opportunities.
+
+**How to apply:** Derive signals from current saved actions so Undo and unapply remain effective. Keep adjustments bounded and separate from AI capability scores, show explanations, audit filtered email jobs, and do not retroactively remove saved jobs. Workday feedback requires a known Workday listing URL, not a textual guess.

@@ -65,6 +65,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import Layout from "@/components/layout";
 import { PostingDecisionControls } from "@/components/posting-decision-controls";
+import { PreferenceBadge } from "@/components/preference-badge";
 import { usePostingDecision, dismissReasons, reasonLabel } from "@/hooks/use-posting-decision";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
@@ -186,7 +187,7 @@ export default function DashboardPage() {
 
   const [showFilters, setShowFilters] = useState(false);
   const [sortKey, setSortKeyState] = useState<string>(
-    () => localStorage.getItem("dashboard-sort") ?? "date-desc"
+    () => localStorage.getItem("dashboard-sort") ?? "recommended"
   );
   const setSortKey = useCallback((key: string) => {
     localStorage.setItem("dashboard-sort", key);
@@ -671,6 +672,11 @@ export default function DashboardPage() {
   const postings = useMemo(() => {
     let items = [...rawPostings];
     switch (sortKey) {
+      case "recommended":
+        return items.sort((a, b) =>
+          ((b.report?.fitScore ?? 0) + (b.posting.preferenceAdjustment ?? 0))
+          - ((a.report?.fitScore ?? 0) + (a.posting.preferenceAdjustment ?? 0))
+          || new Date(b.posting.createdAt).getTime() - new Date(a.posting.createdAt).getTime());
       case "date-desc":
         return items.sort((a, b) => new Date(b.posting.createdAt).getTime() - new Date(a.posting.createdAt).getTime());
       case "date-asc":
@@ -712,6 +718,9 @@ export default function DashboardPage() {
       items = items.filter((p) => (p.report?.fitScore ?? 0) >= minFitScore);
     }
     switch (sortKey) {
+      case "recommended": return items.sort((a, b) =>
+        ((b.report?.fitScore ?? 0) + (b.posting.preferenceAdjustment ?? 0))
+        - ((a.report?.fitScore ?? 0) + (a.posting.preferenceAdjustment ?? 0)));
       case "date-desc": return items.sort((a, b) => new Date(b.posting.createdAt).getTime() - new Date(a.posting.createdAt).getTime());
       case "date-asc":  return items.sort((a, b) => new Date(a.posting.createdAt).getTime() - new Date(b.posting.createdAt).getTime());
       case "score-desc": return items.sort((a, b) => (b.report?.fitScore ?? -1) - (a.report?.fitScore ?? -1));
@@ -1205,6 +1214,16 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        <details className="mb-4 text-xs text-muted-foreground" data-testid="response-learning-explanation">
+          <summary className="cursor-pointer hover:text-foreground">How your choices improve results</summary>
+          <p className="mt-2 max-w-3xl leading-relaxed">
+            Applications and “More like this” favor similar jobs. Dismissal reasons reduce matching mismatches;
+            repeated, specific feedback can filter future email and online results. Workday feedback applies only
+            to known Workday links. Applied, dismissed, closed, and duplicate listings are not imported again.
+            Dismissing without a reason does not mean you dislike that type of role. Undo reverses the signal for
+            future imports. Recommended sorting combines AI fit with your choices; the AI fit score itself is unchanged.
+          </p>
+        </details>
         {(gmailSyncing || onlineProcessing) && (
           <div
             className="mb-4 flex flex-col gap-2 rounded-xl border border-indigo-800/40 bg-indigo-950/25 px-4 py-3"
@@ -1781,6 +1800,7 @@ export default function DashboardPage() {
                       data-testid="sort-select"
                       className="h-9 pl-8 pr-3 text-sm rounded-md border border-input bg-background text-foreground appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
                     >
+                      <option value="recommended">Recommended: Fit + your choices</option>
                       <option value="date-desc">Date: Newest first</option>
                       <option value="date-asc">Date: Oldest first</option>
                       <option value="score-desc">Score: Highest first</option>
@@ -1847,11 +1867,11 @@ export default function DashboardPage() {
                     </Button>
                   </div>
                 </div>
-                {(search || minFitScore != null || sortKey !== "date-desc") && (
+                {(search || minFitScore != null || sortKey !== "recommended") && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => { setSearch(""); setMinFitScore(undefined); setSortKey("date-desc"); }}
+                    onClick={() => { setSearch(""); setMinFitScore(undefined); setSortKey("recommended"); }}
                   >
                     Reset
                   </Button>
@@ -1912,6 +1932,9 @@ export default function DashboardPage() {
                             <Layers className="w-3 h-3" />
                             Removed automatically
                           </Badge>
+                        )}
+                        {posting.deletedBy === "duplicate" && (
+                          <Badge variant="outline" className="text-xs text-muted-foreground">Reported duplicate</Badge>
                         )}
                         {item.feedback && item.feedback.kind !== "more_like_this" && (
                           <span className="text-[11px] text-muted-foreground" data-testid={`deleted-reason-${posting.id}`}>
@@ -2042,6 +2065,7 @@ export default function DashboardPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <ScoreBadge score={score} />
+                        <PreferenceBadge posting={posting} />
                         {item.onlineMatchScore != null && (
                           <Badge variant="outline" className="text-xs text-violet-300 border-violet-800/50" title="Online discovery match score">
                             Match {item.onlineMatchScore}

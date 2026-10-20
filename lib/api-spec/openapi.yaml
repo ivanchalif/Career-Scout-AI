@@ -1294,6 +1294,12 @@ components:
           type: ["string", "null"]
         dismissalUndoToken:
           type: ["string", "null"]
+        preferenceAdjustment:
+          type: integer
+          description: Bounded response-based ranking adjustment, separate from the AI fit score
+        preferenceReasons:
+          type: array
+          items: { type: string }
         closedAt:
           type: ["string", "null"]
           format: date-time
@@ -1506,7 +1512,7 @@ components:
           type: ["string", "null"]
         reason:
           type: string
-          enum: [blocked_sender, application_response, body_keyword, duplicate, duplicate_dismissed, duplicate_applied]
+          enum: [blocked_sender, application_response, body_keyword, duplicate, duplicate_dismissed, duplicate_applied, learned_preference]
         blockedKeyword:
           type: ["string", "null"]
         listingTitle:

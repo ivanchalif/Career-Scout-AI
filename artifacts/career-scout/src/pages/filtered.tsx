@@ -136,6 +136,8 @@ function ReasonBadge({ reason, keyword }: { reason: FilteredEmailReason; keyword
       return <span className={`${base} bg-orange-950/40 text-orange-400 border-orange-800/30`}><AlertTriangle className="w-2.5 h-2.5 shrink-0" />Dismissed</span>;
     case "duplicate_applied":
       return <span className={`${base} bg-emerald-950/40 text-emerald-400 border-emerald-800/30`}><CheckCheck className="w-2.5 h-2.5 shrink-0" />Applied</span>;
+    case "learned_preference":
+      return <span title={keyword ?? undefined} className={`${base} bg-violet-950/40 text-violet-300 border-violet-800/40`}>Learned from your choices</span>;
   }
 }
 
@@ -433,6 +435,7 @@ export default function FilteredPage() {
                 { value: "body_keyword", label: "Body keyword" },
                 { value: "duplicate", label: "Duplicate" },
                 { value: "duplicate_dismissed", label: "Dismissed posting" },
+                { value: "learned_preference", label: "Learned from your choices" },
                 { value: "duplicate_applied", label: "Already applied" },
               ]}
             />

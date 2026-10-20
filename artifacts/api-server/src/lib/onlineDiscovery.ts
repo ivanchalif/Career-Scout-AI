@@ -2,7 +2,6 @@ import { and, eq } from "drizzle-orm";
 import {
   db,
   jobPostingsTable,
-  jobPostingFeedbackTable,
   jobPostingSourcesTable,
   onlineDiscoverySourcesTable,
   userProfilesTable,
@@ -16,6 +15,8 @@ import { fetchCustomFeed, validatePublicFeedUrl } from "./sources/customFeed";
 import { fetchGoogleSearchResults, isGoogleSearchUrl } from "./sources/googleSearch";
 import { fetchHiringCafeJobs, isHiringCafeUrl } from "./sources/hiringCafe";
 import { DEFAULT_EMAIL_FILTER_CRITERIA, matchesEmailFilterCriteria, type EmailFilterCriteria } from "./gmailClient";
+import { loadResponseHistory } from "./responseHistory";
+import { evaluateResponses, type ResponseExample } from "./responseLearning";
 
 const SOURCE = "online";
 const MAX_CANDIDATES_PER_RUN = 12;
@@ -287,38 +288,10 @@ function locationsMatch(candidateLocation: string, wantedLocation: string): bool
   return sanFranciscoArea.test(candidate) && sanFranciscoArea.test(wanted);
 }
 
-function wordSimilarity(a: string, b: string): number {
-  const wordsA = normalWords(a);
-  const wordsB = normalWords(b);
-  if (wordsA.size === 0 || wordsB.size === 0) return 0;
-  let overlap = 0;
-  for (const word of wordsA) {
-    if (wordsB.has(word)) overlap += 1;
-  }
-  return overlap / Math.max(wordsA.size, wordsB.size);
-}
-
-type DiscoveryFeedback = {
-  kind: string;
-  title: string;
-  location: string | null;
-  link: string | null;
-};
+type DiscoveryFeedback = ResponseExample;
 
 function feedbackAdjustment(candidate: OnlineJobCandidate, feedback: DiscoveryFeedback[]): number {
-  let adjustment = 0;
-  for (const item of feedback) {
-    if (item.kind === "not_my_role") {
-      adjustment -= wordSimilarity(candidate.title, item.title) * 10;
-    } else if (item.kind === "wrong_location" && item.location && candidate.location) {
-      const roleSimilarity = wordSimilarity(candidate.title, item.title);
-      const locationSimilarity = locationsMatch(candidate.location, item.location) ? 1 : 0;
-      adjustment -= roleSimilarity * locationSimilarity * 10;
-    } else if (item.kind === "more_like_this") {
-      adjustment += wordSimilarity(candidate.title, item.title) * 8;
-    }
-  }
-  return Math.max(-20, Math.min(20, adjustment));
+  return evaluateResponses(candidate, feedback).adjustment;
 }
 
 function freshnessAdjustment(
@@ -502,18 +475,7 @@ export async function runOnlineDiscovery(userId: string) {
     const [sourceRows, postingRows, feedbackRows] = await Promise.all([
       db.select().from(jobPostingSourcesTable).where(eq(jobPostingSourcesTable.userId, userId)),
       db.select({ id: jobPostingsTable.id, link: jobPostingsTable.link }).from(jobPostingsTable).where(eq(jobPostingsTable.userId, userId)),
-      db.select({
-        kind: jobPostingFeedbackTable.kind,
-        title: jobPostingsTable.title,
-        location: jobPostingsTable.location,
-        link: jobPostingsTable.link,
-      })
-        .from(jobPostingFeedbackTable)
-        .innerJoin(jobPostingsTable, and(
-          eq(jobPostingsTable.id, jobPostingFeedbackTable.jobPostingId),
-          eq(jobPostingsTable.userId, userId),
-        ))
-        .where(eq(jobPostingFeedbackTable.userId, userId)),
+      loadResponseHistory(userId),
     ]);
     const minimum = profile?.onlineDiscoveryMinMatchScore ?? 12;
     const emailFilterSettings = profile?.emailFilterSettings ?? DEFAULT_EMAIL_FILTER_CRITERIA;
@@ -675,13 +637,21 @@ export async function runOnlineDiscovery(userId: string) {
           freshnessWindow: profile?.onlineDiscoveryFreshnessWindow,
         },
       );
-      const matchScore = scoreCandidateForDiscovery(
+      const preference = evaluateResponses(screenedCandidate, feedbackRows);
+      if (preference.suppress) {
+        logger.info({ userId, reasons: preference.reasons }, "online discovery skipped listing based on job responses");
+        continue;
+      }
+      const baseMatchScore = scoreCandidateForDiscovery(
         screenedCandidate,
         criteria,
         { ...(profile ?? {}), emailFilterSettings },
         { remoteKnown },
       );
-      if (score === null || matchScore === null || matchScore < minimum) {
+      const matchScore = baseMatchScore === null ? null : baseMatchScore + preference.adjustment;
+      // One dislike changes ranking only. A pattern is filtered only by the
+      // repeated-evidence rule above; positive examples may improve eligibility.
+      if (score === null || baseMatchScore === null || baseMatchScore + Math.max(0, preference.adjustment) < minimum) {
         logger.info(
           { userId, title: screenedCandidate.title, company: screenedCandidate.company, score, matchScore, minimum },
           "online discovery skipped listing below final match threshold",
@@ -694,6 +664,7 @@ export async function runOnlineDiscovery(userId: string) {
     screenedShortlist.sort((a, b) => b.score - a.score
       || compareCandidateRecency(a.candidate, b.candidate));
     for (const { candidate: screenedCandidate, availability, metadata, canonicalUrl } of screenedShortlist) {
+      const preference = evaluateResponses(screenedCandidate, feedbackRows);
       if (imported >= MAX_CANDIDATES_PER_RUN) break;
 
       let existingId = sourceByUrl.get(canonicalUrl)
@@ -738,6 +709,8 @@ export async function runOnlineDiscovery(userId: string) {
                 ...(screenedCandidate.postedAt ? { sourcePostedAt: { source: "source_feed", confidence: 0.8 } } : {}),
                 ...metadata?.fieldEvidence,
               },
+              preferenceAdjustment: preference.adjustment,
+              preferenceReasons: preference.reasons,
           }).returning();
           const claimed = await tx.insert(jobPostingSourcesTable).values({
             userId,

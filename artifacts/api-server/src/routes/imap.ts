@@ -5,6 +5,9 @@ import { requireAuth } from "../middlewares/requireAuth";
 import { testImapConnection, fetchImapJobEmails } from "../lib/imapClient";
 import { extractJobListings, scorePostingBackground, sweepUnscoredPostings } from "../lib/scoringService";
 import { isFuzzyDuplicate } from "../lib/dedup";
+import { filteredEmailsTable } from "@workspace/db";
+import { loadResponseHistory } from "../lib/responseHistory";
+import { evaluateResponses } from "../lib/responseLearning";
 import { logger } from "../lib/logger";
 
 /** Extracts the display name from a raw "From" header value. */
@@ -108,6 +111,7 @@ router.post("/imap/sync", requireAuth, async (req, res): Promise<void> => {
       .where(eq(gmailSeenKeysTable.userId, userId));
 
     const processedKeys = new Set(seenKeys.map((r) => r.gmailKey));
+    const responseHistory = await loadResponseHistory(userId);
     let synced = 0;
 
     for (const email of emails) {
@@ -143,6 +147,20 @@ router.post("/imap/sync", requireAuth, async (req, res): Promise<void> => {
           continue;
         }
 
+        const preference = evaluateResponses({ title, company, link: listing.url }, responseHistory);
+        if (preference.suppress) {
+          await db.insert(filteredEmailsTable).values({
+            userId,
+            gmailMessageId: `imap:${email.messageId}`,
+            subject: email.subject,
+            senderEmail: email.sender,
+            reason: "learned_preference",
+            blockedKeyword: preference.reasons.join("; "),
+            listingTitle: title,
+            listingCompany: company,
+          });
+          continue;
+        }
         const [newPosting] = await db
           .insert(jobPostingsTable)
           .values({
@@ -155,6 +173,8 @@ router.post("/imap/sync", requireAuth, async (req, res): Promise<void> => {
             senderName: parseSenderName(email.sender),
             gmailMessageId: seenKey,
             extractedSkills: [],
+            preferenceAdjustment: preference.adjustment,
+            preferenceReasons: preference.reasons,
           })
           .onConflictDoNothing()
           .returning();

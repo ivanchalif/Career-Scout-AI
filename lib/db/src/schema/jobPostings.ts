@@ -25,12 +25,14 @@ export const jobPostingsTable = pgTable("job_postings", {
   availabilityConfidence: real("availability_confidence"),
   availabilityEvidence: jsonb("availability_evidence").$type<string[]>(),
   fieldEvidence: jsonb("field_evidence").$type<Record<string, { source: string; confidence: number }>>(),
+  preferenceAdjustment: integer("preference_adjustment").notNull().default(0),
+  preferenceReasons: text("preference_reasons").array().notNull().default([]),
   senderName: text("sender_name"),
   gmailMessageId: text("gmail_message_id"),
   appliedAt: timestamp("applied_at", { withTimezone: true }),
   closedAt: timestamp("closed_at", { withTimezone: true }),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
-  /** Who triggered the soft-delete: "user" = explicit user action, "sweep" = auto-dedup sweep. */
+  /** "user" = dismissal, "duplicate" = user-reported duplicate, "sweep" = automatic deduplication. */
   deletedBy: text("deleted_by"),
   dismissalUndoToken: text("dismissal_undo_token"),
   dismissalPreviousFeedback: jsonb("dismissal_previous_feedback").$type<{ kind: string; createdAt: string }>(),

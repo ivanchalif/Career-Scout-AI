@@ -17,6 +17,7 @@ vi.mock("../scoringService", () => ({
 }));
 vi.mock("../dedup", () => ({ isFuzzyDuplicate: vi.fn(), runDedupSweep: vi.fn() }));
 vi.mock("../pageScraper", () => ({ fetchJobPageContent: vi.fn() }));
+vi.mock("../responseHistory", () => ({ loadResponseHistory: vi.fn() }));
 vi.mock("../logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
 
 import { db, gmailConnectionsTable, jobPostingsTable, gmailSeenKeysTable, syncEventsTable } from "@workspace/db";
@@ -27,6 +28,7 @@ import { fetchJobPageContent } from "../pageScraper";
 import { syncUser } from "../gmailScheduler";
 import { getGmailSyncProgress, isGmailSyncRunning } from "../gmailSyncState";
 import { GmailAuthorizationExpiredError } from "../gmailAuthError";
+import { loadResponseHistory } from "../responseHistory";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -49,6 +51,7 @@ describe("Gmail pipeline progress", () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(loadResponseHistory).mockResolvedValue([]);
     saved = [];
     finalize = undefined;
     vi.mocked(db.select).mockImplementation(() => ({
@@ -80,6 +83,38 @@ describe("Gmail pipeline progress", () => {
     vi.mocked(isFuzzyDuplicate).mockResolvedValue({ isDuplicate: false });
     vi.mocked(sweepUnscoredPostings).mockResolvedValue(undefined);
     vi.mocked(runDedupSweep).mockResolvedValue(0);
+  });
+
+  it("audits repeated learned role mismatches instead of silently importing them", async () => {
+    vi.mocked(loadResponseHistory).mockResolvedValue([
+      { kind: "not_my_role", title: "Product Manager", company: "One", location: null, link: null },
+      { kind: "not_my_role", title: "Product Manager", company: "Two", location: null, link: null },
+    ]);
+    vi.mocked(fetchJobEmails).mockResolvedValue([email("learned-filter")]);
+    vi.mocked(extractJobListings).mockResolvedValue({ listings: [listing("Product Manager")], hadError: false });
+    vi.mocked(fetchJobPageContent).mockResolvedValue(null);
+    const result = await syncUser(conn);
+    expect(result.synced).toBe(0);
+    expect(saved.filter((entry) => entry.table === jobPostingsTable)).toHaveLength(0);
+    expect(saved.some((entry) => entry.values.reason === "learned_preference"
+      && entry.values.listingTitle === "Product Manager")).toBe(true);
+    expect(markEmailAsRead).toHaveBeenCalled();
+  });
+
+  it("persists positive learning separately from the AI fit score on imported Gmail jobs", async () => {
+    vi.mocked(loadResponseHistory).mockResolvedValue([
+      { kind: "applied", title: "Product Manager", company: "Past company", location: null, link: null },
+    ]);
+    vi.mocked(fetchJobEmails).mockResolvedValue([email("learned-positive")]);
+    vi.mocked(extractJobListings).mockResolvedValue({ listings: [listing("Product Manager")], hadError: false });
+    vi.mocked(fetchJobPageContent).mockResolvedValue(null);
+    const result = await syncUser(conn);
+    expect(result.synced).toBe(1);
+    const imported = saved.find((entry) => entry.table === jobPostingsTable);
+    expect(imported?.values).toMatchObject({
+      preferenceAdjustment: 8, preferenceReasons: ["Similar to jobs you applied for"],
+    });
+    expect(imported?.values).not.toHaveProperty("fitScore");
   });
 
   it("reports live imports within a digest, counts all attempted emails, and shares manual/scheduled work", async () => {

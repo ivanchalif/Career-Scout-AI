@@ -162,6 +162,9 @@ export interface JobPosting {
   deletedBy?: string | null;
   /** @nullable */
   dismissalUndoToken?: string | null;
+  /** Bounded response-based ranking adjustment, separate from the AI fit score */
+  preferenceAdjustment?: number;
+  preferenceReasons?: string[];
   /** @nullable */
   closedAt?: string | null;
   createdAt: string;
@@ -336,6 +339,7 @@ export const FilteredEmailReason = {
   duplicate: "duplicate",
   duplicate_dismissed: "duplicate_dismissed",
   duplicate_applied: "duplicate_applied",
+  learned_preference: "learned_preference",
 } as const;
 
 export interface FilteredEmail {

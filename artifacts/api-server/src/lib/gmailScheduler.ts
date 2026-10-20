@@ -7,6 +7,8 @@ import { scorePostingBackground, sweepUnscoredPostings } from "./scoringService"
 import { isFuzzyDuplicate, runDedupSweep } from "./dedup";
 import { fetchJobPageContent } from "./pageScraper";
 import { logger } from "./logger";
+import { loadResponseHistory } from "./responseHistory";
+import { evaluateResponses } from "./responseLearning";
 import { GmailAuthorizationExpiredError, isGmailAuthorizationExpired } from "./gmailAuthError";
 import { isGmailSyncRunning, runGmailSync, type ReportGmailSyncProgress, type SyncUserResult } from "./gmailSyncState";
 export type { SyncUserResult } from "./gmailSyncState";
@@ -149,6 +151,7 @@ async function _syncUserInner(
     seenInBatch.add(e.messageId);
     return true;
   });
+  const responseHistory = newEmails.length ? await loadResponseHistory(conn.userId) : [];
   reportProgress({ phase: "processing", emailsTotal: newEmails.length });
 
   let synced = 0;
@@ -205,12 +208,14 @@ async function _syncUserInner(
       // Also capture the final URL after redirects (resolves tracking links
       // like Jobgether's click-through URLs to the actual job page).
       let description = listing.description;
+      let jobLocation: string | null = null;
       let descriptionSource: "page" | "email" = "email";
       let resolvedUrl = listing.url;
 
       if (listing.url) {
         const pageResult = await fetchJobPageContent(listing.url);
         if (pageResult) {
+          jobLocation = pageResult.metadata?.location ?? null;
           // Always use finalUrl — captures the real job URL after following tracking redirects.
           resolvedUrl = pageResult.finalUrl;
           if (pageResult.contentUsable) {
@@ -291,6 +296,20 @@ async function _syncUserInner(
         continue;
       }
 
+      const preference = evaluateResponses({ title, company, location: jobLocation, link: resolvedUrl }, responseHistory);
+      if (preference.suppress) {
+        await db.insert(filteredEmailsTable).values({
+          ..._emailMeta,
+          reason: "learned_preference",
+          blockedKeyword: preference.reasons.join("; "),
+          listingTitle: title,
+          listingCompany: company,
+        }).onConflictDoNothing();
+        emailSkipped++;
+        emailSkipReasons.add("learned_preference");
+        continue;
+      }
+
       const [newPosting] = await db
         .insert(jobPostingsTable)
         .values({
@@ -303,6 +322,9 @@ async function _syncUserInner(
           senderName: parseSenderName(email.sender),
           gmailMessageId: gmailKey,
           extractedSkills: [],
+          location: jobLocation,
+          preferenceAdjustment: preference.adjustment,
+          preferenceReasons: preference.reasons,
         })
         .onConflictDoNothing()
         .returning();
