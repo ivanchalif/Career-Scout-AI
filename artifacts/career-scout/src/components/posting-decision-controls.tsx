@@ -42,7 +42,7 @@ export function PostingDecisionControls({
               type="button"
               variant="ghost"
               size="icon"
-              className="w-9 h-9 sm:w-8 sm:h-8 text-muted-foreground hover:text-red-400 hover:bg-red-950/20"
+              className="w-9 h-9 sm:w-8 sm:h-8 text-muted-foreground hover:text-foreground hover:bg-muted/60"
               aria-label="Dismiss"
               disabled={pending}
               onClick={async () => {

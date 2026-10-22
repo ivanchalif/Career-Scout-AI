@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import Layout from "@/components/layout";
+import { StatusBadge } from "@/components/status-badge";
 import { PostingDecisionControls } from "@/components/posting-decision-controls";
 import { PreferenceBadge } from "@/components/preference-badge";
 import { ScoreBreakdown, ScoreStatusPill, fitTier } from "@/components/fit-score";
@@ -189,7 +190,8 @@ export default function PostingDetailPage({ id }: { id: number }) {
             <div className="flex-1 min-w-0">
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
                 <div className="min-w-0">
-                  <h1 className="text-xl font-bold text-foreground" data-testid="posting-title">
+                  <p className="page-eyebrow">Opportunity</p>
+                  <h1 className="text-2xl font-bold tracking-tight text-foreground break-words" data-testid="posting-title">
                     {posting.title}
                   </h1>
                   <div className="flex flex-wrap items-center gap-2 mt-1">
@@ -201,12 +203,12 @@ export default function PostingDetailPage({ id }: { id: number }) {
                         {posting.location}
                       </span>
                     )}
-                    <Badge variant="secondary" className="text-xs">{posting.senderName ?? data.sourceName ?? posting.source}</Badge>
+                    <StatusBadge tone="neutral">{posting.senderName ?? data.sourceName ?? posting.source}</StatusBadge>
                     <PreferenceBadge posting={posting} />
                     {data.onlineMatchScore != null && (
-                      <Badge variant="outline" className="text-xs text-violet-300 border-violet-800/50" title="Search match: discovery heuristic, separate from Profile fit">
+                      <StatusBadge tone="neutral" title="Search match: discovery heuristic, separate from Profile fit">
                         Search match {data.onlineMatchScore}
-                      </Badge>
+                      </StatusBadge>
                     )}
                   </div>
                 </div>
@@ -302,16 +304,9 @@ export default function PostingDetailPage({ id }: { id: number }) {
               {availabilityLabel && (
                 <div className="mt-4 rounded-lg border border-border bg-muted/20 p-3" data-testid="posting-availability">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge
-                      variant="outline"
-                      className={availability.availabilityStatus === "open"
-                        ? "text-emerald-400 border-emerald-800/50"
-                        : availability.availabilityStatus === "closed"
-                          ? "text-amber-400 border-amber-800/50"
-                          : "text-muted-foreground"}
-                    >
+                    <StatusBadge tone={availability.availabilityStatus === "open" ? "success" : availability.availabilityStatus == null ? "neutral" : "warning"}>
                       {availabilityLabel}
-                    </Badge>
+                    </StatusBadge>
                     {availability.availabilityCheckedAt && (
                       <span className="text-xs text-muted-foreground">
                         Checked {new Date(availability.availabilityCheckedAt).toLocaleString()}

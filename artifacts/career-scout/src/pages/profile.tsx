@@ -23,6 +23,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import Layout from "@/components/layout";
+import { PageHeader } from "@/components/page-header";
+import { StatusBadge } from "@/components/status-badge";
 
 const profileSchema = z.object({
   skills: z.array(z.string()).default([]),
@@ -66,7 +68,7 @@ function CollapsibleSection({
   children: React.ReactNode;
 }) {
   return (
-    <section className="bg-card border border-border rounded-xl overflow-hidden">
+    <section className="bg-card/60 border border-border/70 rounded-xl overflow-hidden">
       <div className="flex items-center justify-between px-5 py-4">
         <button
           type="button"
@@ -74,8 +76,8 @@ function CollapsibleSection({
           className="flex items-center gap-2 flex-1 text-left hover:opacity-80 transition-opacity"
           onClick={onToggle}
         >
-          <Icon className="w-4 h-4 text-indigo-400" />
-          <h2 className="font-semibold text-foreground text-sm">{title}</h2>
+          <Icon className="w-4 h-4 text-muted-foreground" />
+          <h2 className="font-semibold text-foreground text-[15px] tracking-tight">{title}</h2>
           {badge !== undefined && badge > 0 && (
             <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
               {badge}
@@ -176,6 +178,7 @@ export default function ProfilePage() {
 
   const profileQ = useGetProfile({ query: { queryKey: getGetProfileQueryKey() } });
   const upsertMutation = useUpsertProfile();
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
 
   const { register, handleSubmit, control, setValue, watch, reset, formState: { errors } } =
     useForm<ProfileFormData>({
@@ -312,6 +315,7 @@ export default function ProfilePage() {
       {
         onSuccess: () => {
           qc.invalidateQueries({ queryKey: getGetProfileQueryKey() });
+          setSavedAt(new Date());
           toast({ title: "Profile saved", description: "Your career profile has been updated." });
         },
         onError: () =>
@@ -322,21 +326,15 @@ export default function ProfilePage() {
 
   return (
     <Layout>
-      <div className="px-6 py-8 max-w-3xl mx-auto" data-testid="profile-page">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Career Profile</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Your profile is used to score and rank job opportunities
-            </p>
-          </div>
-          {!profileQ.data && !profileQ.isLoading && (
-            <div className="px-3 py-1.5 rounded-lg bg-amber-950/40 border border-amber-800/30 text-xs text-amber-400">
-              Profile not set up yet
-            </div>
-          )}
-        </div>
+      <div className="px-4 sm:px-6 py-8 max-w-3xl mx-auto min-w-0" data-testid="profile-page">
+        <PageHeader
+          eyebrow="Your profile"
+          title="Career profile"
+          purpose="Skills, experience and preferences that shape how each opportunity is read for you. Change anything, anytime."
+          actions={!profileQ.data && !profileQ.isLoading ? (
+            <StatusBadge tone="warning" data-testid="profile-not-set-up">Profile not set up yet</StatusBadge>
+          ) : undefined}
+        />
 
         {profileQ.isLoading ? (
           <div className="space-y-4">
@@ -403,7 +401,7 @@ export default function ProfilePage() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="gap-1.5 text-indigo-400 border-indigo-800/50 hover:bg-indigo-950/30 hover:text-indigo-300 h-7 text-xs"
+                    className="gap-1.5 h-7 text-xs"
                     onClick={() => {
                       parseResumeExperience();
                       if (!openSections.has("experience")) toggleSection("experience");
@@ -455,7 +453,7 @@ export default function ProfilePage() {
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1">
                           <Label className="text-xs">Job title</Label>
                           <Input
@@ -526,7 +524,7 @@ export default function ProfilePage() {
                   {...register("education")}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label className="flex items-center gap-1.5">
                     <DollarSign className="w-3.5 h-3.5" />
@@ -544,7 +542,7 @@ export default function ProfilePage() {
                     <Wifi className="w-3.5 h-3.5" />
                     Work type (select all that apply)
                   </Label>
-                  <div className="flex gap-2 pt-1">
+                  <div className="flex flex-wrap gap-2 pt-1">
                     {(["remote", "hybrid", "onsite"] as const).map((type) => {
                       const labels = { remote: "Remote", hybrid: "Hybrid", onsite: "On-site" };
                       const active = remotePreferences.includes(type);
@@ -554,9 +552,10 @@ export default function ProfilePage() {
                           type="button"
                           onClick={() => toggleRemotePreference(type)}
                           data-testid={`remote-pref-${type}`}
+                          aria-pressed={active}
                           className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                             active
-                              ? "bg-indigo-500/20 border-indigo-500/50 text-indigo-300"
+                              ? "bg-primary/15 border-primary/50 text-foreground"
                               : "border-border text-muted-foreground hover:border-muted-foreground"
                           }`}
                         >
@@ -676,7 +675,7 @@ export default function ProfilePage() {
                       href={watch("resumeUrl")}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-xs text-indigo-400 hover:underline"
+                      className="text-xs text-primary hover:underline"
                       data-testid="resume-view-link"
                     >
                       View current resume
@@ -701,21 +700,26 @@ export default function ProfilePage() {
             </CollapsibleSection>
 
             {/* Save button */}
-            <div className="flex justify-end pt-2">
+            <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
+              <p className="text-xs text-muted-foreground" role="status" aria-live="polite" data-testid="profile-save-status">
+                {upsertMutation.isPending
+                  ? "Saving your profile..."
+                  : upsertMutation.isError
+                    ? <span className="text-destructive">Not saved. Check your connection and try again.</span>
+                    : savedAt
+                      ? <span className="feedback-in inline-flex items-center gap-1 text-success"><CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />Saved at {savedAt.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}. Re-scoring uses these details.</span>
+                      : null}
+              </p>
               <Button
                 type="submit"
-                className="gap-2 bg-indigo-600 hover:bg-indigo-500 min-w-[120px]"
+                className="gap-2 min-w-[140px]"
                 disabled={upsertMutation.isPending}
+                aria-busy={upsertMutation.isPending}
                 data-testid="save-profile-button"
               >
-                {upsertMutation.isSuccess ? (
+                {upsertMutation.isPending ? (
                   <>
-                    <CheckCircle2 className="w-4 h-4" />
-                    Saved
-                  </>
-                ) : upsertMutation.isPending ? (
-                  <>
-                    <Save className="w-4 h-4 animate-pulse" />
+                    <Loader2 className="w-4 h-4 animate-spin" />
                     Saving...
                   </>
                 ) : (

@@ -1,0 +1,29 @@
+.career-refinement {
+  --background: 222 47% 11%;
+  --foreground: 210 40% 96%;
+  --muted-foreground: 215 20% 68%;
+  --border: 217 33% 22%;
+  --primary: 238 84% 67%;
+  --primary-text: 234 89% 82%;
+  --muted: 217 33% 17%;
+  --success: 158 52% 58%;
+  --warning: 38 88% 64%;
+  --hidden: 220 14% 62%;
+  --neutral: 215 24% 74%;
+  --destructive: 0 72% 51%;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--app-font-sans, ui-sans-serif, system-ui, sans-serif);
+}
+.career-refinement .page-head { display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:1rem; margin-bottom:2rem; padding-bottom:1.25rem; border-bottom:1px solid hsl(var(--border) / .6); }
+.career-refinement .page-eyebrow { font-size:.6875rem; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:hsl(var(--primary-text)); margin-bottom:.5rem; }
+.career-refinement .page-title { font-size:1.75rem; line-height:1.15; font-weight:700; letter-spacing:-.025em; color:hsl(var(--foreground)); }
+@media (min-width:640px){ .career-refinement .page-title { font-size:2rem; } }
+.career-refinement .page-purpose { margin-top:.5rem; max-width:40rem; font-size:.9375rem; line-height:1.55; color:hsl(var(--muted-foreground)); }
+.career-refinement .sem-badge { display:inline-flex; align-items:center; gap:.3rem; border-radius:9999px; border:1px solid transparent; padding:.125rem .5rem; font-size:.6875rem; font-weight:600; line-height:1.25rem; white-space:nowrap; max-width:100%; }
+.career-refinement .sem-badge[data-tone="success"] { color:hsl(var(--success)); background:hsl(var(--success) / .12); border-color:hsl(var(--success) / .28); }
+.career-refinement .sem-badge[data-tone="warning"] { color:hsl(var(--warning)); background:hsl(var(--warning) / .10); border-color:hsl(var(--warning) / .28); }
+.career-refinement .sem-badge[data-tone="hidden"] { color:hsl(var(--hidden)); background:transparent; border-color:hsl(var(--hidden) / .35); border-style:dashed; }
+.career-refinement .sem-badge[data-tone="destructive"] { color:hsl(0 80% 72%); background:hsl(var(--destructive) / .12); border-color:hsl(var(--destructive) / .35); }
+.career-refinement .sem-badge[data-tone="neutral"] { color:hsl(var(--neutral)); background:hsl(var(--muted) / .6); border-color:hsl(var(--border)); }
+.career-refinement .sem-badge[data-tone="accent"] { color:hsl(var(--primary-text)); background:hsl(var(--primary) / .10); border-color:hsl(var(--primary) / .28); }

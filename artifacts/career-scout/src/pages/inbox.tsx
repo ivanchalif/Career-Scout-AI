@@ -47,6 +47,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import Layout from "@/components/layout";
+import { PageHeader } from "@/components/page-header";
 
 type Tab = "google" | "imap" | "filters";
 
@@ -277,13 +278,12 @@ export default function InboxPage() {
 
   return (
     <Layout>
-      <div className="px-6 py-8 max-w-2xl mx-auto" data-testid="inbox-page">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-foreground">Email integration</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Connect your inbox so Career Scout can automatically detect job-related emails
-          </p>
-        </div>
+      <div className="px-4 sm:px-6 py-8 max-w-2xl mx-auto min-w-0" data-testid="inbox-page">
+        <PageHeader
+          eyebrow="Connected sources"
+          title="Email integration"
+          purpose="Connect your inbox so job alerts and recruiter emails become opportunities here, without copy and paste."
+        />
 
         {/* Tabs */}
         <div className="flex gap-1 p-1 bg-muted/40 rounded-xl w-fit mb-6 border border-border">

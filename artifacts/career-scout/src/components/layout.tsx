@@ -114,8 +114,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                         aria-label={label}
                         className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${
                           active
-                            ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                            : "text-sidebar-foreground hover:bg-sidebar-accent/50"
+                            ? "bg-sidebar-accent text-foreground shadow-[inset_2px_0_0_hsl(var(--primary))]"
+                            : "text-sidebar-foreground/75 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
                         } ${collapsed ? "justify-center px-2" : ""}`}
                         data-testid={`nav-${label.toLowerCase()}`}
                       >
@@ -169,9 +169,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               const active = location.startsWith(href);
               return (
                 <Link key={href} href={href} aria-label={label} aria-current={active ? "page" : undefined}
-                  className={`flex min-w-0 flex-col items-center gap-0.5 px-0.5 py-1.5 rounded-lg transition-colors ${active ? "bg-sidebar-accent text-indigo-300" : "text-sidebar-foreground hover:text-foreground"}`}>
+                  className={`flex min-w-0 flex-col items-center gap-0.5 px-0.5 py-1.5 rounded-lg transition-colors ${active ? "bg-sidebar-accent text-foreground" : "text-sidebar-foreground hover:text-foreground"}`}>
                     <Icon className="w-5 h-5" />
-                    <span className="text-[10px] font-medium">{label}</span>
+                    <span className="text-[10px] font-medium truncate max-w-full">{label}</span>
                 </Link>
               );
             })}

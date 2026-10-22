@@ -12,6 +12,8 @@ import {
 } from "@workspace/api-client-react";
 import type { FilteredEmailReason } from "@workspace/api-client-react";
 import Layout from "@/components/layout";
+import { PageHeader } from "@/components/page-header";
+import { fitTier } from "@/components/fit-score";
 
 type Tab = "suppressed" | "skipped" | "sync-log";
 type DateRange = "today" | "7d" | "30d" | "all";
@@ -260,17 +262,13 @@ export default function FilteredPage() {
 
   return (
     <Layout>
-      <div className="px-6 py-8 max-w-3xl mx-auto">
-        <div className="flex items-center gap-2 mb-5">
-          <EyeOff className="w-5 h-5 text-amber-400 shrink-0" />
-          <div>
-            <h1 className="text-xl font-semibold text-foreground">Filtered Jobs</h1>
-            <p className="text-sm text-muted-foreground">
-              Review jobs that were hidden or skipped so nothing slips through unnoticed.
-            </p>
-          </div>
-          {isLoading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground ml-auto" />}
-        </div>
+      <div className="px-4 sm:px-6 py-8 max-w-3xl mx-auto min-w-0">
+        <PageHeader
+          eyebrow="Hidden by your rules"
+          title={<span className="inline-flex items-center gap-3"><EyeOff className="w-6 h-6 text-hidden shrink-0" aria-hidden="true" />Filtered jobs</span>}
+          purpose="Jobs your filters hid or a sync skipped. Look them over so nothing worthwhile slips past."
+          actions={isLoading ? <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" aria-label="Loading" /> : undefined}
+        />
 
         {/* Tab bar */}
         <div className="flex gap-1 mb-5 border-b border-border">
@@ -362,13 +360,7 @@ export default function FilteredPage() {
                             {posting.title}
                           </Link>
                           {report?.fitScore != null && (
-                            <span className={`shrink-0 inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded tabular-nums ${
-                              report.fitScore >= 80
-                                ? "bg-emerald-950/60 text-emerald-400 border border-emerald-800/40"
-                                : report.fitScore >= 60
-                                ? "bg-amber-950/60 text-amber-400 border border-amber-800/40"
-                                : "bg-red-950/60 text-red-400 border border-red-800/40"
-                            }`}>
+                            <span className={`shrink-0 inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded tabular-nums border ${fitTier(report.fitScore).cls}`} title={`Profile fit ${report.fitScore}, ${fitTier(report.fitScore).label}`}>
                               {report.fitScore}
                             </span>
                           )}

@@ -9,3 +9,4 @@
 - [Interactive toast timing](interactive-toast-timing.md) — portaled menus can defeat duration-only pauses; hold automatic dismissal while controls are in use.
 - [Cold-start regression tests](cold-start-tests.md) — initial router imports can exceed a test’s timeout; keep expensive imports in setup.
 - [Job score communication](job-score-communication.md) — explain search and fit as independent stages; low fit is not an error and should not use red styling.
+- [Semantic state meaning](semantic-state-meaning.md) — distinguish reversible hidden states and uncertain availability from concrete errors or removals.

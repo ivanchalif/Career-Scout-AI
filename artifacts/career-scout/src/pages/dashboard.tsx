@@ -49,7 +49,6 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -64,9 +63,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import Layout from "@/components/layout";
+import { StatusBadge } from "@/components/status-badge";
 import { PostingDecisionControls } from "@/components/posting-decision-controls";
 import { PreferenceBadge } from "@/components/preference-badge";
-import { FitScoreBadge } from "@/components/fit-score";
+import { FitScoreBadge, fitTier } from "@/components/fit-score";
 import { usePostingDecision, dismissReasons, reasonLabel } from "@/hooks/use-posting-decision";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
@@ -85,15 +85,15 @@ function StatCard({
   loading?: boolean;
 }) {
   return (
-    <div className="bg-card border border-border rounded-xl p-5">
-      <div className="flex items-center gap-2 text-muted-foreground mb-2">
-        <Icon className="w-4 h-4" />
-        <span className="text-xs font-medium uppercase tracking-wide">{label}</span>
+    <div className="px-1 sm:px-5 py-4 first:sm:pl-0 min-w-0">
+      <div className="flex items-center gap-2 text-muted-foreground mb-1.5">
+        <Icon className="w-3.5 h-3.5" aria-hidden="true" />
+        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] truncate">{label}</span>
       </div>
       {loading ? (
         <Skeleton className="h-8 w-16" />
       ) : (
-        <p className="text-2xl font-bold text-foreground">{value}</p>
+        <p className="text-3xl font-semibold tracking-tight tabular-nums text-foreground">{value}</p>
       )}
     </div>
   );
@@ -1023,9 +1023,9 @@ export default function DashboardPage() {
           qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
           qc.invalidateQueries({ queryKey: getListDeletedPostingsQueryKey() });
           qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
-          toast({ title: "Restored", description: "Job posting moved back to Active." });
+          toast({ title: "Restored to Active", description: "This job is back in your Active list." });
         },
-        onError: () => toast({ title: "Error", description: "Failed to restore posting.", variant: "destructive" }),
+        onError: () => toast({ title: "Could not restore", description: "The job is still in Deleted. Please try again.", variant: "destructive" }),
       }
     );
   }
@@ -1068,7 +1068,7 @@ export default function DashboardPage() {
           qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
           qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
           toast({
-            title: isCurrentlyApplied ? "Marked as not applied" : "Marked as applied",
+            title: isCurrentlyApplied ? "Moved back to Active" : "Marked as applied",
             description: isCurrentlyApplied
               ? "Job moved back to your active list."
               : "Job moved to your Applied tab.",
@@ -1083,10 +1083,11 @@ export default function DashboardPage() {
     <Layout>
       <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto min-w-0" data-testid="dashboard-page">
         {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div className="flex flex-wrap items-end justify-between gap-4 mb-8 pb-5 border-b border-border/60">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Your job opportunities, ranked by fit</p>
+            <p className="page-eyebrow">Your opportunities</p>
+            <h1 className="page-title">Dashboard</h1>
+            <p className="page-purpose">Every opportunity you are tracking, ordered by how well it lines up with your profile and your choices.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2 min-w-0">
             {/* Utility buttons — icon-only on small screens, full label on sm+ */}
@@ -1218,7 +1219,7 @@ export default function DashboardPage() {
               </div>
             )}
             {onlineProcessing && (
-              <div className="flex items-center gap-2 text-sm text-violet-200" data-testid="online-processing-indicator">
+              <div className="flex items-center gap-2 text-sm text-foreground" data-testid="online-processing-indicator">
                 <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
                 <span>Searching and processing online jobs. New matches will appear here when ready.</span>
               </div>
@@ -1227,12 +1228,12 @@ export default function DashboardPage() {
         )}
 
         {/* Profile-matched online discovery */}
-        <div className="flex flex-col bg-violet-950/30 border border-violet-800/40 rounded-xl px-5 pt-4 pb-3 mb-4 gap-3" data-testid="online-discovery-panel">
+        <div className="flex flex-col border-y border-border/70 py-4 mb-6 gap-3" data-testid="online-discovery-panel">
           <div className="flex items-start gap-3">
-            <SearchCode className="w-5 h-5 text-violet-300 shrink-0 mt-0.5" />
+            <SearchCode className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" aria-hidden="true" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-violet-200">Discover US & Canada jobs online</p>
-              <p className="text-xs text-violet-300/70 mt-0.5">
+              <p className="text-sm font-medium text-foreground">Discover US & Canada jobs online</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
                 {discoveryStatus?.criteria.roleTitles.length || discoveryStatus?.criteria.skills.length
                   ? `Matching ${[...discoveryStatus.criteria.roleTitles, ...discoveryStatus.criteria.skills].slice(0, 4).join(", ")}${(discoveryStatus.criteria.roleTitles.length + discoveryStatus.criteria.skills.length) > 4 ? "…" : ""}`
                 : "Add experience or skills to your profile to start matching in the US and Canada."}
@@ -1242,7 +1243,7 @@ export default function DashboardPage() {
               size="sm"
               onClick={onDiscoverOnline}
               disabled={onlineProcessing}
-              className="bg-violet-600 hover:bg-violet-500 gap-1.5"
+              className="gap-1.5"
               data-testid="discover-online-button"
             >
               <SearchCode className={`w-3.5 h-3.5 ${onlineProcessing ? "animate-pulse" : ""}`} />
@@ -1253,7 +1254,7 @@ export default function DashboardPage() {
               variant="ghost"
               size="icon"
               onClick={() => setOnlineDiscoveryExpanded((expanded) => !expanded)}
-              className="h-8 w-8 text-violet-300 hover:bg-violet-900/40 hover:text-violet-100"
+              className="h-8 w-8 text-muted-foreground hover:bg-muted hover:text-foreground"
               aria-label={onlineDiscoveryExpanded ? "Collapse online job discovery" : "Expand online job discovery"}
               aria-expanded={onlineDiscoveryExpanded}
               data-testid="toggle-online-discovery-panel"
@@ -1263,10 +1264,10 @@ export default function DashboardPage() {
           </div>
           {onlineDiscoveryExpanded && (
             <>
-              <div className="flex flex-wrap items-center gap-2 border-t border-violet-800/30 pt-2.5">
-                <label className="text-xs text-violet-300/80">Auto-discover</label>
+              <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2.5">
+                <label className="text-xs text-muted-foreground">Auto-discover</label>
                 <select
-                  className="h-8 rounded-md border border-violet-700/50 bg-background px-2 text-xs"
+                  className="h-8 rounded-md border border-border bg-background px-2 text-xs"
                   value={discoveryStatus?.scheduleHours == null ? "manual" : String(discoveryStatus.scheduleHours)}
                   onChange={(event) => saveDiscoverySettings(event.target.value === "manual" ? null : Number(event.target.value))}
                   disabled={updateDiscoveryMutation.isPending}
@@ -1277,10 +1278,10 @@ export default function DashboardPage() {
                   <option value="24">Daily</option>
                   <option value="72">Every 3 days</option>
                 </select>
-                <label className="text-xs text-violet-300/80 ml-1" htmlFor="discovery-freshness-select">Posted</label>
+                <label className="text-xs text-muted-foreground ml-1" htmlFor="discovery-freshness-select">Posted</label>
                 <select
                   id="discovery-freshness-select"
-                  className="h-8 rounded-md border border-violet-700/50 bg-background px-2 text-xs"
+                  className="h-8 rounded-md border border-border bg-background px-2 text-xs"
                   value={discoveryStatus?.freshnessWindow ?? "past_month"}
                   onChange={(event) => saveDiscoverySettings(
                     discoveryStatus?.scheduleHours ?? null,
@@ -1294,10 +1295,10 @@ export default function DashboardPage() {
                   <option value="past_month">Past month</option>
                   <option value="any_time">Any time</option>
                 </select>
-                <p className="basis-full text-[11px] text-violet-300/60">
+                <p className="basis-full text-[11px] text-muted-foreground">
                   Freshness is a ranking preference; listings without a posted date remain eligible.
                 </p>
-                <label className="text-xs text-violet-300/80 ml-1">Minimum match</label>
+                <label className="text-xs text-muted-foreground ml-1">Minimum match</label>
                 <Input
                   type="number"
                   min={1}
@@ -1308,19 +1309,19 @@ export default function DashboardPage() {
                   className="h-8 w-16 text-xs"
                   data-testid="discovery-min-match-input"
                 />
-                <span className="text-xs text-violet-300/60">
+                <span className="text-xs text-muted-foreground">
                   {discoveryStatus?.lastRunAt
                     ? `Last search ${formatAdded(discoveryStatus.lastRunAt)} · ${discoveryStatus.lastFound} matched · ${discoveryStatus.lastImported} added · ${discoveryStatus.lastDuplicates} already saved`
                     : "Uses your profile, US/Canada location, and the same screening as email listings"}
                 </span>
               </div>
-              <div className="border-t border-violet-800/30 pt-3 space-y-3" data-testid="online-discovery-sources">
+              <div className="border-t border-border pt-3 space-y-3" data-testid="online-discovery-sources">
                 <div className="flex items-baseline justify-between gap-3">
                   <div>
-                    <p className="text-xs font-medium text-violet-200">Job sources</p>
-                    <p className="text-xs text-violet-300/60 mt-0.5">Suppress a source to pause it, or remove it without deleting saved jobs.</p>
+                    <p className="text-xs font-medium text-foreground">Job sources</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Suppress a source to pause it, or remove it without deleting saved jobs.</p>
                   </div>
-                  <span className="text-xs text-violet-300/60">
+                  <span className="text-xs text-muted-foreground">
                     {discoverySources.filter((source) => !source.isSuppressed).length} active
                   </span>
                 </div>
@@ -1333,9 +1334,9 @@ export default function DashboardPage() {
                       return (
                         <div
                           key={source.id}
-                          className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border px-3 py-2 ${source.isSuppressed ? "border-violet-900/50 bg-violet-950/20 opacity-70" : "border-violet-800/40 bg-background/30"}`}
+                          className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2.5 border-b border-border/50 last:border-b-0 ${source.isSuppressed ? "opacity-75" : ""}`}
                         >
-                          <Link2 className="w-3.5 h-3.5 text-violet-300 shrink-0" />
+                          <Link2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                           {isEditing ? (
                             <div className="min-w-0 flex-1 basis-full sm:basis-auto space-y-1.5">
                               <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)] gap-2">
@@ -1351,7 +1352,7 @@ export default function DashboardPage() {
                                   data-testid={`edit-discovery-source-name-${source.id}`}
                                 />
                                 {source.kind === "builtin" ? (
-                                  <p className="flex items-center text-[11px] text-violet-300/60 truncate" title="Built-in source URLs cannot be changed">
+                                  <p className="flex items-center text-[11px] text-muted-foreground truncate" title="Built-in source URLs cannot be changed">
                                     Built-in URL cannot be changed
                                   </p>
                                 ) : (
@@ -1376,18 +1377,18 @@ export default function DashboardPage() {
                             </div>
                           ) : (
                             <div className="min-w-0 flex-1">
-                              <p className="text-xs font-medium text-violet-100 truncate">{source.name}</p>
-                              <p className="text-[11px] text-violet-300/60 truncate">{source.url}</p>
+                              <p className="text-xs font-medium text-foreground truncate">{source.name}</p>
+                              <p className="text-[11px] text-muted-foreground truncate">{source.url}</p>
                             </div>
                           )}
-                          {source.isSuppressed && <Badge variant="outline" className="text-[10px] border-amber-700/50 text-amber-300">Suppressed</Badge>}
+                          {source.isSuppressed && <StatusBadge tone="hidden">Suppressed</StatusBadge>}
                           {isEditing ? (
                             <>
                               <Button
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                className="h-7 px-2 text-xs text-emerald-300 hover:text-emerald-200"
+                                className="h-7 px-2 text-xs text-success hover:text-success/80"
                                 disabled={updateDiscoverySourceMutation.isPending}
                                 onClick={() => saveDiscoverySource(source)}
                                 data-testid={`save-discovery-source-${source.id}`}
@@ -1398,7 +1399,7 @@ export default function DashboardPage() {
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                className="h-7 px-2 text-xs text-violet-200 hover:text-violet-50"
+                                className="h-7 px-2 text-xs text-foreground hover:text-foreground"
                                 disabled={updateDiscoverySourceMutation.isPending}
                                 onClick={cancelEditingDiscoverySource}
                                 data-testid={`cancel-edit-discovery-source-${source.id}`}
@@ -1411,7 +1412,7 @@ export default function DashboardPage() {
                               type="button"
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 text-violet-300 hover:text-violet-100"
+                              className="h-7 w-7 text-muted-foreground hover:text-foreground"
                               disabled={updateDiscoverySourceMutation.isPending}
                               onClick={() => startEditingDiscoverySource(source)}
                               aria-label={`Edit ${source.name}`}
@@ -1424,7 +1425,7 @@ export default function DashboardPage() {
                             type="button"
                             variant="ghost"
                             size="sm"
-                            className="h-7 px-2 text-xs text-violet-200 hover:text-violet-50"
+                            className="h-7 px-2 text-xs text-foreground hover:text-foreground"
                             disabled={updateDiscoverySourceMutation.isPending || isEditing}
                             onClick={() => toggleDiscoverySource(source)}
                             data-testid={`toggle-discovery-source-${source.id}`}
@@ -1436,7 +1437,7 @@ export default function DashboardPage() {
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 text-violet-300 hover:text-destructive"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
                             disabled={deleteDiscoverySourceMutation.isPending || isEditing}
                             onClick={() => removeDiscoverySource(source)}
                             aria-label={`Remove ${source.name}`}
@@ -1448,13 +1449,13 @@ export default function DashboardPage() {
                       );
                     })}
                     {discoverySources.length === 0 && (
-                      <p className="text-xs text-violet-300/60 py-1">No sources configured. Add one below to search online jobs.</p>
+                      <p className="text-xs text-muted-foreground py-1">No sources configured. Add one below to search online jobs.</p>
                     )}
                   </div>
                 )}
                 {availableDiscoverySources.filter((available) => !discoverySources.some((source) => source.kind === "builtin" && source.provider === available.provider)).length > 0 && (
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs text-violet-300/70">Available</span>
+                    <span className="text-xs text-muted-foreground">Available</span>
                     {availableDiscoverySources
                       .filter((available) => !discoverySources.some((source) => source.kind === "builtin" && source.provider === available.provider))
                       .map((available) => (
@@ -1463,7 +1464,7 @@ export default function DashboardPage() {
                           type="button"
                           variant="outline"
                           size="sm"
-                          className="h-7 text-xs border-violet-700/50 text-violet-200 hover:bg-violet-900/40"
+                          className="h-7 text-xs border-border text-foreground hover:bg-muted"
                           disabled={createDiscoverySourceMutation.isPending}
                           onClick={() => addBuiltInDiscoverySource(available.provider)}
                           data-testid={`add-discovery-source-${available.provider}`}
@@ -1500,7 +1501,7 @@ export default function DashboardPage() {
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="h-8 text-xs border-violet-700/50 text-violet-200 hover:bg-violet-900/40"
+                    className="h-8 text-xs border-border text-foreground hover:bg-muted"
                     disabled={createDiscoverySourceMutation.isPending}
                     onClick={addCustomDiscoverySource}
                     data-testid="add-custom-discovery-source"
@@ -1508,38 +1509,31 @@ export default function DashboardPage() {
                     <Plus className="w-3 h-3 mr-1" /> Add source
                   </Button>
                 </div>
-                <p className="text-[11px] text-violet-300/50">Use a public HTTPS RSS, Atom, JSON, or Google Search URL. Search URLs run through Brave, preserving operators such as site: and quoted phrases.</p>
+                <p className="text-[11px] text-muted-foreground">Use a public HTTPS RSS, Atom, JSON, or Google Search URL. Search URLs run through Brave, preserving operators such as site: and quoted phrases.</p>
               </div>
               {latestAvailabilityChecks !== null && (
-                <div className="border-t border-violet-800/30 pt-3 space-y-2" data-testid="latest-availability-checks">
+                <div className="border-t border-border pt-3 space-y-2" data-testid="latest-availability-checks">
                   <div>
-                    <p className="text-xs font-medium text-violet-200">Latest checks this session</p>
-                    <p className="text-[11px] text-violet-300/60">Confirmed closed listings are checked but not imported.</p>
+                    <p className="text-xs font-medium text-foreground">Latest checks this session</p>
+                    <p className="text-[11px] text-muted-foreground">Confirmed closed listings are checked but not imported.</p>
                   </div>
                   {latestAvailabilityChecks.length === 0 ? (
-                    <p className="text-xs text-violet-300/60">No availability checks were returned by the latest run.</p>
+                    <p className="text-xs text-muted-foreground">No availability checks were returned by the latest run.</p>
                   ) : (
                     <div className="space-y-1.5">
                       {latestAvailabilityChecks.map((check, index) => (
-                        <div key={`${check.url}-${index}`} className="rounded-lg border border-violet-800/40 bg-background/30 px-3 py-2">
+                        <div key={`${check.url}-${index}`} className="py-2 border-b border-border/50 last:border-b-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <Badge
-                              variant="outline"
-                              className={check.status === "open"
-                                ? "text-emerald-300 border-emerald-800/50"
-                                : check.status === "closed"
-                                ? "text-red-300 border-red-800/50"
-                                : "text-amber-300 border-amber-800/50"}
-                            >
+                            <StatusBadge tone={check.status === "open" ? "success" : check.status === "closed" ? "hidden" : "warning"}>
                               {check.status === "open" ? "Open" : check.status === "closed" ? "Closed · skipped" : "Unverified"}
-                            </Badge>
-                            <span className="text-xs text-violet-100">{humanizeEvidence(check.provider)}</span>
-                            <span className="text-[11px] text-violet-300/50">Checked {formatAdded(check.checkedAt)}</span>
-                            <span className="text-[11px] text-violet-300/50">{Math.round(check.confidence * 100)}% confidence</span>
+                            </StatusBadge>
+                            <span className="text-xs text-foreground">{humanizeEvidence(check.provider)}</span>
+                            <span className="text-[11px] text-muted-foreground">Checked {formatAdded(check.checkedAt)}</span>
+                            <span className="text-[11px] text-muted-foreground">{Math.round(check.confidence * 100)}% confidence</span>
                           </div>
-                          <p className="mt-1 text-xs text-violet-200/80">{humanizeAvailabilityReason(check.reason)}</p>
+                          <p className="mt-1 text-xs text-foreground/80">{humanizeAvailabilityReason(check.reason)}</p>
                           {check.evidence.length > 0 && (
-                            <p className="mt-1 text-[11px] text-violet-300/60">
+                            <p className="mt-1 text-[11px] text-muted-foreground">
                               Evidence: {check.evidence.map(humanizeEvidence).join(", ")}
                             </p>
                           )}
@@ -1547,7 +1541,7 @@ export default function DashboardPage() {
                             href={check.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="mt-1 block truncate text-[11px] text-violet-300 underline underline-offset-2 hover:text-violet-100"
+                            className="mt-1 block truncate text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
                           >
                             {check.url}
                           </a>
@@ -1632,7 +1626,7 @@ export default function DashboardPage() {
         )}
 
         {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div className="stat-strip mb-8" data-testid="dashboard-stats">
           <StatCard
             icon={BriefcaseBusiness}
             label={activeTab === "active" ? "Active postings" : activeTab === "applied" ? "Applied postings" : "Deleted postings"}
@@ -1911,20 +1905,20 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <FitScoreBadge score={score} status={item.scoreStatus} />
                         {item.onlineMatchScore != null && (
-                          <Badge variant="outline" className="text-xs text-violet-300 border-violet-800/50" title="Search match: discovery heuristic, separate from Profile fit">
+                          <StatusBadge tone="neutral" title="Search match: discovery heuristic, separate from Profile fit">
                             Search match {item.onlineMatchScore}
-                          </Badge>
+                          </StatusBadge>
                         )}
                         <span className="font-semibold text-foreground line-through">{posting.title}</span>
-                        <Badge variant="secondary" className="text-xs">{posting.senderName ?? item.sourceName ?? posting.source}</Badge>
+                        <StatusBadge tone="neutral">{posting.senderName ?? item.sourceName ?? posting.source}</StatusBadge>
                         {posting.deletedBy === "sweep" && (
-                          <Badge variant="outline" className="text-xs text-amber-400 border-amber-800/50 gap-1">
-                            <Layers className="w-3 h-3" />
+                          <StatusBadge tone="destructive">
+                            <Layers className="w-3 h-3" aria-hidden="true" />
                             Removed automatically
-                          </Badge>
+                          </StatusBadge>
                         )}
                         {posting.deletedBy === "duplicate" && (
-                          <Badge variant="outline" className="text-xs text-muted-foreground">Reported duplicate</Badge>
+                          <StatusBadge tone="destructive">Reported duplicate</StatusBadge>
                         )}
                         {item.feedback && item.feedback.kind !== "more_like_this" && (
                           <span className="text-[11px] text-muted-foreground" data-testid={`deleted-reason-${posting.id}`}>
@@ -1932,10 +1926,10 @@ export default function DashboardPage() {
                           </span>
                         )}
                         {isClosed && (
-                          <Badge variant="outline" className="text-xs text-orange-400 border-orange-800/50 gap-1">
-                            <Archive className="w-3 h-3" />
+                          <StatusBadge tone="hidden">
+                            <Archive className="w-3 h-3" aria-hidden="true" />
                             Closed
-                          </Badge>
+                          </StatusBadge>
                         )}
                       </div>
                       <p className="text-sm text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2">
@@ -1957,7 +1951,7 @@ export default function DashboardPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="gap-1.5 text-sky-400 border-sky-800/50 hover:bg-sky-950/30 hover:text-sky-300"
+                          className="gap-1.5"
                           onClick={() => onReopen(posting.id)}
                           disabled={reopenMutation.isPending}
                           data-testid={`posting-reopen-${posting.id}`}
@@ -1969,7 +1963,7 @@ export default function DashboardPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="gap-1.5 text-sky-400 border-sky-800/50 hover:bg-sky-950/30 hover:text-sky-300"
+                          className="gap-1.5"
                           onClick={() => void decision.undoDismissal(posting.id, posting.dismissalUndoToken!)}
                           disabled={decision.pending}
                           data-testid={`posting-undo-dismissal-${posting.id}`}
@@ -1981,13 +1975,15 @@ export default function DashboardPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="gap-1.5 text-sky-400 border-sky-800/50 hover:bg-sky-950/30 hover:text-sky-300"
+                          className="gap-1.5"
                           onClick={() => onRestore(posting.id)}
                           disabled={restoreMutation.isPending}
+                          aria-busy={restoreMutation.isPending && restoreMutation.variables?.id === posting.id}
                           data-testid={`posting-restore-${posting.id}`}
                         >
-                          <RotateCcw className="w-3.5 h-3.5" />
-                          Restore
+                          {restoreMutation.isPending && restoreMutation.variables?.id === posting.id
+                            ? <><Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />Restoring...</>
+                            : <><RotateCcw className="w-3.5 h-3.5" />Restore</>}
                         </Button>
                       )}
                     </div>
@@ -2066,9 +2062,9 @@ export default function DashboardPage() {
                         <FitScoreBadge score={score} status={item.scoreStatus} />
                         <PreferenceBadge posting={posting} />
                         {item.onlineMatchScore != null && (
-                          <Badge variant="outline" className="text-xs text-violet-300 border-violet-800/50" title="Search match: discovery heuristic, separate from Profile fit">
+                          <StatusBadge tone="neutral" title="Search match: discovery heuristic, separate from Profile fit">
                             Search match {item.onlineMatchScore}
-                          </Badge>
+                          </StatusBadge>
                         )}
                         <span
                           className="font-semibold text-foreground"
@@ -2076,14 +2072,14 @@ export default function DashboardPage() {
                         >
                           {posting.title}
                         </span>
-                        <Badge variant="secondary" className="text-xs">
+                        <StatusBadge tone="neutral">
                           {posting.senderName ?? item.sourceName ?? posting.source}
-                        </Badge>
+                        </StatusBadge>
                         {posting.appliedAt && (
-                          <span className="flex items-center gap-1 text-xs text-sky-400">
-                            <CheckCircle2 className="w-3 h-3" />
+                          <StatusBadge tone="success">
+                            <CheckCircle2 className="w-3 h-3" aria-hidden="true" />
                             Applied
-                          </span>
+                          </StatusBadge>
                         )}
                       </div>
                       <p className="text-sm text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2">
@@ -2114,16 +2110,9 @@ export default function DashboardPage() {
                       </p>
                       {availabilityLabel(availability) && (
                         <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs" data-testid={`availability-${posting.id}`}>
-                          <Badge
-                            variant="outline"
-                            className={availability.availabilityStatus === "open"
-                              ? "text-emerald-400 border-emerald-800/50"
-                              : availability.availabilityStatus === "closed"
-                                ? "text-amber-400 border-amber-800/50"
-                                : "text-muted-foreground"}
-                          >
+                          <StatusBadge tone={availability.availabilityStatus === "open" ? "success" : availability.availabilityStatus == null ? "neutral" : "warning"}>
                             {availabilityLabel(availability)}
-                          </Badge>
+                          </StatusBadge>
                           {availability.availabilityReason && (
                             <span className="text-muted-foreground">{humanizeAvailabilityReason(availability.availabilityReason)}</span>
                           )}
@@ -2156,11 +2145,14 @@ export default function DashboardPage() {
                       aria-label={posting.appliedAt ? `Undo applied status for ${posting.title}` : `Mark ${posting.title} as applied`}
                       onClick={() => onToggleApplied(posting.id, !!posting.appliedAt)}
                       disabled={markAppliedMutation.isPending}
+                      aria-busy={markAppliedMutation.isPending && markAppliedMutation.variables?.id === posting.id}
                       data-testid={`posting-apply-${posting.id}`}
                       title={posting.appliedAt ? "Undo applied" : "Mark as applied"}
-                      className={`w-9 h-9 sm:w-8 sm:h-8 ${posting.appliedAt ? "text-sky-400 hover:text-sky-300" : "text-muted-foreground hover:text-sky-400"}`}
+                      className={`w-9 h-9 sm:w-8 sm:h-8 ${posting.appliedAt ? "text-success hover:text-success/80" : "text-muted-foreground hover:text-success"}`}
                     >
-                      {posting.appliedAt ? <Undo2 className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                      {markAppliedMutation.isPending && markAppliedMutation.variables?.id === posting.id
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+                        : posting.appliedAt ? <Undo2 className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
                     </Button>
                     <PostingDecisionControls postingId={posting.id} feedback={item.feedback} />
                     <DropdownMenu>
@@ -2325,7 +2317,7 @@ export default function DashboardPage() {
                             <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                               <StatusPill appliedAt={selfAppliedAt} deletedAt={null} company={posting.company} />
                               {selfScore != null && (
-                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold border ${selfScore >= 80 ? "bg-emerald-950/50 text-emerald-400 border-emerald-800/40" : selfScore >= 60 ? "bg-indigo-950/50 text-indigo-300 border-indigo-700/40" : "bg-amber-950/50 text-amber-300 border-amber-800/40"}`}>
+                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold border ${fitTier(selfScore).cls}`}>
                                   {selfScore}% fit
                                 </span>
                               )}
@@ -2347,7 +2339,7 @@ export default function DashboardPage() {
                             <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                               <StatusPill appliedAt={pairedAppliedAt} deletedAt={pairedDeletedAt} company={pairedCompany} />
                               {pairedScore != null && (
-                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold border ${pairedScore >= 80 ? "bg-emerald-950/50 text-emerald-400 border-emerald-800/40" : pairedScore >= 60 ? "bg-indigo-950/50 text-indigo-300 border-indigo-700/40" : "bg-amber-950/50 text-amber-300 border-amber-800/40"}`}>
+                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold border ${fitTier(pairedScore).cls}`}>
                                   {pairedScore}% fit
                                 </span>
                               )}

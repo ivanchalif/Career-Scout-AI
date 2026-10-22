@@ -87,16 +87,14 @@ export default function MetricsPage() {
 
   return (
     <Layout>
-      <div className="px-6 py-8 max-w-3xl mx-auto" data-testid="metrics-page">
+      <div className="px-4 sm:px-6 py-8 max-w-3xl mx-auto min-w-0" data-testid="metrics-page">
 
         {/* Page header */}
-        <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex items-center gap-2">
-            <BarChart2 className="w-5 h-5 text-indigo-400 shrink-0" />
-            <div>
-              <h1 className="text-xl font-semibold text-foreground">Metrics</h1>
-              <p className="text-sm text-muted-foreground">Sync pipeline stats — date-filterable. Dashboard visibility is always the live snapshot.</p>
-            </div>
+        <div className="flex flex-col gap-4 mb-8 pb-5 border-b border-border/60 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
+            <p className="page-eyebrow">Behind the scenes</p>
+            <h1 className="page-title inline-flex items-center gap-3"><BarChart2 className="w-6 h-6 text-muted-foreground shrink-0" aria-hidden="true" />Metrics</h1>
+            <p className="page-purpose">How many emails and listings each sync looked at, kept, or set aside. Filter by date; dashboard visibility always reflects right now.</p>
           </div>
 
           {/* Date range controls */}

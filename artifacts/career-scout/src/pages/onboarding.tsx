@@ -165,6 +165,10 @@ export default function OnboardingPage() {
       {
         onSuccess: () => {
           qc.invalidateQueries({ queryKey: getGetProfileQueryKey() });
+          toast({
+            title: "Profile saved. Welcome to Career Scout.",
+            description: "Your opportunities will be read against this profile as they arrive.",
+          });
           setLocation("/dashboard");
         },
         onError: () =>
@@ -177,32 +181,30 @@ export default function OnboardingPage() {
     <div className="min-h-dvh bg-background flex flex-col">
       {/* Header */}
       <header className="border-b border-border px-6 py-4 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
-          <Rocket className="w-4 h-4 text-white" />
+        <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center">
+          <Rocket className="w-4 h-4 text-primary" />
         </div>
-        <span className="font-bold text-foreground">Career Scout</span>
+        <span className="font-semibold tracking-tight text-foreground">Career Scout</span>
       </header>
 
       <div className="flex-1 flex items-start justify-center px-4 py-12">
         <div className="w-full max-w-2xl" data-testid="onboarding-page">
           {/* Welcome */}
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-950/50 border border-indigo-800/30 mb-4">
-              <User className="w-7 h-7 text-indigo-400" />
-            </div>
-            <h1 className="text-2xl font-bold text-foreground">Set up your career profile</h1>
-            <p className="text-muted-foreground mt-2 text-sm max-w-md mx-auto">
-              Tell us about your skills and experience so we can score job opportunities against your profile.
+          <div className="mb-10">
+            <p className="page-eyebrow">Getting started</p>
+            <h1 className="page-title">Set up your career profile</h1>
+            <p className="page-purpose">
+              A few skills and recent roles are enough to begin. Career Scout uses them to read each opportunity against your strengths. Nothing here is a test, and you can refine it later.
             </p>
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             {/* Skills */}
-            <section className="bg-card border border-border rounded-xl p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <User className="w-4 h-4 text-indigo-400" />
+            <section className="bg-card/60 border border-border/70 rounded-xl p-5">
+              <div className="flex flex-wrap items-center gap-2 mb-4">
+                <User className="w-4 h-4 text-muted-foreground" />
                 <h2 className="font-semibold text-foreground">Your skills</h2>
-                <span className="text-xs text-muted-foreground ml-auto">Add at least a few to improve scoring</span>
+                <span className="text-xs text-muted-foreground sm:ml-auto basis-full sm:basis-auto">Add at least a few to improve scoring</span>
               </div>
               <div className="flex gap-2 mb-3">
                 <Input
@@ -241,10 +243,10 @@ export default function OnboardingPage() {
             </section>
 
             {/* Experience */}
-            <section className="bg-card border border-border rounded-xl p-5">
+            <section className="bg-card/60 border border-border/70 rounded-xl p-5">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <Briefcase className="w-4 h-4 text-indigo-400" />
+                  <Briefcase className="w-4 h-4 text-muted-foreground" />
                   <h2 className="font-semibold text-foreground">Work experience</h2>
                 </div>
                 <Button
@@ -278,7 +280,7 @@ export default function OnboardingPage() {
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="space-y-1">
                         <Label className="text-xs">Job title</Label>
                         <Input placeholder="Software Engineer" {...register(`experienceHistory.${i}.title`)} />
@@ -315,9 +317,9 @@ export default function OnboardingPage() {
             </section>
 
             {/* Preferences + Resume */}
-            <section className="bg-card border border-border rounded-xl p-5 space-y-4">
+            <section className="bg-card/60 border border-border/70 rounded-xl p-5 space-y-4">
               <h2 className="font-semibold text-foreground">Preferences &amp; resume</h2>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label className="flex items-center gap-1.5">
                     <DollarSign className="w-3.5 h-3.5" />
@@ -396,12 +398,16 @@ export default function OnboardingPage() {
 
             <Button
               type="submit"
-              className="w-full gap-2 bg-indigo-600 hover:bg-indigo-500 h-11"
+              className="w-full gap-2 h-11"
               disabled={upsertMutation.isPending}
+              aria-busy={upsertMutation.isPending}
               data-testid="start-button"
             >
               {upsertMutation.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Saving your profile...
+                </>
               ) : (
                 <>
                   Get started
@@ -409,6 +415,9 @@ export default function OnboardingPage() {
                 </>
               )}
             </Button>
+            {upsertMutation.isError && (
+              <p className="text-center text-xs text-destructive" role="alert">Your profile was not saved. Please try again.</p>
+            )}
             <p className="text-center text-xs text-muted-foreground">
               You can update your profile anytime from the settings page.
             </p>
