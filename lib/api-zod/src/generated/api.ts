@@ -229,6 +229,11 @@ export const ListPostingsResponseItem = zod.object({
     }),
     zod.null(),
   ]),
+  scoreStatus: zod
+    .enum(["pending", "current", "needs_reanalysis"])
+    .describe(
+      "Pending without a fit report, or needing reanalysis after the profile was updated.",
+    ),
   feedback: zod
     .union([
       zod.object({
@@ -364,6 +369,11 @@ export const ListDeletedPostingsResponseItem = zod.object({
     }),
     zod.null(),
   ]),
+  scoreStatus: zod
+    .enum(["pending", "current", "needs_reanalysis"])
+    .describe(
+      "Pending without a fit report, or needing reanalysis after the profile was updated.",
+    ),
   feedback: zod
     .union([
       zod.object({
@@ -491,6 +501,11 @@ export const GetPostingResponse = zod.object({
     }),
     zod.null(),
   ]),
+  scoreStatus: zod
+    .enum(["pending", "current", "needs_reanalysis"])
+    .describe(
+      "Pending without a fit report, or needing reanalysis after the profile was updated.",
+    ),
   feedback: zod
     .union([
       zod.object({
@@ -733,6 +748,11 @@ export const UndoPostingDismissalResponse = zod.object({
     }),
     zod.null(),
   ]),
+  scoreStatus: zod
+    .enum(["pending", "current", "needs_reanalysis"])
+    .describe(
+      "Pending without a fit report, or needing reanalysis after the profile was updated.",
+    ),
   feedback: zod
     .union([
       zod.object({
@@ -1451,6 +1471,11 @@ export const GetDashboardSummaryResponse = zod.object({
         }),
         zod.null(),
       ]),
+      scoreStatus: zod
+        .enum(["pending", "current", "needs_reanalysis"])
+        .describe(
+          "Pending without a fit report, or needing reanalysis after the profile was updated.",
+        ),
       feedback: zod
         .union([
           zod.object({

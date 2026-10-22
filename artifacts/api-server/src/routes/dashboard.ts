@@ -74,7 +74,13 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     .slice(0, 5)
     .flatMap((report) => {
       const posting = activePostingById.get(report.jobPostingId);
-      return posting ? [{ posting, report }] : [];
+      return posting ? [{
+        posting,
+        report,
+        scoreStatus: profile?.updatedAt && profile.updatedAt > report.updatedAt
+          ? "needs_reanalysis" as const
+          : "current" as const,
+      }] : [];
     });
 
   res.json(

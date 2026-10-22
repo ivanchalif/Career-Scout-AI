@@ -66,39 +66,12 @@ import { useForm } from "react-hook-form";
 import Layout from "@/components/layout";
 import { PostingDecisionControls } from "@/components/posting-decision-controls";
 import { PreferenceBadge } from "@/components/preference-badge";
+import { FitScoreBadge } from "@/components/fit-score";
 import { usePostingDecision, dismissReasons, reasonLabel } from "@/hooks/use-posting-decision";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
   DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
-
-function ScoreBadge({ score }: { score: number | null }) {
-  if (score === null) {
-    return (
-      <span
-        className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground animate-pulse"
-        data-testid="score-ring-pending"
-        title="AI scoring in progress"
-      >
-        AI
-      </span>
-    );
-  }
-  const cls =
-    score >= 80
-      ? "bg-emerald-950/60 text-emerald-400 border border-emerald-800/40"
-      : score >= 60
-      ? "bg-amber-950/60 text-amber-400 border border-amber-800/40"
-      : "bg-red-950/60 text-red-400 border border-red-800/40";
-  return (
-    <span
-      className={`inline-flex items-center text-[11px] font-bold px-1.5 py-0.5 rounded tabular-nums ${cls}`}
-      data-testid="score-ring"
-    >
-      {score}
-    </span>
-  );
-}
 
 function StatCard({
   icon: Icon,
@@ -1919,10 +1892,10 @@ export default function DashboardPage() {
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <ScoreBadge score={score} />
+                        <FitScoreBadge score={score} status={item.scoreStatus} />
                         {item.onlineMatchScore != null && (
-                          <Badge variant="outline" className="text-xs text-violet-300 border-violet-800/50" title="Online discovery match score">
-                            Match {item.onlineMatchScore}
+                          <Badge variant="outline" className="text-xs text-violet-300 border-violet-800/50" title="Search match: discovery heuristic, separate from Profile fit">
+                            Search match {item.onlineMatchScore}
                           </Badge>
                         )}
                         <span className="font-semibold text-foreground line-through">{posting.title}</span>
@@ -2064,11 +2037,11 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0 px-4 pt-3 pb-2 sm:px-5 sm:py-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <ScoreBadge score={score} />
+                        <FitScoreBadge score={score} status={item.scoreStatus} />
                         <PreferenceBadge posting={posting} />
                         {item.onlineMatchScore != null && (
-                          <Badge variant="outline" className="text-xs text-violet-300 border-violet-800/50" title="Online discovery match score">
-                            Match {item.onlineMatchScore}
+                          <Badge variant="outline" className="text-xs text-violet-300 border-violet-800/50" title="Search match: discovery heuristic, separate from Profile fit">
+                            Search match {item.onlineMatchScore}
                           </Badge>
                         )}
                         <span
@@ -2321,7 +2294,7 @@ export default function DashboardPage() {
                             <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                               <StatusPill appliedAt={selfAppliedAt} deletedAt={null} company={posting.company} />
                               {selfScore != null && (
-                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold border ${selfScore >= 80 ? "bg-emerald-950/50 text-emerald-400 border-emerald-800/40" : selfScore >= 60 ? "bg-amber-950/50 text-amber-400 border-amber-800/40" : "bg-red-950/50 text-red-400 border-red-800/40"}`}>
+                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold border ${selfScore >= 80 ? "bg-emerald-950/50 text-emerald-400 border-emerald-800/40" : selfScore >= 60 ? "bg-indigo-950/50 text-indigo-300 border-indigo-700/40" : "bg-amber-950/50 text-amber-300 border-amber-800/40"}`}>
                                   {selfScore}% fit
                                 </span>
                               )}
@@ -2343,7 +2316,7 @@ export default function DashboardPage() {
                             <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                               <StatusPill appliedAt={pairedAppliedAt} deletedAt={pairedDeletedAt} company={pairedCompany} />
                               {pairedScore != null && (
-                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold border ${pairedScore >= 80 ? "bg-emerald-950/50 text-emerald-400 border-emerald-800/40" : pairedScore >= 60 ? "bg-amber-950/50 text-amber-400 border-amber-800/40" : "bg-red-950/50 text-red-400 border-red-800/40"}`}>
+                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold border ${pairedScore >= 80 ? "bg-emerald-950/50 text-emerald-400 border-emerald-800/40" : pairedScore >= 60 ? "bg-indigo-950/50 text-indigo-300 border-indigo-700/40" : "bg-amber-950/50 text-amber-300 border-amber-800/40"}`}>
                                   {pairedScore}% fit
                                 </span>
                               )}

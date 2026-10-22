@@ -53,6 +53,18 @@ type DiscoveryScoreProfile = {
   } | null;
 };
 
+type ScoreStatus = "pending" | "current" | "needs_reanalysis";
+
+function getScoreStatus(
+  report: typeof matchReportsTable.$inferSelect | undefined,
+  profileUpdatedAt: Date | null | undefined,
+): ScoreStatus {
+  if (report?.fitScore == null) return "pending";
+  return profileUpdatedAt && profileUpdatedAt.getTime() > report.updatedAt.getTime()
+    ? "needs_reanalysis"
+    : "current";
+}
+
 function getOnlineMatchScore(
   posting: typeof jobPostingsTable.$inferSelect,
   profile: DiscoveryScoreProfile | null | undefined,
@@ -93,6 +105,7 @@ export async function getPostingWithReport(postingId: number, userId: string) {
 
   const [profile] = await db
     .select({
+      updatedAt: userProfilesTable.updatedAt,
       experienceHistory: userProfilesTable.experienceHistory,
       skills: userProfilesTable.skills,
       locationPreferences: userProfilesTable.locationPreferences,
@@ -116,6 +129,7 @@ export async function getPostingWithReport(postingId: number, userId: string) {
   return {
     posting,
     report: report ?? null,
+    scoreStatus: getScoreStatus(report, profile?.updatedAt),
     feedback: feedbackRow ?? null,
     sourceName,
     onlineMatchScore: getOnlineMatchScore(posting, profile),
@@ -138,6 +152,7 @@ router.get("/postings", requireAuth, async (req, res): Promise<void> => {
 
   const [userProfile] = await db
     .select({
+      updatedAt: userProfilesTable.updatedAt,
       companyFilterSettings: userProfilesTable.companyFilterSettings,
       titleExcludeKeywords: userProfilesTable.titleExcludeKeywords,
       experienceHistory: userProfilesTable.experienceHistory,
@@ -249,6 +264,7 @@ router.get("/postings", requireAuth, async (req, res): Promise<void> => {
       return {
         posting,
         report: report ?? null,
+        scoreStatus: getScoreStatus(report, userProfile?.updatedAt),
         feedback: feedback ?? null,
         sourceName: sourceNames.get(posting.source) ?? null,
         onlineMatchScore: getOnlineMatchScore(posting, userProfile),
@@ -307,6 +323,7 @@ router.get("/postings/deleted", requireAuth, async (req, res): Promise<void> => 
 
   const [profile] = await db
     .select({
+      updatedAt: userProfilesTable.updatedAt,
       experienceHistory: userProfilesTable.experienceHistory,
       skills: userProfilesTable.skills,
       locationPreferences: userProfilesTable.locationPreferences,
@@ -342,6 +359,7 @@ router.get("/postings/deleted", requireAuth, async (req, res): Promise<void> => 
       return {
         posting,
         report: report ?? null,
+        scoreStatus: getScoreStatus(report, profile?.updatedAt),
         feedback: feedback ?? null,
         sourceName: sourceNames.get(posting.source) ?? null,
         onlineMatchScore: getOnlineMatchScore(posting, profile),

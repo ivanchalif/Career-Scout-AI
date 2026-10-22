@@ -19,6 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import Layout from "@/components/layout";
 import { PostingDecisionControls } from "@/components/posting-decision-controls";
 import { PreferenceBadge } from "@/components/preference-badge";
+import { ScoreBreakdown, ScoreStatusPill, fitTier } from "@/components/fit-score";
 import { usePostingDecision, dismissReasons } from "@/hooks/use-posting-decision";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
@@ -34,47 +35,40 @@ function humanizeAvailabilityReason(reason: string): string {
   return known[reason] ?? `${reason.replace(/[_-]+/g, " ").replace(/^\w/, (letter) => letter.toUpperCase())}${/[.!?]$/.test(reason) ? "" : "."}`;
 }
 
-function ScoreRingLarge({ score }: { score: number | null }) {
+function ScoreRingLarge({ score, status }: { score: number | null; status?: string | null }) {
   if (score === null) {
     return (
       <div className="flex flex-col items-center gap-2">
-        <div className="flex items-center justify-center w-28 h-28 rounded-full border-3 border-muted bg-muted/10">
+        <div className="flex items-center justify-center w-28 h-28 rounded-full border-3 border-muted bg-muted/10" data-testid="score-ring-pending">
           <div className="text-center">
             <p className="text-3xl font-bold text-muted-foreground">—</p>
             <p className="text-xs text-muted-foreground mt-1">Not scored</p>
           </div>
         </div>
+        <span className="text-xs text-muted-foreground">Profile fit</span>
+        <ScoreStatusPill score={score} status={status} />
       </div>
     );
   }
-
-  const color = score >= 80 ? "#22c55e" : score >= 60 ? "#f59e0b" : "#ef4444";
-  const label = score >= 80 ? "Strong fit" : score >= 60 ? "Moderate fit" : "Weak fit";
+  const { color, label } = fitTier(score);
   const radius = 50;
   const circumference = 2 * Math.PI * radius;
   const progress = (score / 100) * circumference;
-
   return (
-    <div className="flex flex-col items-center gap-2">
-      <div className="relative flex items-center justify-center w-28 h-28" data-testid="score-ring">
-        <svg width="112" height="112" viewBox="0 0 112 112" className="-rotate-90">
+    <div className="flex flex-col items-center gap-1.5">
+      <div className="relative flex items-center justify-center w-28 h-28" data-testid="score-ring" role="img" aria-label={`Profile fit ${score} out of 100, ${label}`}>
+        <svg width="112" height="112" viewBox="0 0 112 112" className="-rotate-90" aria-hidden="true">
           <circle cx="56" cy="56" r={radius} fill="none" stroke="hsl(var(--muted))" strokeWidth="6" />
-          <circle
-            cx="56"
-            cy="56"
-            r={radius}
-            fill="none"
-            stroke={color}
-            strokeWidth="6"
-            strokeDasharray={`${progress} ${circumference - progress}`}
-            strokeLinecap="round"
-          />
+          <circle cx="56" cy="56" r={radius} fill="none" stroke={color} strokeWidth="6"
+            strokeDasharray={`${progress} ${circumference - progress}`} strokeLinecap="round" />
         </svg>
         <div className="absolute text-center">
           <p className="text-3xl font-bold" style={{ color }}>{score}</p>
         </div>
       </div>
-      <span className="text-sm font-medium" style={{ color }}>{label}</span>
+      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Profile fit</span>
+      <span className="text-sm font-medium" style={{ color }} data-testid="text-fit-label">{label}</span>
+      <ScoreStatusPill score={score} status={status} />
     </div>
   );
 }
@@ -188,7 +182,7 @@ export default function PostingDetailPage({ id }: { id: number }) {
           <div className="flex flex-col md:flex-row md:items-start gap-6">
             {/* Score ring */}
             <div className="shrink-0">
-              <ScoreRingLarge score={score} />
+              <ScoreRingLarge score={score} status={data.scoreStatus} />
             </div>
 
             {/* Job info */}
@@ -210,8 +204,8 @@ export default function PostingDetailPage({ id }: { id: number }) {
                     <Badge variant="secondary" className="text-xs">{posting.senderName ?? data.sourceName ?? posting.source}</Badge>
                     <PreferenceBadge posting={posting} />
                     {data.onlineMatchScore != null && (
-                      <Badge variant="outline" className="text-xs text-violet-300 border-violet-800/50" title="Online discovery match score">
-                        Match {data.onlineMatchScore}
+                      <Badge variant="outline" className="text-xs text-violet-300 border-violet-800/50" title="Search match: discovery heuristic, separate from Profile fit">
+                        Search match {data.onlineMatchScore}
                       </Badge>
                     )}
                   </div>
@@ -295,6 +289,15 @@ export default function PostingDetailPage({ id }: { id: number }) {
                   <p className="text-sm text-foreground/80" data-testid="ai-reasoning">{report.reasoning}</p>
                 </div>
               )}
+
+              <ScoreBreakdown
+                score={score}
+                onlineMatchScore={data.onlineMatchScore}
+                isOnline={/^(?:arbeitnow|brave|google|hiringcafe|custom)(?::\d+)?$/.test(posting.source)}
+                reasoning={report?.reasoning}
+                matchedSkills={report?.matchedSkills ?? []}
+                missingSkills={report?.missingSkills ?? []}
+              />
 
               {availabilityLabel && (
                 <div className="mt-4 rounded-lg border border-border bg-muted/20 p-3" data-testid="posting-availability">
@@ -384,12 +387,12 @@ export default function PostingDetailPage({ id }: { id: number }) {
           {report?.missingSkills && report.missingSkills.length > 0 && (
             <div className="bg-card border border-border rounded-xl p-5">
               <div className="flex items-center gap-2 mb-3">
-                <XCircle className="w-4 h-4 text-red-400" />
-                <h2 className="font-semibold text-foreground text-sm">Missing skills</h2>
+                <XCircle className="w-4 h-4 text-amber-400" />
+                <h2 className="font-semibold text-foreground text-sm">Skills to strengthen</h2>
               </div>
               <div className="flex flex-wrap gap-2" data-testid="missing-skills">
                 {report.missingSkills.map((skill) => (
-                  <span key={skill} className="text-xs px-2.5 py-1 rounded-full bg-red-950/40 text-red-400 border border-red-800/30">
+                  <span key={skill} className="text-xs px-2.5 py-1 rounded-full bg-amber-950/40 text-amber-300 border border-amber-800/30">
                     {skill}
                   </span>
                 ))}

@@ -1363,6 +1363,10 @@ components:
           oneOf:
             - $ref: "#/components/schemas/MatchReport"
             - type: "null"
+        scoreStatus:
+          type: string
+          enum: [pending, current, needs_reanalysis]
+          description: Pending without a fit report, or needing reanalysis after the profile was updated.
         feedback:
           oneOf:
             - $ref: "#/components/schemas/PostingFeedback"
@@ -1384,6 +1388,7 @@ components:
       required:
         - posting
         - report
+        - scoreStatus
 
     PostingFeedback:
       type: object

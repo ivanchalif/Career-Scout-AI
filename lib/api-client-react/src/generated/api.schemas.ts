@@ -186,6 +186,18 @@ export interface MatchReport {
   updatedAt: string;
 }
 
+/**
+ * Pending without a fit report, or needing reanalysis after the profile was updated.
+ */
+export type PostingWithReportScoreStatus =
+  (typeof PostingWithReportScoreStatus)[keyof typeof PostingWithReportScoreStatus];
+
+export const PostingWithReportScoreStatus = {
+  pending: "pending",
+  current: "current",
+  needs_reanalysis: "needs_reanalysis",
+} as const;
+
 export type PostingFeedbackKind =
   (typeof PostingFeedbackKind)[keyof typeof PostingFeedbackKind];
 
@@ -223,6 +235,8 @@ export interface PostingSource {
 export interface PostingWithReport {
   posting: JobPosting;
   report: MatchReport | null;
+  /** Pending without a fit report, or needing reanalysis after the profile was updated. */
+  scoreStatus: PostingWithReportScoreStatus;
   feedback?: PostingFeedback | null;
   /**
    * Display name of the configured online discovery source
