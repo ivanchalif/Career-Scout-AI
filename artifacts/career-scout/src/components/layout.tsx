@@ -57,8 +57,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Tooltip delayDuration={0}>
               <TooltipTrigger asChild>
                 <button
+                  type="button"
                   onClick={toggleCollapsed}
                   aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                  aria-expanded={!collapsed}
                   data-testid="sidebar-toggle"
                   className={`flex items-center gap-3 h-full transition-colors hover:opacity-80 ${collapsed ? "justify-center w-full" : "pl-4 flex-1 min-w-0"}`}
                 >
@@ -107,8 +109,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               return (
                 <Tooltip key={href} delayDuration={0}>
                   <TooltipTrigger asChild>
-                    <Link href={href}>
-                      <div
+                    <Link href={href}
+                        aria-current={active ? "page" : undefined}
+                        aria-label={label}
                         className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${
                           active
                             ? "bg-sidebar-accent text-sidebar-accent-foreground"
@@ -120,7 +123,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                         {!collapsed && (
                           <span className="text-sm font-medium whitespace-nowrap">{label}</span>
                         )}
-                      </div>
                     </Link>
                   </TooltipTrigger>
                   {collapsed && (
@@ -137,6 +139,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
+                  aria-label="Sign out"
                   className={`w-full flex items-center gap-3 justify-start px-3 py-2.5 h-auto text-muted-foreground hover:text-destructive hover:bg-destructive/10 ${collapsed ? "justify-center px-2" : ""}`}
                   onClick={() => signOut({ redirectUrl: "/" })}
                   data-testid="sign-out-button"
@@ -165,15 +168,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             {navItems.map(({ href, icon: Icon, label }) => {
               const active = location.startsWith(href);
               return (
-                <Link key={href} href={href} className="min-w-0">
-                  <div className={`flex min-w-0 flex-col items-center gap-0.5 px-0.5 py-1.5 rounded-lg transition-colors ${active ? "text-indigo-400" : "text-sidebar-foreground hover:text-foreground"}`}>
+                <Link key={href} href={href} aria-label={label} aria-current={active ? "page" : undefined}
+                  className={`flex min-w-0 flex-col items-center gap-0.5 px-0.5 py-1.5 rounded-lg transition-colors ${active ? "bg-sidebar-accent text-indigo-300" : "text-sidebar-foreground hover:text-foreground"}`}>
                     <Icon className="w-5 h-5" />
                     <span className="text-[10px] font-medium">{label}</span>
-                  </div>
                 </Link>
               );
             })}
             <button
+              type="button"
+              aria-label="Sign out"
               onClick={() => signOut({ redirectUrl: "/" })}
               className="flex min-w-0 flex-col items-center gap-0.5 px-0.5 py-1.5 rounded-lg text-muted-foreground hover:text-destructive transition-colors"
               data-testid="mobile-sign-out"

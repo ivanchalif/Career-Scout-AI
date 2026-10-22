@@ -80,6 +80,9 @@ function FilterBar({
         {(["today", "7d", "30d", "all"] as DateRange[]).map((r) => (
           <button
             key={r}
+            type="button"
+            aria-current={dateRange === r ? "true" : undefined}
+            aria-pressed={dateRange === r}
             onClick={() => onDateRange(r)}
             className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
               dateRange === r
@@ -100,7 +103,7 @@ function FilterBar({
           placeholder={textPlaceholder}
           value={text}
           onChange={(e) => onText(e.target.value)}
-          className="w-full pl-8 pr-3 py-1.5 text-sm bg-muted/40 border border-border rounded-lg placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
+          className="w-full pl-8 pr-3 py-1.5 text-sm bg-muted/40 border border-border rounded-lg placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
         />
       </div>
 
@@ -285,6 +288,9 @@ export default function FilteredPage() {
             return (
               <button
                 key={t}
+                type="button"
+                aria-current={tab === t ? "true" : undefined}
+                aria-pressed={tab === t}
                 onClick={() => setTab(t)}
                 className={`px-3 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
                   tab === t
@@ -370,9 +376,9 @@ export default function FilteredPage() {
                         <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                           <span className="text-xs text-muted-foreground">{posting.company}</span>
                           {posting.location && (
-                            <span className="text-xs text-muted-foreground/60">{posting.location}</span>
+                            <span className="text-xs text-muted-foreground">{posting.location}</span>
                           )}
-                          <span className="text-xs text-muted-foreground/50">
+                          <span className="text-xs text-muted-foreground">
                             {fmtDateTime(posting.createdAt)}
                           </span>
                         </div>
@@ -405,7 +411,7 @@ export default function FilteredPage() {
                             href={posting.link}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-muted-foreground/50 hover:text-indigo-400 transition-colors"
+                            className="text-muted-foreground hover:text-indigo-400 transition-colors"
                             title="Open original posting"
                           >
                             <ExternalLink className="w-3.5 h-3.5" />
@@ -479,11 +485,11 @@ export default function FilteredPage() {
                         {item.listingCompany && (
                           <span>{item.listingCompany}</span>
                         )}
-                        <span className="truncate text-muted-foreground/60">{item.senderEmail}</span>
+                        <span className="truncate text-muted-foreground">{item.senderEmail}</span>
                         {item.listingTitle && item.subject && item.listingTitle !== item.subject && (
-                          <span className="hidden sm:block text-muted-foreground/40 truncate">via "{item.subject}"</span>
+                          <span className="hidden sm:block text-muted-foreground truncate">via "{item.subject}"</span>
                         )}
-                        <span className="ml-auto shrink-0 text-muted-foreground/50">
+                        <span className="ml-auto shrink-0 text-muted-foreground">
                           {fmtDateTime(item.filteredAt)}
                         </span>
                       </div>
@@ -554,18 +560,18 @@ export default function FilteredPage() {
                           {item.senderName ? `${item.senderName} · ` : ""}{item.senderEmail}
                         </span>
                         {item.listingsExtracted > 0 && (
-                          <span className="shrink-0 text-muted-foreground/60">
+                          <span className="shrink-0 text-muted-foreground">
                             {item.listingsExtracted} listing{item.listingsExtracted === 1 ? "" : "s"}
                             {item.listingsImported > 0 && `, ${item.listingsImported} imported`}
                             {item.listingsSkipped > 0 && `, ${item.listingsSkipped} skipped`}
                           </span>
                         )}
                         {item.skipReasons.length > 0 && (
-                          <span className="shrink-0 text-muted-foreground/50">
+                          <span className="shrink-0 text-muted-foreground">
                             ({item.skipReasons.join(", ")})
                           </span>
                         )}
-                        <span className="ml-auto shrink-0 text-muted-foreground/50">
+                        <span className="ml-auto shrink-0 text-muted-foreground">
                           {fmtDateTime(item.processedAt)}
                         </span>
                       </div>

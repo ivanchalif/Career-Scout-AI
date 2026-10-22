@@ -70,6 +70,7 @@ function CollapsibleSection({
       <div className="flex items-center justify-between px-5 py-4">
         <button
           type="button"
+          aria-expanded={isOpen}
           className="flex items-center gap-2 flex-1 text-left hover:opacity-80 transition-opacity"
           onClick={onToggle}
         >
@@ -85,6 +86,8 @@ function CollapsibleSection({
           {headerActions}
           <button
             type="button"
+            aria-label={`${isOpen ? "Collapse" : "Expand"} ${title}`}
+            aria-expanded={isOpen}
             className="p-1 rounded hover:bg-muted/40 transition-colors"
             onClick={onToggle}
           >
@@ -362,22 +365,24 @@ export default function ProfilePage() {
                   data-testid="skill-input"
                 />
                 <Button type="button" variant="outline" onClick={addSkill} data-testid="add-skill-button">
+                  <span className="sr-only">Add skill</span>
                   <Plus className="w-4 h-4" />
                 </Button>
               </div>
               {skills.length > 0 ? (
                 <div className="flex flex-wrap gap-2" data-testid="skills-list">
                   {skills.map((skill) => (
-                    <Badge
+                    <button
                       key={skill}
-                      variant="secondary"
-                      className="gap-1.5 pr-1.5 cursor-pointer hover:bg-destructive/20 hover:text-destructive transition-colors"
+                      type="button"
+                      aria-label={`Remove ${skill} skill`}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-transparent bg-secondary text-secondary-foreground px-2.5 py-0.5 text-xs font-semibold hover:bg-destructive/20 hover:text-destructive transition-colors"
                       onClick={() => removeSkill(skill)}
                       data-testid={`skill-${skill}`}
                     >
                       {skill}
-                      <Trash2 className="w-3 h-3" />
-                    </Badge>
+                      <Trash2 className="w-3 h-3" aria-hidden="true" />
+                    </button>
                   ))}
                 </div>
               ) : (
@@ -442,6 +447,7 @@ export default function ProfilePage() {
                           type="button"
                           variant="ghost"
                           size="icon"
+                          aria-label={`Remove experience position ${i + 1}`}
                           className="w-7 h-7 text-destructive hover:text-destructive hover:bg-destructive/10"
                           onClick={() => removeExp(i)}
                           data-testid={`remove-experience-${i}`}
@@ -596,6 +602,7 @@ export default function ProfilePage() {
                         {loc}
                         <button
                           type="button"
+                          aria-label={`Remove location ${loc}`}
                           onClick={() => removeLocation(loc)}
                           className="ml-0.5 rounded-full hover:bg-muted-foreground/20 p-0.5"
                         >

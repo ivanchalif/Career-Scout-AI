@@ -98,7 +98,7 @@
   --secondary: 222 47% 18%;
   --secondary-foreground: 210 40% 88%;
   --muted: 222 47% 17%;
-  --muted-foreground: 215 20% 55%;
+  --muted-foreground: 215 20% 68%;
   --accent: 238 84% 67%;
   --accent-foreground: 0 0% 100%;
   --destructive: 0 72% 51%;
@@ -171,7 +171,7 @@
   --secondary: 222 47% 18%;
   --secondary-foreground: 210 40% 88%;
   --muted: 222 47% 17%;
-  --muted-foreground: 215 20% 55%;
+  --muted-foreground: 215 20% 68%;
   --accent: 238 84% 67%;
   --accent-foreground: 0 0% 100%;
   --destructive: 0 72% 51%;
@@ -199,8 +199,22 @@
     @apply border-border;
   }
 
+  :is(a, button, input, select, textarea, [tabindex="0"]):focus-visible {
+    outline: 2px solid hsl(var(--ring)) !important;
+    outline-offset: 3px !important;
+  }
+
   body {
     @apply font-sans antialiased bg-background text-foreground;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

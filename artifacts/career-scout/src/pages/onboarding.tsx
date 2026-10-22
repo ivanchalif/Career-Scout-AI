@@ -215,21 +215,24 @@ export default function OnboardingPage() {
                   data-testid="skill-input"
                 />
                 <Button type="button" variant="outline" onClick={addSkill} data-testid="add-skill-button">
+                  <span className="sr-only">Add skill</span>
                   <Plus className="w-4 h-4" />
                 </Button>
               </div>
               {skills.length > 0 ? (
                 <div className="flex flex-wrap gap-2" data-testid="skills-list">
                   {skills.map((skill) => (
-                    <Badge
+                    <button
                       key={skill}
-                      variant="secondary"
-                      className="gap-1.5 pr-1.5 cursor-pointer hover:bg-destructive/20 hover:text-destructive transition-colors"
+                      type="button"
+                      aria-label={`Remove ${skill} skill`}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-transparent bg-secondary text-secondary-foreground px-2.5 py-0.5 text-xs font-semibold hover:bg-destructive/20 hover:text-destructive transition-colors"
                       onClick={() => removeSkill(skill)}
+                      data-testid={`skill-${skill}`}
                     >
                       {skill}
-                      <Trash2 className="w-3 h-3" />
-                    </Badge>
+                      <Trash2 className="w-3 h-3" aria-hidden="true" />
+                    </button>
                   ))}
                 </div>
               ) : (
@@ -268,6 +271,7 @@ export default function OnboardingPage() {
                         type="button"
                         variant="ghost"
                         size="icon"
+                        aria-label={`Remove experience position ${i + 1}`}
                         className="w-7 h-7 text-destructive hover:text-destructive hover:bg-destructive/10"
                         onClick={() => removeExp(i)}
                       >

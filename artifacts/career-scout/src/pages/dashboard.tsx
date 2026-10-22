@@ -1094,6 +1094,7 @@ export default function DashboardPage() {
               variant="outline"
               size="sm"
               onClick={onSweepDuplicates}
+              aria-label={sweepingDuplicates ? "Scanning duplicate jobs" : "Clean up duplicate jobs"}
               disabled={sweepingDuplicates}
               className="gap-2 text-muted-foreground"
               data-testid="dedup-sweep-button"
@@ -1110,6 +1111,7 @@ export default function DashboardPage() {
               variant="outline"
               size="sm"
               onClick={onBackfillLinks}
+              aria-label={backfillingLinks ? "Finding job links" : "Find job links"}
               disabled={backfillingLinks}
               className="gap-2 text-muted-foreground"
               data-testid="backfill-links-button"
@@ -1126,6 +1128,7 @@ export default function DashboardPage() {
               variant="outline"
               size="sm"
               onClick={onReanalyzeAll}
+              aria-label={reanalyzing ? "Re-analyzing all jobs" : "Re-analyze all jobs"}
               disabled={reanalyzing}
               className="gap-2 text-muted-foreground"
               data-testid="reanalyze-button"
@@ -1138,6 +1141,7 @@ export default function DashboardPage() {
               variant="outline"
               size="sm"
               onClick={onExportCsv}
+              aria-label={exportingCsv ? "Exporting jobs as CSV" : "Export jobs as CSV"}
               disabled={exportingCsv}
               className="gap-2 text-muted-foreground"
               data-testid="export-csv-button"
@@ -1154,6 +1158,7 @@ export default function DashboardPage() {
               variant="outline"
               size="sm"
               onClick={() => importFileRef.current?.click()}
+              aria-label={importingCsv ? "Importing jobs from CSV" : "Import jobs from CSV"}
               disabled={importingCsv}
               className="gap-2 text-muted-foreground"
               data-testid="import-csv-button"
@@ -1678,6 +1683,8 @@ export default function DashboardPage() {
             variant="outline"
             size="sm"
             onClick={() => setShowFilters((v) => !v)}
+            aria-label={showFilters ? "Hide filters" : "Show filters"}
+            aria-expanded={showFilters}
             className={`gap-1.5 shrink-0 mr-3 h-8 px-2 ${showFilters ? "border-indigo-500 text-indigo-400" : ""}`}
             data-testid="filter-button"
           >
@@ -1690,6 +1697,9 @@ export default function DashboardPage() {
 
           {/* Tabs */}
           <button
+            type="button"
+            aria-current={activeTab === "active" ? "true" : undefined}
+            aria-pressed={activeTab === "active"}
             onClick={() => setActiveTab("active")}
             data-testid="tab-active"
             className={`px-2 sm:px-4 py-2 text-xs font-medium border-b-2 transition-colors -mb-px flex items-center gap-1 shrink-0 ${
@@ -1708,6 +1718,9 @@ export default function DashboardPage() {
             )}
           </button>
           <button
+            type="button"
+            aria-current={activeTab === "applied" ? "true" : undefined}
+            aria-pressed={activeTab === "applied"}
             onClick={() => setActiveTab("applied")}
             data-testid="tab-applied"
             className={`px-2 sm:px-4 py-2 text-xs font-medium border-b-2 transition-colors -mb-px flex items-center gap-1 shrink-0 ${
@@ -1726,6 +1739,9 @@ export default function DashboardPage() {
             )}
           </button>
           <button
+            type="button"
+            aria-current={activeTab === "deleted" ? "true" : undefined}
+            aria-pressed={activeTab === "deleted"}
             onClick={() => setActiveTab("deleted")}
             data-testid="tab-deleted"
             className={`px-2 sm:px-4 py-2 text-xs font-medium border-b-2 transition-colors -mb-px flex items-center gap-1 shrink-0 ${
@@ -1810,6 +1826,7 @@ export default function DashboardPage() {
                           {kw}
                           <button
                             type="button"
+                            aria-label={`Remove blocked title keyword ${kw}`}
                             onClick={() => removeTitleExcludeKeyword(kw)}
                             disabled={updateTitleExcludeMutation.isPending}
                             className="ml-0.5 text-red-400 hover:text-red-200 disabled:opacity-50"
@@ -1929,7 +1946,7 @@ export default function DashboardPage() {
                             {posting.location}
                           </span>
                         )}
-                        <span className="text-xs text-muted-foreground/60">
+                        <span className="text-xs text-muted-foreground">
                           {posting.sourcePostedAt && `Posted ${formatDate(posting.sourcePostedAt)} · `}
                           Discovered {formatAdded(posting.createdAt)}
                         </span>
@@ -2031,7 +2048,16 @@ export default function DashboardPage() {
                 <div
                   className={`flex flex-col sm:flex-row sm:items-center gap-0 bg-card border border-border rounded-xl overflow-hidden transition-colors ${posting.link ? "hover:border-indigo-800/50 cursor-pointer" : "cursor-default"}`}
                   data-testid={`posting-card-${posting.id}`}
+                  role={posting.link ? "link" : undefined}
+                  tabIndex={posting.link ? 0 : undefined}
+                  aria-label={posting.link ? `Open ${posting.title} at ${posting.company} in a new tab` : undefined}
                   onClick={() => { if (posting.link) window.open(posting.link, "_blank", "noopener,noreferrer"); }}
+                  onKeyDown={(event) => {
+                    if (posting.link && event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+                      event.preventDefault();
+                      window.open(posting.link, "_blank", "noopener,noreferrer");
+                    }
+                  }}
                 >
                   {/* Info row — text content */}
                   <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0 px-4 pt-3 pb-2 sm:px-5 sm:py-4">
@@ -2078,11 +2104,11 @@ export default function DashboardPage() {
                           </span>
                         )}
                         {posting.sourcePostedAt && (
-                          <span className="text-xs text-muted-foreground/60" title="Date listed by the original source">
+                          <span className="text-xs text-muted-foreground" title="Date listed by the original source">
                             Posted {formatDate(posting.sourcePostedAt)}
                           </span>
                         )}
-                        <span className="text-xs text-muted-foreground/60" title="Date discovered and added to Career Scout">
+                        <span className="text-xs text-muted-foreground" title="Date discovered and added to Career Scout">
                           Discovered {formatAdded(posting.createdAt)}
                         </span>
                       </p>
@@ -2102,7 +2128,7 @@ export default function DashboardPage() {
                             <span className="text-muted-foreground">{humanizeAvailabilityReason(availability.availabilityReason)}</span>
                           )}
                           {availability.availabilityCheckedAt && (
-                            <span className="text-muted-foreground/60">
+                            <span className="text-muted-foreground">
                               Checked {formatAdded(availability.availabilityCheckedAt)}
                             </span>
                           )}
@@ -2127,6 +2153,7 @@ export default function DashboardPage() {
                     <Button
                       variant="ghost"
                       size="icon"
+                      aria-label={posting.appliedAt ? `Undo applied status for ${posting.title}` : `Mark ${posting.title} as applied`}
                       onClick={() => onToggleApplied(posting.id, !!posting.appliedAt)}
                       disabled={markAppliedMutation.isPending}
                       data-testid={`posting-apply-${posting.id}`}
@@ -2260,6 +2287,8 @@ export default function DashboardPage() {
                           )}
                         </span>
                         <button
+                          type="button"
+                          aria-expanded={isReviewing}
                           className={`flex items-center gap-0.5 hover:text-white ${isAppliedPair ? "text-orange-400" : "text-amber-400"}`}
                           onClick={() => toggleReviewNearDup(posting.id)}
                           title={isReviewing ? "Hide comparison" : "Review both roles"}
@@ -2269,6 +2298,7 @@ export default function DashboardPage() {
                         </button>
                         <span className={`select-none ${isAppliedPair ? "text-orange-800/60" : "text-amber-800/60"}`}>·</span>
                         <button
+                          type="button"
                           className={`font-medium underline underline-offset-2 ${isAppliedPair ? "text-orange-300 hover:text-orange-100" : "hover:text-amber-200"}`}
                           onClick={() => flagAsDuplicate(posting.id)}
                         >
@@ -2276,6 +2306,7 @@ export default function DashboardPage() {
                         </button>
                         <span className={`select-none ${isAppliedPair ? "text-orange-800/60" : "text-amber-800/60"}`}>·</span>
                         <button
+                          type="button"
                           className={`${isAppliedPair ? "text-orange-700 hover:text-orange-500" : "text-amber-600 hover:text-amber-400"}`}
                           onClick={() => dismissNearDup(posting.id)}
                         >

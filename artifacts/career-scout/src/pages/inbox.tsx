@@ -289,6 +289,8 @@ export default function InboxPage() {
         <div className="flex gap-1 p-1 bg-muted/40 rounded-xl w-fit mb-6 border border-border">
           <button
             type="button"
+            aria-current={activeTab === "google" ? "true" : undefined}
+            aria-pressed={activeTab === "google"}
             onClick={() => setActiveTab("google")}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               activeTab === "google"
@@ -299,11 +301,16 @@ export default function InboxPage() {
             <Mail className="w-4 h-4" />
             Google (Gmail)
             {gmailStatus?.connected && (
-              <span className="w-2 h-2 rounded-full bg-emerald-400 ml-0.5" />
+              <span className="inline-flex items-center gap-1 text-xs text-emerald-300">
+                <span aria-hidden="true" className="w-2 h-2 rounded-full bg-emerald-400" />
+                Connected
+              </span>
             )}
           </button>
           <button
             type="button"
+            aria-current={activeTab === "imap" ? "true" : undefined}
+            aria-pressed={activeTab === "imap"}
             onClick={() => setActiveTab("imap")}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               activeTab === "imap"
@@ -314,11 +321,16 @@ export default function InboxPage() {
             <Server className="w-4 h-4" />
             IMAP / SMTP
             {imapStatus?.connected && (
-              <span className="w-2 h-2 rounded-full bg-emerald-400 ml-0.5" />
+              <span className="inline-flex items-center gap-1 text-xs text-emerald-300">
+                <span aria-hidden="true" className="w-2 h-2 rounded-full bg-emerald-400" />
+                Connected
+              </span>
             )}
           </button>
           <button
             type="button"
+            aria-current={activeTab === "filters" ? "true" : undefined}
+            aria-pressed={activeTab === "filters"}
             onClick={() => setActiveTab("filters")}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               activeTab === "filters"
@@ -428,11 +440,11 @@ export default function InboxPage() {
                     data-testid="gmail-sync-button"
                   >
                     {syncGmailMutation.isPending ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
                     ) : (
                       <RefreshCw className="w-3.5 h-3.5" />
                     )}
-                    {syncGmailMutation.isPending ? "Syncing…" : "Sync now"}
+                    <span aria-live="polite">{syncGmailMutation.isPending ? "Syncing…" : "Sync now"}</span>
                   </Button>
                   <Button
                     variant="ghost"
@@ -770,7 +782,7 @@ function FilterSettingsTab() {
           {localSettings.subjectKeywords.map((kw) => (
             <span key={kw} className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-indigo-950/40 text-indigo-300 border border-indigo-800/30">
               {kw}
-              <button type="button" onClick={() => removeItem("subjectKeywords", kw)} className="text-indigo-400 hover:text-indigo-200 ml-0.5">
+              <button type="button" aria-label={`Remove subject keyword ${kw}`} onClick={() => removeItem("subjectKeywords", kw)} className="text-indigo-400 hover:text-indigo-200 ml-0.5">
                 <X className="w-3 h-3" />
               </button>
             </span>
@@ -802,7 +814,7 @@ function FilterSettingsTab() {
             {localSettings.fromAddresses.map((addr) => (
               <span key={addr} className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-violet-950/40 text-violet-300 border border-violet-800/30">
                 {addr}
-                <button type="button" onClick={() => removeItem("fromAddresses", addr)} className="text-violet-400 hover:text-violet-200 ml-0.5">
+                <button type="button" aria-label={`Remove sender ${addr}`} onClick={() => removeItem("fromAddresses", addr)} className="text-violet-400 hover:text-violet-200 ml-0.5">
                   <X className="w-3 h-3" />
                 </button>
               </span>
@@ -810,7 +822,7 @@ function FilterSettingsTab() {
           </div>
         )}
         {localSettings.fromAddresses.length === 0 && (
-          <p className="text-xs text-muted-foreground/60 italic">Matching any sender — add addresses to restrict</p>
+          <p className="text-xs text-muted-foreground italic">Matching any sender — add addresses to restrict</p>
         )}
         <div className="flex gap-2">
           <Input
@@ -838,7 +850,7 @@ function FilterSettingsTab() {
             {localSettings.bodyKeywords.map((kw) => (
               <span key={kw} className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-emerald-950/40 text-emerald-300 border border-emerald-800/30">
                 {kw}
-                <button type="button" onClick={() => removeItem("bodyKeywords", kw)} className="text-emerald-400 hover:text-emerald-200 ml-0.5">
+                <button type="button" aria-label={`Remove body keyword ${kw}`} onClick={() => removeItem("bodyKeywords", kw)} className="text-emerald-400 hover:text-emerald-200 ml-0.5">
                   <X className="w-3 h-3" />
                 </button>
               </span>
@@ -846,7 +858,7 @@ function FilterSettingsTab() {
           </div>
         )}
         {localSettings.bodyKeywords.length === 0 && (
-          <p className="text-xs text-muted-foreground/60 italic">No body filter — add keywords to require them in the email body</p>
+          <p className="text-xs text-muted-foreground italic">No body filter — add keywords to require them in the email body</p>
         )}
         <div className="flex gap-2">
           <Input
@@ -874,7 +886,7 @@ function FilterSettingsTab() {
             {localSettings.blockedBodyKeywords.map((kw) => (
               <span key={kw} className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-red-950/40 text-red-300 border border-red-800/30">
                 {kw}
-                <button type="button" onClick={() => removeItem("blockedBodyKeywords", kw)} className="text-red-400 hover:text-red-200 ml-0.5">
+                <button type="button" aria-label={`Remove blocked body keyword ${kw}`} onClick={() => removeItem("blockedBodyKeywords", kw)} className="text-red-400 hover:text-red-200 ml-0.5">
                   <X className="w-3 h-3" />
                 </button>
               </span>
@@ -882,7 +894,7 @@ function FilterSettingsTab() {
           </div>
         )}
         {localSettings.blockedBodyKeywords.length === 0 && (
-          <p className="text-xs text-muted-foreground/60 italic">No blocked keywords — individual job listings matching these are skipped</p>
+          <p className="text-xs text-muted-foreground italic">No blocked keywords — individual job listings matching these are skipped</p>
         )}
         <div className="flex gap-2">
           <Input
@@ -930,6 +942,8 @@ function FilterSettingsTab() {
               <button
                 key={mode}
                 type="button"
+                aria-pressed={localCompanySettings.mode === mode}
+                aria-current={localCompanySettings.mode === mode ? "true" : undefined}
                 onClick={() => setLocalCompanySettings((prev) => ({ ...prev, mode }))}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
                   localCompanySettings.mode === mode
@@ -946,7 +960,7 @@ function FilterSettingsTab() {
               </button>
             ))}
           </div>
-          <p className="text-xs text-muted-foreground/70">
+          <p className="text-xs text-muted-foreground">
             {localCompanySettings.mode === "off" && "No company filter — all companies visible."}
             {localCompanySettings.mode === "include" && "Only show jobs from companies in the list below."}
             {localCompanySettings.mode === "exclude" && "Hide jobs from companies in the list below."}
@@ -972,6 +986,7 @@ function FilterSettingsTab() {
                     {company}
                     <button
                       type="button"
+                      aria-label={`Remove company ${company}`}
                       onClick={() => removeCompany(company)}
                       className={`ml-0.5 ${localCompanySettings.mode === "include" ? "text-emerald-400 hover:text-emerald-200" : "text-red-400 hover:text-red-200"}`}
                     >
@@ -982,7 +997,7 @@ function FilterSettingsTab() {
               </div>
             )}
             {localCompanySettings.companies.length === 0 && (
-              <p className="text-xs text-muted-foreground/60 italic">
+              <p className="text-xs text-muted-foreground italic">
                 {localCompanySettings.mode === "include" ? "No companies added — add companies to show only their jobs" : "No companies blocked — add companies to hide their jobs"}
               </p>
             )}
@@ -1048,7 +1063,7 @@ function FilterSettingsTab() {
             </div>
           )}
           {localTitleExclude.keywords.length === 0 && (
-            <p className="text-xs text-muted-foreground/60 italic">
+            <p className="text-xs text-muted-foreground italic">
               No keywords blocked — add keywords to hide matching job titles
             </p>
           )}

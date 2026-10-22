@@ -102,12 +102,15 @@ export default function MetricsPage() {
           {/* Date range controls */}
           <div className="flex flex-col items-end gap-2 shrink-0">
             <div className="flex items-center gap-1.5">
-              {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
+              {isLoading && <span role="status" className="sr-only">Loading metrics</span>}
+              {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" aria-hidden="true" />}
               <div className="flex rounded-md overflow-hidden border border-border text-xs">
                 {PRESETS.map((p) => (
                   <button
                     key={p.mode}
                     type="button"
+                    aria-current={dateMode === p.mode ? "true" : undefined}
+                    aria-pressed={dateMode === p.mode}
                     onClick={() => setDateMode(p.mode)}
                     className={`px-2.5 py-1 transition-colors ${
                       dateMode === p.mode
@@ -120,6 +123,8 @@ export default function MetricsPage() {
                 ))}
                 <button
                   type="button"
+                  aria-current={dateMode === "custom" ? "true" : undefined}
+                  aria-pressed={dateMode === "custom"}
                   onClick={() => setDateMode("custom")}
                   className={`flex items-center gap-1 px-2.5 py-1 transition-colors ${
                     dateMode === "custom"
@@ -314,7 +319,7 @@ export default function MetricsPage() {
                 </div>
               )}
               {data.syncHistory.length === 0 && (
-                <p className="text-xs text-muted-foreground/60 italic">No syncs in this range — try a wider window or run a sync.</p>
+                <p className="text-xs text-muted-foreground italic">No syncs in this range — try a wider window or run a sync.</p>
               )}
             </div>
           </div>
