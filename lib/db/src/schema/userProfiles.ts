@@ -24,6 +24,7 @@ export const userProfilesTable = pgTable("user_profiles", {
   lastOnlineDiscoveryDuplicates: integer("last_online_discovery_duplicates").notNull().default(0),
   lastOnlineDiscoveryError: text("last_online_discovery_error"),
   companyFilterSettings: jsonb("company_filter_settings").$type<{
+    excludeWorkday?: boolean;
     mode: "off" | "include" | "exclude";
     companies: string[];
   }>().notNull().default({ mode: "off", companies: [] }),

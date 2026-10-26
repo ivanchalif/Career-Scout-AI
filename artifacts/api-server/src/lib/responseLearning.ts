@@ -114,7 +114,9 @@ export function evaluateResponses(
       reason = "Similar to jobs dismissed for their location";
     } else if (example.kind === "workday" && workday) {
       negative = 8 * recency;
-      strong = recency >= 0.5;
+      // Explicit ATS visibility settings keep these imports recoverable.
+      // Historical Workday feedback still ranks jobs, but must not drop them.
+      strong = false;
       reason = "Uses Workday, which you dismissed previously";
     }
     if (!positive && !negative) continue;

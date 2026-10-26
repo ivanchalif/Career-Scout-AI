@@ -26,3 +26,9 @@ Learning from job responses must apply consistently to future email and online i
 **Why:** The user requested using applied, dismissed, duplicate, and other responses to improve future filtering. A neutral action or mirrored listing must not accidentally eliminate relevant opportunities.
 
 **How to apply:** Derive signals from current saved actions so Undo and unapply remain effective. Keep adjustments bounded and separate from AI capability scores, show explanations, audit filtered email jobs, and do not retroactively remove saved jobs. Workday feedback requires a known Workday listing URL, not a textual guess.
+
+Workday exclusion is a reversible visibility preference, not an import ban.
+
+**Why:** The user explicitly chose to hide current and future Workday jobs while keeping them recoverable, rather than skipping future imports.
+
+**How to apply:** Retain detected Workday listings for review in Filtered and allow inclusion again through the saved dashboard filter. Do not let Workday dismissal history alone suppress imports; it may still affect ranking. Unknown ATS links remain eligible rather than guessing from a company name or a mention of Workday.

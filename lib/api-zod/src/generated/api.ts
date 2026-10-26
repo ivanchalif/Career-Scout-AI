@@ -261,6 +261,10 @@ export const ListPostingsResponseItem = zod.object({
     .describe("Profile match score used by online discovery"),
   filterReason: zod
     .object({
+      byAts: zod
+        .boolean()
+        .optional()
+        .describe("Hidden because the application URL uses Workday."),
       byCompany: zod.boolean(),
       companyReason: zod.string().nullable(),
       byTitle: zod.boolean(),
@@ -401,6 +405,10 @@ export const ListDeletedPostingsResponseItem = zod.object({
     .describe("Profile match score used by online discovery"),
   filterReason: zod
     .object({
+      byAts: zod
+        .boolean()
+        .optional()
+        .describe("Hidden because the application URL uses Workday."),
       byCompany: zod.boolean(),
       companyReason: zod.string().nullable(),
       byTitle: zod.boolean(),
@@ -533,6 +541,10 @@ export const GetPostingResponse = zod.object({
     .describe("Profile match score used by online discovery"),
   filterReason: zod
     .object({
+      byAts: zod
+        .boolean()
+        .optional()
+        .describe("Hidden because the application URL uses Workday."),
       byCompany: zod.boolean(),
       companyReason: zod.string().nullable(),
       byTitle: zod.boolean(),
@@ -780,6 +792,10 @@ export const UndoPostingDismissalResponse = zod.object({
     .describe("Profile match score used by online discovery"),
   filterReason: zod
     .object({
+      byAts: zod
+        .boolean()
+        .optional()
+        .describe("Hidden because the application URL uses Workday."),
       byCompany: zod.boolean(),
       companyReason: zod.string().nullable(),
       byTitle: zod.boolean(),
@@ -1236,6 +1252,12 @@ export const UpdateFilterSettingsResponse = zod.object({
  * @summary Get company filter settings
  */
 export const GetCompanyFilterSettingsResponse = zod.object({
+  excludeWorkday: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Hide verified Workday application links without deleting or skipping imports. Enabled when omitted.",
+    ),
   mode: zod.enum(["off", "include", "exclude"]),
   companies: zod.array(zod.string()),
 });
@@ -1244,11 +1266,23 @@ export const GetCompanyFilterSettingsResponse = zod.object({
  * @summary Update company filter settings
  */
 export const UpdateCompanyFilterSettingsBody = zod.object({
+  excludeWorkday: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Hide verified Workday application links without deleting or skipping imports. Enabled when omitted.",
+    ),
   mode: zod.enum(["off", "include", "exclude"]),
   companies: zod.array(zod.string()),
 });
 
 export const UpdateCompanyFilterSettingsResponse = zod.object({
+  excludeWorkday: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Hide verified Workday application links without deleting or skipping imports. Enabled when omitted.",
+    ),
   mode: zod.enum(["off", "include", "exclude"]),
   companies: zod.array(zod.string()),
 });
@@ -1503,6 +1537,10 @@ export const GetDashboardSummaryResponse = zod.object({
         .describe("Profile match score used by online discovery"),
       filterReason: zod
         .object({
+          byAts: zod
+            .boolean()
+            .optional()
+            .describe("Hidden because the application URL uses Workday."),
           byCompany: zod.boolean(),
           companyReason: zod.string().nullable(),
           byTitle: zod.boolean(),

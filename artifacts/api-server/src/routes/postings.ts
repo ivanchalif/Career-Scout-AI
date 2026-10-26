@@ -28,6 +28,7 @@ import { scorePosting, scorePostingBackground, extractJobListings } from "../lib
 import { fetchSingleEmail } from "../lib/gmailClient";
 import { isFuzzyDuplicate, sweepDuplicatesOf, runDedupSweep, dbNormalizeSql } from "../lib/dedup";
 import { logger } from "../lib/logger";
+import { isHiddenByWorkday } from "../lib/workdayFilter";
 import { fetchJobPageContent } from "../lib/pageScraper";
 import { buildDiscoveryCriteria, rankCandidate } from "../lib/onlineDiscovery";
 import multer from "multer";
@@ -201,6 +202,7 @@ router.get("/postings", requireAuth, async (req, res): Promise<void> => {
   );
 
   type FilterReason = {
+    byAts: boolean;
     byCompany: boolean;
     companyReason: string | null;
     byTitle: boolean;
@@ -233,8 +235,9 @@ router.get("/postings", requireAuth, async (req, res): Promise<void> => {
       : [];
     const byTitle = titleReasons.length > 0;
 
-    if (!byCompany && !byTitle) return null;
-    return { byCompany, companyReason, byTitle, titleReasons };
+    const byAts = isHiddenByWorkday(p, companyFilter);
+    if (!byCompany && !byTitle && !byAts) return null;
+    return { byCompany, companyReason, byTitle, titleReasons, byAts };
   };
 
   const filtered = postings.filter((p) => {

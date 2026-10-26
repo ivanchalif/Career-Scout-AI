@@ -66,7 +66,9 @@ describe("learning from job responses", () => {
 
   it("applies Workday feedback only to a verified Workday host, not an entire company or role", () => {
     const history = [example("workday", "One"), example("workday", "Two")];
-    expect(evaluateResponses({ ...candidate, link: "https://company.wd5.myworkdayjobs.com/en-US/jobs/job/1" }, history).suppress).toBe(true);
+    const workday = evaluateResponses({ ...candidate, link: "https://company.wd5.myworkdayjobs.com/en-US/jobs/job/1" }, history);
+    expect(workday.suppress).toBe(false);
+    expect(workday.adjustment).toBeLessThan(0);
     expect(evaluateResponses(candidate, history)).toMatchObject({ adjustment: 0, suppress: false });
     expect(evaluateResponses({ ...candidate, company: "Workday", title: "Workday Product Manager" }, history).suppress).toBe(false);
     expect(isWorkdayListing("https://myworkdayjobs.com.evil.example/job")).toBe(false);

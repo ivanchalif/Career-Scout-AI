@@ -646,6 +646,7 @@ function FilterSettingsTab() {
       onSuccess: (data) => {
         qc.setQueryData(getGetCompanyFilterSettingsQueryKey(), data);
         qc.invalidateQueries({ queryKey: ["/api/postings"] });
+        qc.invalidateQueries({ queryKey: ["/api/dashboard/summary"] });
         toast({ title: "Company filter saved", description: "Your company filter has been updated." });
       },
       onError: () => {

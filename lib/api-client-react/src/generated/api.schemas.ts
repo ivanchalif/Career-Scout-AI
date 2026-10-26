@@ -215,6 +215,8 @@ export interface PostingFeedback {
 }
 
 export interface PostingFilterReason {
+  /** Hidden because the application URL uses Workday. */
+  byAts?: boolean;
   byCompany: boolean;
   /** @nullable */
   companyReason: string | null;
@@ -690,6 +692,8 @@ export const CompanyFilterSettingsMode = {
 } as const;
 
 export interface CompanyFilterSettings {
+  /** Hide verified Workday application links without deleting or skipping imports. Enabled when omitted. */
+  excludeWorkday?: boolean;
   mode: CompanyFilterSettingsMode;
   companies: string[];
 }

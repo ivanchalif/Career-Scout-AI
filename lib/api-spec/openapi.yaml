@@ -1445,6 +1445,9 @@ components:
     PostingFilterReason:
       type: object
       properties:
+        byAts:
+          type: boolean
+          description: Hidden because the application URL uses Workday.
         byCompany:
           type: boolean
         companyReason:
@@ -2010,6 +2013,9 @@ components:
     CompanyFilterSettings:
       type: object
       properties:
+        excludeWorkday:
+          type: boolean
+          description: Hide verified Workday application links without deleting or skipping imports. Enabled when omitted.
         mode:
           type: string
           enum: [off, include, exclude]

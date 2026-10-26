@@ -161,12 +161,13 @@ const emailFilterSettingsSchema = z.object({
 });
 
 const companyFilterSettingsSchema = z.object({
+  excludeWorkday: z.boolean().optional(),
   mode: z.enum(["off", "include", "exclude"]).default("off"),
   companies: z.array(z.string()).default([]),
 });
 
 const EMPTY_EMAIL_FILTER = { subjectKeywords: [], fromAddresses: [], bodyKeywords: [], blockedBodyKeywords: [] };
-const EMPTY_COMPANY_FILTER = { mode: "off" as const, companies: [] };
+const EMPTY_COMPANY_FILTER = { mode: "off" as const, companies: [], excludeWorkday: true };
 
 router.get("/filter-settings", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId;
@@ -205,7 +206,7 @@ router.get("/company-filter-settings", requireAuth, async (req, res): Promise<vo
     res.json(EMPTY_COMPANY_FILTER);
     return;
   }
-  res.json(profile.companyFilterSettings ?? EMPTY_COMPANY_FILTER);
+  res.json({ excludeWorkday: true, ...(profile.companyFilterSettings ?? EMPTY_COMPANY_FILTER) });
 });
 
 router.put("/company-filter-settings", requireAuth, async (req, res): Promise<void> => {
@@ -216,15 +217,20 @@ router.put("/company-filter-settings", requireAuth, async (req, res): Promise<vo
     return;
   }
 
+  const [existingProfile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, userId));
+  const settings = {
+    ...parsed.data,
+    excludeWorkday: parsed.data.excludeWorkday ?? existingProfile?.companyFilterSettings?.excludeWorkday ?? true,
+  };
   await db
     .insert(userProfilesTable)
-    .values({ userId, companyFilterSettings: parsed.data })
+    .values({ userId, companyFilterSettings: settings })
     .onConflictDoUpdate({
       target: userProfilesTable.userId,
-      set: { companyFilterSettings: parsed.data, updatedAt: new Date() },
+      set: { companyFilterSettings: settings, updatedAt: new Date() },
     });
 
-  res.json(parsed.data);
+  res.json(settings);
 });
 
 const titleExcludeKeywordsSchema = z.object({

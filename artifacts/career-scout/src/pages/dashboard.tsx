@@ -332,6 +332,7 @@ export default function DashboardPage() {
       return;
     }
     const newSettings = {
+      ...current,
       mode: "exclude" as const,
       companies: [...(current.mode === "exclude" ? current.companies : []), companyName],
     };
@@ -1670,6 +1671,14 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {companyFilterQ.data?.excludeWorkday !== false && !companyFilterQ.isLoading && !companyFilterQ.isError && (
+          <p className="text-xs text-muted-foreground mb-3" data-testid="workday-filter-notice">
+            Workday ATS jobs are hidden.{" "}
+            <Link href="/filtered" className="underline underline-offset-2">Review them in Filtered</Link>
+            {" "}or turn off “Hide Workday ATS” in Filters to show them again.
+          </p>
+        )}
+
         {/* View tabs + Filters — single row */}
         <div className="flex items-center border-b border-border mb-5">
           {/* Filters on left — icon-only on mobile */}
@@ -1760,6 +1769,35 @@ export default function DashboardPage() {
 
             {showFilters && (
               <div className="flex flex-wrap items-end gap-3 mb-4 p-4 bg-card border border-border rounded-lg">
+                <div className="basis-full space-y-1 border-b border-border pb-3">
+                  <label className="inline-flex items-center gap-2 text-sm font-medium">
+                    <input
+                      type="checkbox"
+                      checked={companyFilterQ.data?.excludeWorkday !== false}
+                      disabled={companyFilterQ.isLoading || companyFilterQ.isError || updateCompanyFilterMutation.isPending}
+                      data-testid="exclude-workday-toggle"
+                      onChange={(event) => {
+                        const excludeWorkday = event.target.checked;
+                        const settings = { ...(companyFilterQ.data ?? { mode: "off" as const, companies: [] }), excludeWorkday };
+                        updateCompanyFilterMutation.mutate({ data: settings }, {
+                          onSuccess: (saved) => {
+                            qc.setQueryData(getGetCompanyFilterSettingsQueryKey(), saved);
+                            qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
+                            qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+                            toast({ title: excludeWorkday ? "Workday jobs hidden" : "Workday jobs included", description: "No job postings were deleted." });
+                          },
+                          onError: () => toast({ title: "Filter not saved", description: "Please try again.", variant: "destructive" }),
+                        });
+                      }}
+                    />
+                    Hide Workday ATS
+                    {updateCompanyFilterMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />}
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    Excludes known Workday application links, not roles that simply mention Workday.
+                    {" "}<Link href="/filtered" className="underline underline-offset-2">Hidden jobs stay in Filtered</Link>; turn this off to show them again.
+                  </p>
+                </div>
                 <div className="flex-1 min-w-48 space-y-1">
                   <Label className="text-xs text-muted-foreground">Search</Label>
                   <div className="relative">

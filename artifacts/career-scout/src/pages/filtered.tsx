@@ -225,6 +225,7 @@ export default function FilteredPage() {
         if (cutoff && new Date(posting.createdAt).getTime() < cutoff) return false;
         if (suppReason === "company" && !filterReason?.byCompany) return false;
         if (suppReason === "title" && !filterReason?.byTitle) return false;
+        if (suppReason === "workday" && !filterReason?.byAts) return false;
         if (q) {
           const haystack = `${posting.title} ${posting.company} ${posting.location ?? ""}`.toLowerCase();
           if (!haystack.includes(q)) return false;
@@ -319,6 +320,7 @@ export default function FilteredPage() {
               reasonOptions={[
                 { value: "company", label: "Company filter" },
                 { value: "title", label: "Title keyword" },
+                { value: "workday", label: "Workday ATS" },
               ]}
             />
 
@@ -376,6 +378,9 @@ export default function FilteredPage() {
                         </div>
                         {filterReason && (
                           <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                            {filterReason.byAts && (
+                              <span className="sem-badge" data-tone="hidden" title="Turn off Hide Workday ATS in Dashboard filters to show this job again.">Workday ATS</span>
+                            )}
                             {filterReason.byCompany && (
                               <span
                                 className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-950/40 text-amber-400 border border-amber-800/30"
