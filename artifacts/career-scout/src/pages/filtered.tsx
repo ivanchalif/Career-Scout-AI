@@ -14,6 +14,9 @@ import type { FilteredEmailReason } from "@workspace/api-client-react";
 import Layout from "@/components/layout";
 import { PageHeader } from "@/components/page-header";
 import { fitTier } from "@/components/fit-score";
+import {
+  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+} from "@/components/ui/select";
 
 type Tab = "suppressed" | "skipped" | "sync-log";
 type DateRange = "today" | "7d" | "30d" | "all";
@@ -110,16 +113,23 @@ function FilterBar({
       </div>
 
       {/* Reason / outcome dropdown */}
-      <select
-        value={reasonValue}
-        onChange={(e) => onReason(e.target.value)}
-        className="shrink-0 text-sm bg-muted/40 border border-border rounded-lg px-2.5 py-1.5 text-muted-foreground focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
+      <Select
+        value={reasonValue || "all"}
+        onValueChange={(value) => onReason(value === "all" ? "" : value)}
       >
-        <option value="">{allReasonLabel}</option>
-        {reasonOptions.map((o) => (
-          <option key={o.value} value={o.value}>{o.label}</option>
-        ))}
-      </select>
+        <SelectTrigger
+          aria-label={allReasonLabel === "All filter types" ? "Filter types" : allReasonLabel}
+          className="w-full sm:w-auto sm:min-w-40 shrink-0 gap-2 h-auto bg-muted/40 border-border rounded-lg px-2.5 py-1.5 text-foreground"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">{allReasonLabel}</SelectItem>
+          {reasonOptions.map((o) => (
+            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }
