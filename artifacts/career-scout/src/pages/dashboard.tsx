@@ -2201,11 +2201,18 @@ export default function DashboardPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuSub>
-                          <DropdownMenuSubTrigger data-testid={`posting-dismiss-with-reason-${posting.id}`}>Dismiss with reason</DropdownMenuSubTrigger>
+                          <DropdownMenuSubTrigger data-testid={`posting-dismiss-with-reason-${posting.id}`}>Dismiss</DropdownMenuSubTrigger>
                           <DropdownMenuSubContent>
                             {dismissReasons.map((r) => (
                               <DropdownMenuItem key={r.kind} onSelect={() => void decision.dismiss(posting.id, r.kind)}>{r.label}</DropdownMenuItem>
                             ))}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onSelect={() => flagAsDuplicate(posting.id)} data-testid={`posting-flag-dupe-${posting.id}`}>
+                              <Copy className="w-3.5 h-3.5 mr-2" />Flag as duplicate
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => onClose(posting.id)} disabled={closeMutation.isPending} data-testid={`posting-close-${posting.id}`}>
+                              <Archive className="w-3.5 h-3.5 mr-2" />Mark as closed
+                            </DropdownMenuItem>
                           </DropdownMenuSubContent>
                         </DropdownMenuSub>
                         <DropdownMenuItem asChild>
@@ -2219,14 +2226,8 @@ export default function DashboardPage() {
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem onSelect={() => flagAsDuplicate(posting.id)} data-testid={`posting-flag-dupe-${posting.id}`}>
-                          <Copy className="w-3.5 h-3.5 mr-2" />Flag as duplicate
-                        </DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => blockCompany(posting.company)} disabled={updateCompanyFilterMutation.isPending} data-testid={`posting-block-company-${posting.id}`}>
                           <Ban className="w-3.5 h-3.5 mr-2" />Block {posting.company}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => onClose(posting.id)} disabled={closeMutation.isPending} data-testid={`posting-close-${posting.id}`}>
-                          <Archive className="w-3.5 h-3.5 mr-2" />Mark as closed
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
