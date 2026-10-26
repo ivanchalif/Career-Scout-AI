@@ -30,7 +30,6 @@ import {
   getGetTitleExcludeSettingsQueryKey,
   useListDeletedPostings,
   useRestorePosting,
-  useClosePosting,
   useReopenPosting,
   getListPostingsQueryKey,
   getListDeletedPostingsQueryKey,
@@ -67,7 +66,8 @@ import { StatusBadge } from "@/components/status-badge";
 import { PostingDecisionControls } from "@/components/posting-decision-controls";
 import { PreferenceBadge } from "@/components/preference-badge";
 import { FitScoreBadge, fitTier } from "@/components/fit-score";
-import { usePostingDecision, dismissReasons, reasonLabel } from "@/hooks/use-posting-decision";
+import { usePostingDecision, reasonLabel } from "@/hooks/use-posting-decision";
+import { DismissReasonItems } from "@/components/dismiss-reason-items";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
   DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
@@ -233,15 +233,7 @@ export default function DashboardPage() {
   }, []);
 
   async function flagAsDuplicate(postingId: number) {
-    const token = await getToken();
-    const res = await fetch(`/api/postings/${postingId}/flag-duplicate`, {
-      method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (!res.ok) {
-      toast({ title: "Couldn't remove posting", description: `Server returned ${res.status}. Try refreshing the page.`, variant: "destructive" });
-      return;
-    }
+    if (!await decision.dismiss(postingId, "duplicate")) return;
     setNearDupMap((prev) => {
       const next = new Map(prev);
       const entry = next.get(postingId);
@@ -250,9 +242,6 @@ export default function DashboardPage() {
       if (pairedId !== undefined) next.delete(pairedId);
       return next;
     });
-    qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
-    qc.invalidateQueries({ queryKey: getListDeletedPostingsQueryKey() });
-    qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
   }
 
   function dismissNearDup(postingId: number) {
@@ -388,7 +377,6 @@ export default function DashboardPage() {
   const decision = usePostingDecision();
   const markAppliedMutation = useMarkApplied();
   const restoreMutation = useRestorePosting();
-  const closeMutation = useClosePosting();
   const reopenMutation = useReopenPosting();
   const syncMutation = useSyncGmail();
   const disconnectMutation = useDisconnectGmail();
@@ -1027,21 +1015,6 @@ export default function DashboardPage() {
           toast({ title: "Restored to Active", description: "This job is back in your Active list." });
         },
         onError: () => toast({ title: "Could not restore", description: "The job is still in Deleted. Please try again.", variant: "destructive" }),
-      }
-    );
-  }
-
-  async function onClose(id: number) {
-    await closeMutation.mutateAsync(
-      { id },
-      {
-        onSuccess: () => {
-          qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
-          qc.invalidateQueries({ queryKey: getListDeletedPostingsQueryKey() });
-          qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
-          toast({ title: "Marked as closed", description: "Job posting archived. It can re-import if the role reopens." });
-        },
-        onError: () => toast({ title: "Error", description: "Failed to archive posting.", variant: "destructive" }),
       }
     );
   }
@@ -2203,16 +2176,11 @@ export default function DashboardPage() {
                         <DropdownMenuSub>
                           <DropdownMenuSubTrigger data-testid={`posting-dismiss-with-reason-${posting.id}`}>Dismiss</DropdownMenuSubTrigger>
                           <DropdownMenuSubContent>
-                            {dismissReasons.map((r) => (
-                              <DropdownMenuItem key={r.kind} onSelect={() => void decision.dismiss(posting.id, r.kind)}>{r.label}</DropdownMenuItem>
-                            ))}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onSelect={() => flagAsDuplicate(posting.id)} data-testid={`posting-flag-dupe-${posting.id}`}>
-                              <Copy className="w-3.5 h-3.5 mr-2" />Flag as duplicate
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => onClose(posting.id)} disabled={closeMutation.isPending} data-testid={`posting-close-${posting.id}`}>
-                              <Archive className="w-3.5 h-3.5 mr-2" />Mark as closed
-                            </DropdownMenuItem>
+                            <DismissReasonItems
+                              onSelect={(kind) => kind === "duplicate" ? flagAsDuplicate(posting.id) : decision.dismiss(posting.id, kind)}
+                              disabled={decision.pending}
+                              testId={(kind) => kind === "duplicate" ? `posting-flag-dupe-${posting.id}` : kind === "already_closed" ? `posting-close-${posting.id}` : `posting-dismiss-reason-${kind}-${posting.id}`}
+                            />
                           </DropdownMenuSubContent>
                         </DropdownMenuSub>
                         <DropdownMenuItem asChild>
@@ -2332,8 +2300,9 @@ export default function DashboardPage() {
                           type="button"
                           className={`font-medium underline underline-offset-2 ${isAppliedPair ? "text-orange-300 hover:text-orange-100" : "hover:text-amber-200"}`}
                           onClick={() => flagAsDuplicate(posting.id)}
+                          disabled={decision.pending}
                         >
-                          Remove this
+                          Flag as duplicate
                         </button>
                         <span className={`select-none ${isAppliedPair ? "text-orange-800/60" : "text-amber-800/60"}`}>·</span>
                         <button

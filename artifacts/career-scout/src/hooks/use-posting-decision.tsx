@@ -16,23 +16,12 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "@/hooks/use-toast";
-
-export type DismissReason = "not_my_role" | "wrong_location" | "already_closed" | "workday";
-
-export const dismissReasons: Array<{ kind: DismissReason; label: string }> = [
-  { kind: "not_my_role", label: "Not my role" },
-  { kind: "wrong_location", label: "Wrong location" },
-  { kind: "already_closed", label: "Already closed" },
-  { kind: "workday", label: "Workday" },
-];
-
-export function reasonLabel(kind: string): string {
-  return dismissReasons.find((r) => r.kind === kind)?.label ?? (kind === "more_like_this" ? "More like this" : kind);
-}
+import { DismissReasonItems } from "@/components/dismiss-reason-items";
+import { reasonLabel, type DismissReason } from "@/lib/dismissal-reasons";
+export { dismissReasons, reasonLabel, type DismissReason } from "@/lib/dismissal-reasons";
 
 const TOAST_MS = 3000;
 
@@ -113,11 +102,7 @@ function DismissToastBody({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="z-[110]">
-          {dismissReasons.map((r) => (
-            <DropdownMenuItem key={r.kind} onSelect={() => void pick(r.kind)} data-testid={`dismiss-reason-${r.kind}-${id}`}>
-              {r.label}
-            </DropdownMenuItem>
-          ))}
+          <DismissReasonItems onSelect={pick} disabled={busy} testId={(kind) => `dismiss-reason-${kind}-${id}`} />
         </DropdownMenuContent>
       </DropdownMenu>
       {error && <p className="w-full text-xs text-red-400" role="alert">{error}</p>}

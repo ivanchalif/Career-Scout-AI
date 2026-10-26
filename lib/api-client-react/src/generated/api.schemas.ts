@@ -206,6 +206,7 @@ export const PostingFeedbackKind = {
   wrong_location: "wrong_location",
   already_closed: "already_closed",
   workday: "workday",
+  duplicate: "duplicate",
   more_like_this: "more_like_this",
 } as const;
 
@@ -264,6 +265,7 @@ export const PostingFeedbackInputKind = {
   wrong_location: "wrong_location",
   already_closed: "already_closed",
   workday: "workday",
+  duplicate: "duplicate",
   more_like_this: "more_like_this",
 } as const;
 
@@ -283,6 +285,7 @@ export const PostingDismissalInputReason = {
   wrong_location: "wrong_location",
   already_closed: "already_closed",
   workday: "workday",
+  duplicate: "duplicate",
 } as const;
 
 export interface PostingDismissalInput {
@@ -304,6 +307,7 @@ export const DismissalReasonInputReason = {
   wrong_location: "wrong_location",
   already_closed: "already_closed",
   workday: "workday",
+  duplicate: "duplicate",
 } as const;
 
 export interface DismissalReasonInput {

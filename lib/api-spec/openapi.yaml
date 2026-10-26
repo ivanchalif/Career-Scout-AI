@@ -1395,7 +1395,7 @@ components:
       properties:
         kind:
           type: string
-          enum: [not_my_role, wrong_location, already_closed, workday, more_like_this]
+          enum: [not_my_role, wrong_location, already_closed, workday, duplicate, more_like_this]
         createdAt:
           type: string
           format: date-time
@@ -1406,7 +1406,7 @@ components:
       properties:
         kind:
           type: string
-          enum: [not_my_role, wrong_location, already_closed, workday, more_like_this]
+          enum: [not_my_role, wrong_location, already_closed, workday, duplicate, more_like_this]
       required: [kind]
 
     PostingDismissalInput:
@@ -1414,7 +1414,7 @@ components:
       properties:
         reason:
           type: ["string", "null"]
-          enum: [not_my_role, wrong_location, already_closed, workday, null]
+          enum: [not_my_role, wrong_location, already_closed, workday, duplicate, null]
 
     PostingDismissal:
       type: object
@@ -1433,7 +1433,7 @@ components:
         undoToken: { type: string, minLength: 1 }
         reason:
           type: string
-          enum: [not_my_role, wrong_location, already_closed, workday]
+          enum: [not_my_role, wrong_location, already_closed, workday, duplicate]
       required: [undoToken, reason]
 
     DismissalUndoInput:

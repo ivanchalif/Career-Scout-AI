@@ -21,8 +21,9 @@ import { StatusBadge } from "@/components/status-badge";
 import { PostingDecisionControls } from "@/components/posting-decision-controls";
 import { PreferenceBadge } from "@/components/preference-badge";
 import { ScoreBreakdown, ScoreStatusPill, fitTier } from "@/components/fit-score";
-import { usePostingDecision, dismissReasons } from "@/hooks/use-posting-decision";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { usePostingDecision } from "@/hooks/use-posting-decision";
+import { DismissReasonItems } from "@/components/dismiss-reason-items";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 function humanizeAvailabilityReason(reason: string): string {
   const known: Record<string, string> = {
@@ -229,11 +230,11 @@ export default function PostingDetailPage({ id }: { id: number }) {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      {dismissReasons.map((r) => (
-                        <DropdownMenuItem key={r.kind} onSelect={async () => { if (await decision.dismiss(id, r.kind)) setLocation("/dashboard"); }}>
-                          Dismiss: {r.label}
-                        </DropdownMenuItem>
-                      ))}
+                      <DismissReasonItems
+                        disabled={decision.pending}
+                        onSelect={async (kind) => { if (await decision.dismiss(id, kind)) setLocation("/dashboard"); }}
+                        testId={(kind) => `detail-dismiss-reason-${kind}-${id}`}
+                      />
                     </DropdownMenuContent>
                   </DropdownMenu>
                   <Button

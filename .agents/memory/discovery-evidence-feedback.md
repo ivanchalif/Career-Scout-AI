@@ -21,6 +21,12 @@ Dismissal alone is not negative match feedback. Reasons are optional and coupled
 
 **How to apply:** Keep ordinary dismissals neutral, preserve job content for recovery, and treat Undo as reversal of the entire dismissal operation.
 
+Dismissal choices and labels must be uniform across every marking entry point, before and after dismissal, including duplicate-review shortcuts.
+
+**Why:** The user clarified that the post-dismissal reason picker is included, then reiterated that reasons should be uniform across all ways of marking. Fixing only the overflow menu or a single missing option is insufficient.
+
+**How to apply:** Treat all reason pickers as first-class entry points with the same choices, ordering and labels. Avoid synonymous closed options with different side effects. Duplicate marking must preserve dismissal Undo, job content and prior feedback rather than invoking irreversible cleanup through a shortcut.
+
 Learning from job responses must apply consistently to future email and online imports. Applications and explicit likes are positive examples; generic dismissals and duplicate reports suppress repeated listings without implying dislike of the role or company. Filtering a broader pattern requires repeated independent, specific negative responses, with matching positive evidence preventing that exclusion.
 
 **Why:** The user requested using applied, dismissed, duplicate, and other responses to improve future filtering. A neutral action or mirrored listing must not accidentally eliminate relevant opportunities.
