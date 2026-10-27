@@ -20,6 +20,10 @@ author = "agent"
 task = "workflow.run"
 args = "api-server-tests"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "dismissal-regressions"
+
 [[workflows.workflow]]
 name = "api-server-tests"
 author = "agent"
@@ -27,6 +31,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pnpm --filter @workspace/api-server test"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "dismissal-regressions"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node --test artifacts/career-scout/tests/*.test.mjs && PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=\"${PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH:-$(command -v chromium || true)}\" pnpm --filter @workspace/career-scout test:dismissal"
 
 [workflows.workflow.metadata]
 isValidation = true

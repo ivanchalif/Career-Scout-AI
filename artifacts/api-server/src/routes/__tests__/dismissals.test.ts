@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import express from "express";
 import type { NextFunction, Request, Response } from "express";
@@ -115,8 +115,13 @@ function makeTransaction(
   return tx;
 }
 
+let dismissalRouter: express.Router;
+
+beforeAll(async () => {
+  ({ default: dismissalRouter } = await import("../dismissals"));
+});
+
 async function makeApp() {
-  const { default: dismissalRouter } = await import("../dismissals");
   const app = express();
   app.use(express.json());
   app.use(dismissalRouter);
@@ -169,7 +174,7 @@ describe("reversible posting dismissals", () => {
     expect(updateValues[0]).not.toHaveProperty("fullDescription");
   });
 
-  it.each(["wrong_location", "workday", "duplicate"])("snapshots feedback before setting optional reason %s", async (reason) => {
+  it.each(["not_my_role", "wrong_location", "already_closed", "workday", "duplicate"])("snapshots feedback before setting optional reason %s", async (reason) => {
     const priorCreatedAt = new Date("2024-11-10T11:12:13.000Z");
     const newCreatedAt = new Date("2026-01-05T06:07:08.000Z");
     const tx = makeTransaction(
@@ -193,7 +198,7 @@ describe("reversible posting dismissals", () => {
     expect(tx.update).toHaveBeenCalledTimes(1);
   });
 
-  it.each(["wrong_location", "workday", "duplicate"])("sets dismissal reason %s only for the current token and preserves the original snapshot", async (reason) => {
+  it.each(["not_my_role", "wrong_location", "already_closed", "workday", "duplicate"])("sets dismissal reason %s only for the current token and preserves the original snapshot", async (reason) => {
     const snapshot = { kind: "more_like_this", createdAt: "2024-11-10T11:12:13.000Z" };
     const lockCalls: string[] = [];
     const insertValues: Record<string, unknown>[] = [];
@@ -246,6 +251,57 @@ describe("reversible posting dismissals", () => {
     expect(lockCalls).toEqual(["update"]);
     expect(tx.insert).not.toHaveBeenCalled();
     expect(tx.update).not.toHaveBeenCalled();
+  });
+
+  it("keeps the original snapshot through multiple reason changes and restores its exact timestamp on Undo", async () => {
+    const original = { kind: "more_like_this", createdAt: new Date("2024-11-10T11:12:13.000Z") };
+    const updateValues: Record<string, unknown>[] = [];
+    makeTransaction([[activePosting], [original]], { updateValues });
+    const app = await makeApp();
+    const dismissed = await request(app).post("/postings/7/dismiss").send({ reason: null });
+    expect(dismissed.status).toBe(200);
+    const token = dismissed.body.undoToken;
+    const storedPosting = { ...activePosting, ...updateValues[0] };
+    expect(storedPosting.dismissalPreviousFeedback).toEqual({
+      kind: original.kind, createdAt: original.createdAt.toISOString(),
+    });
+
+    for (const kind of ["not_my_role", "already_closed", "duplicate"]) {
+      const reasonWrites: Record<string, unknown>[] = [];
+      const tx = makeTransaction([[storedPosting]], {
+        updateValues: reasonWrites,
+        insertReturnedRows: [[{ kind, createdAt: new Date("2026-01-05T06:07:08.000Z") }]],
+      });
+      const changed = await request(app).put("/postings/7/dismissal-reason")
+        .send({ undoToken: token, reason: kind });
+      expect(changed.status).toBe(200);
+      expect(changed.body).toMatchObject({ undoToken: token, feedback: { kind } });
+      // The snapshot and token must not be replaced by a later reason.
+      expect(reasonWrites).toEqual([]);
+      expect(tx.delete).not.toHaveBeenCalled();
+    }
+
+    const feedbackWrites: Record<string, unknown>[] = [];
+    const restoreWrites: Record<string, unknown>[] = [];
+    makeTransaction([[storedPosting]], { insertValues: feedbackWrites, updateValues: restoreWrites });
+    mockGetPostingWithReport.mockResolvedValue({
+      posting: {
+        ...activePosting, title: "Test-owned role", company: "Test-owned company",
+        fullDescription: "Retained", extractedSkills: [], source: "manual",
+        createdAt: new Date("2025-01-01T00:00:00.000Z"),
+      },
+      report: null, scoreStatus: "pending", feedback: original,
+      sourceName: null, onlineMatchScore: null,
+    });
+    const undone = await request(app).post("/postings/7/undo-dismissal").send({ undoToken: token });
+    expect(undone.status).toBe(200);
+    expect(undone.body.feedback).toEqual({ kind: original.kind, createdAt: original.createdAt.toISOString() });
+    expect(feedbackWrites).toEqual([{
+      userId: "owner-7", jobPostingId: 7, kind: original.kind, createdAt: original.createdAt,
+    }]);
+    expect(restoreWrites[0]).toMatchObject({
+      deletedAt: null, dismissalUndoToken: null, dismissalPreviousFeedback: null,
+    });
   });
 
   it("rejects a stale undo token without modifying posting or feedback", async () => {

@@ -7,6 +7,8 @@ const baseURL = devDomain
 
 export default defineConfig({
   testDir: "./e2e",
+  // This isolated suite has its own server and does not use saved credentials.
+  testIgnore: /dismissal\.spec\.ts/,
   timeout: 60_000,
   retries: 1,
   globalSetup: "./e2e/global-setup.ts",

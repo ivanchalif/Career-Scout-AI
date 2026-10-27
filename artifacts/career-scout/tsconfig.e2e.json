@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["e2e/**/*.ts", "e2e/**/*.tsx", "playwright*.config.ts"],
+  "references": [
+    { "path": "../../lib/api-client-react" },
+    { "path": "../../lib/object-storage-web" }
+  ]
+}
