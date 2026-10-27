@@ -4,6 +4,7 @@ import { shadcn } from "@clerk/themes";
 import { Switch, Route, Redirect, useLocation, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
+import { DismissalDialogProvider } from "@/components/dismissal-dialog-provider";
 import LandingPage from "@/pages/landing";
 import DashboardPage from "@/pages/dashboard";
 import PostingDetailPage from "@/pages/posting-detail";
@@ -213,6 +214,7 @@ function ClerkProviderWithRoutes() {
       <QueryClientProvider client={queryClient}>
         <ApiAuthBridge />
         <ClerkQueryClientCacheInvalidator />
+        <DismissalDialogProvider>
         <Switch>
           <Route path="/" component={HomeRoute} />
           <Route path="/sign-in/*?" component={SignInPage} />
@@ -256,6 +258,7 @@ function ClerkProviderWithRoutes() {
           </Route>
           <Route component={NotFound} />
         </Switch>
+        </DismissalDialogProvider>
         <Toaster />
       </QueryClientProvider>
     </ClerkProvider>

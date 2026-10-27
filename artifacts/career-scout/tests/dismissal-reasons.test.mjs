@@ -22,7 +22,7 @@ test("other feedback still has a readable label", () => {
 
 test("every reason picker uses the shared renderer instead of a local list", async () => {
   for (const path of [
-    "../src/hooks/use-posting-decision.tsx",
+    "../src/components/dismissal-dialog-provider.tsx",
     "../src/pages/dashboard.tsx",
     "../src/pages/posting-detail.tsx",
   ]) {
@@ -30,6 +30,20 @@ test("every reason picker uses the shared renderer instead of a local list", asy
     assert.match(source, /<DismissReasonItems\b/, path);
     assert.doesNotMatch(source, /dismissReasons\.map/, path);
   }
+});
+
+test("dismissal prompt is persistent and mounted outside routes", async () => {
+  const dialog = await readFile(new URL("../src/components/dismissal-dialog-provider.tsx", import.meta.url), "utf8");
+  const app = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const hook = await readFile(new URL("../src/hooks/use-posting-decision.tsx", import.meta.url), "utf8");
+  assert.match(dialog, /<Dialog open/);
+  assert.doesNotMatch(dialog, /setTimeout|setInterval|TOAST_MS/);
+  assert.match(dialog, /undoToken: token, reason: kind/);
+  assert.match(dialog, /setToken\(result\.undoToken \|\| token\)/);
+  assert.match(dialog, /undoToken: token \}/);
+  assert.match(app, /<DismissalDialogProvider>\s*<Switch>/);
+  assert.match(hook, /showDismissalDialog\(\{ id, undoToken: res\.undoToken/);
+  assert.doesNotMatch(hook, /DismissToastBody|TOAST_MS/);
 });
 
 test("duplicate-review shortcut uses the reversible reason flow too", async () => {

@@ -6,7 +6,7 @@
 - [OpenAPI codegen contract sync](openapi-codegen-contract-sync.md) — regenerate only after the spec reflects all shipped typed routes, or codegen can silently remove active client hooks.
 - [Online discovery source lifecycle](online-discovery-source-lifecycle.md) — suppress pauses a configured source; remove deletes only its config and never imported job history.
 - [Discovery evidence and feedback](discovery-evidence-feedback.md) — uncertain facts stay uncertain; freshness and feedback rank results without broad exclusions.
-- [Interactive toast timing](interactive-toast-timing.md) — portaled menus can defeat duration-only pauses; hold automatic dismissal while controls are in use.
+- [Dismissal dialog behavior](interactive-toast-timing.md) — persistent dialog like the applied prompt; preserve optional reasons and Undo across card removal and navigation.
 - [Cold-start regression tests](cold-start-tests.md) — initial router imports can exceed a test’s timeout; keep expensive imports in setup.
 - [Job score communication](job-score-communication.md) — explain search and fit as independent stages; low fit is not an error and should not use red styling.
 - [Semantic state meaning](semantic-state-meaning.md) — distinguish reversible hidden states and uncertain availability from concrete errors or removals.
