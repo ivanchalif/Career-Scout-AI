@@ -33,6 +33,12 @@ Learning from job responses must apply consistently to future email and online i
 
 **How to apply:** Derive signals from current saved actions so Undo and unapply remain effective. Keep adjustments bounded and separate from AI capability scores, show explanations, audit filtered email jobs, and do not retroactively remove saved jobs. Workday feedback requires a known Workday listing URL, not a textual guess.
 
+Marking a job as applied must offer, not automatically save, an additional “More like this” preference.
+
+**Why:** The user explicitly requested a separate optional choice after applying; applying and explicit preference are distinct responses.
+
+**How to apply:** Prompt only after the application status is successfully saved, skip an existing explicit like, and keep applied status intact when the user declines, closes the prompt, or preference saving fails. Removing applied status must not silently remove an explicit like.
+
 Workday exclusion is a reversible visibility preference, not an import ban.
 
 **Why:** The user explicitly chose to hide current and future Workday jobs while keeping them recoverable, rather than skipping future imports.

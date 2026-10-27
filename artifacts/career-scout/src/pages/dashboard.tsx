@@ -68,6 +68,8 @@ import { PreferenceBadge } from "@/components/preference-badge";
 import { FitScoreBadge, fitTier } from "@/components/fit-score";
 import { usePostingDecision, reasonLabel } from "@/hooks/use-posting-decision";
 import { DismissReasonItems } from "@/components/dismiss-reason-items";
+import { AppliedPreferenceDialog } from "@/components/applied-preference-dialog";
+import { readDashboardSorts, saveDashboardSort, type DashboardSorts, type DashboardView } from "@/lib/dashboard-sorts";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
   DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
@@ -153,19 +155,27 @@ let _dedupSweepInFlight = false;
 export default function DashboardPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const { getToken } = useAuth();
+  const { getToken, userId } = useAuth();
   const [search, setSearch] = useState("");
   const [minFitScore, setMinFitScore] = useState<number | undefined>(undefined);
   const [showAddModal, setShowAddModal] = useState(false);
 
   const [showFilters, setShowFilters] = useState(false);
-  const [sortKey, setSortKeyState] = useState<string>(
-    () => localStorage.getItem("dashboard-sort") ?? "recommended"
-  );
+  const [activeTab, setActiveTab] = useState<DashboardView>("active");
+  const sortScope = userId ?? "signed-out";
+  const storedSorts = useMemo(() => readDashboardSorts(localStorage, sortScope), [sortScope]);
+  const [sortOverrides, setSortOverrides] = useState<Record<string, DashboardSorts>>({});
+  const viewSorts = sortOverrides[sortScope] ?? storedSorts;
+  const sortKey = viewSorts[activeTab];
   const setSortKey = useCallback((key: string) => {
-    localStorage.setItem("dashboard-sort", key);
-    setSortKeyState(key);
-  }, []);
+    saveDashboardSort(localStorage, sortScope, activeTab, key);
+    setSortOverrides(previous => ({
+      ...previous,
+      [sortScope]: { ...(previous[sortScope] ?? storedSorts), [activeTab]: key },
+    }));
+  }, [sortScope, activeTab, storedSorts]);
+  const [appliedPreferenceJob, setAppliedPreferenceJob] = useState<{ id: number; title: string } | null>(null);
+  useEffect(() => { setAppliedPreferenceJob(null); }, [userId]);
   const [reanalyzing, setReanalyzing] = useState(false);
   const [backfillingLinks, setBackfillingLinks] = useState(false);
   const [sweepingDuplicates, setSweepingDuplicates] = useState(false);
@@ -173,7 +183,6 @@ export default function DashboardPage() {
   const [exportingCsv, setExportingCsv] = useState(false);
   const [importingCsv, setImportingCsv] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
-  const [activeTab, setActiveTab] = useState<"active" | "applied" | "deleted">("active");
   type NearDupPair = {
     id1: number; id2: number;
     title1: string; title2: string;
@@ -1034,19 +1043,24 @@ export default function DashboardPage() {
     );
   }
 
-  async function onToggleApplied(id: number, isCurrentlyApplied: boolean) {
-    await markAppliedMutation.mutateAsync(
+  function onToggleApplied(id: number, title: string, alreadyLiked: boolean) {
+    markAppliedMutation.mutate(
       { id },
       {
-        onSuccess: (_result) => {
+        onSuccess: (result) => {
           qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
           qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
-          toast({
-            title: isCurrentlyApplied ? "Moved back to Active" : "Marked as applied",
-            description: isCurrentlyApplied
-              ? "Job moved back to your active list."
-              : "Job moved to your Applied tab.",
-          });
+          qc.invalidateQueries({ queryKey: getGetPostingQueryKey(id) });
+          if (result.appliedAt && !alreadyLiked) {
+            setAppliedPreferenceJob({ id, title });
+          } else {
+            toast({
+              title: result.appliedAt ? "Marked as applied" : "Moved back to Active",
+              description: result.appliedAt
+                ? "Job moved to your Applied tab."
+                : "Job moved back to your active list.",
+            });
+          }
         },
         onError: () => toast({ title: "Error", description: "Failed to update status.", variant: "destructive" }),
       }
@@ -1785,10 +1799,13 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Sort</Label>
+                  <Label htmlFor="dashboard-sort" className="text-xs text-muted-foreground">
+                    Sort {activeTab === "active" ? "Active" : activeTab === "applied" ? "Applied" : "Deleted"}
+                  </Label>
                   <div className="relative">
                     <ArrowUpDown className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                     <select
+                      id="dashboard-sort"
                       value={sortKey}
                       onChange={(e) => setSortKey(e.target.value)}
                       data-testid="sort-select"
@@ -2154,7 +2171,7 @@ export default function DashboardPage() {
                       variant="ghost"
                       size="icon"
                       aria-label={posting.appliedAt ? `Undo applied status for ${posting.title}` : `Mark ${posting.title} as applied`}
-                      onClick={() => onToggleApplied(posting.id, !!posting.appliedAt)}
+                      onClick={() => onToggleApplied(posting.id, posting.title, item.feedback?.kind === "more_like_this")}
                       disabled={markAppliedMutation.isPending}
                       aria-busy={markAppliedMutation.isPending && markAppliedMutation.variables?.id === posting.id}
                       data-testid={`posting-apply-${posting.id}`}
@@ -2440,6 +2457,13 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
 
+      {appliedPreferenceJob && (
+        <AppliedPreferenceDialog
+          key={appliedPreferenceJob.id}
+          job={appliedPreferenceJob}
+          onClose={() => setAppliedPreferenceJob(null)}
+        />
+      )}
     </Layout>
   );
 }
