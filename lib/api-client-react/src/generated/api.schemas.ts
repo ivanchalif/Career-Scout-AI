@@ -504,6 +504,20 @@ export interface OnlineDiscoveryCriteria {
   remotePreferences: string[];
 }
 
+export interface OnlineDiscoveryReport {
+  retrieved: number;
+  alreadySaved: number;
+  repeated: number;
+  excluded: number;
+  recentlyChecked: number;
+  deferred: number;
+  imported: number;
+  pageChecks: number;
+  unverified: number;
+  sourceFailures: number;
+  searchRequests: number;
+}
+
 export type OnlineDiscoveryStatusFreshnessWindow =
   (typeof OnlineDiscoveryStatusFreshnessWindow)[keyof typeof OnlineDiscoveryStatusFreshnessWindow];
 
@@ -529,6 +543,7 @@ export interface OnlineDiscoveryStatus {
   /** @nullable */
   lastError?: string | null;
   criteria: OnlineDiscoveryCriteria;
+  report?: OnlineDiscoveryReport;
 }
 
 export type DiscoveryAvailabilityCheckStatus =

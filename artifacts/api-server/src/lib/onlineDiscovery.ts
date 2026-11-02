@@ -1,10 +1,14 @@
 import { and, eq } from "drizzle-orm";
+import { createHash } from "node:crypto";
 import {
   db,
   jobPostingsTable,
   jobPostingSourcesTable,
   onlineDiscoverySourcesTable,
   userProfilesTable,
+  onlineDiscoveryProgressTable,
+  type DiscoveryProgress,
+  type DiscoveryReport,
 } from "@workspace/db";
 import { canonicalizeJobUrl, isFuzzyDuplicate, normalizeFuzzy } from "./dedup";
 import { logger } from "./logger";
@@ -17,12 +21,12 @@ import { fetchHiringCafeJobs, isHiringCafeUrl } from "./sources/hiringCafe";
 import { DEFAULT_EMAIL_FILTER_CRITERIA, matchesEmailFilterCriteria, type EmailFilterCriteria } from "./gmailClient";
 import { loadResponseHistory } from "./responseHistory";
 import { evaluateResponses, type ResponseExample } from "./responseLearning";
+import { searchBeyondKnown, pruneRejected } from "./discoverySearch";
 
 const SOURCE = "online";
 const MAX_CANDIDATES_PER_RUN = 12;
 const MAX_SCREENED_CANDIDATES_PER_RUN = 24;
 const activeDiscoveryRuns = new Set<string>();
-const searchRotations = new Map<string, number>();
 const ARBEITNOW_URL = "https://www.arbeitnow.com/api/job-board-api";
 const NORTH_AMERICA_LOCATION_PATTERN = /\b(?:united states|u\.?\s*s\.?\s*a?\.?|usa|canada|north america|alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming|ontario|quebec|nova scotia|new brunswick|manitoba|british columbia|prince edward island|saskatchewan|alberta|newfoundland and labrador|toronto|vancouver|montreal|calgary|ottawa|edmonton|winnipeg|quebec city)\b/i;
 const NORTH_AMERICA_STATE_CODE_PATTERN = /\b(?:al|ak|az|ar|ca|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy)\b/i;
@@ -123,16 +127,6 @@ function sourceSite(provider: string): string | null {
   return site;
 }
 
-function rotationFor(key: string): number {
-  const rotation = searchRotations.get(key) ?? 0;
-  searchRotations.set(key, rotation + 1);
-  return rotation;
-}
-
-function braveSearchUrl(query: string): string {
-  return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
-}
-
 /**
  * Build a small rotating set of source/role/location-specific web searches.
  * Location in the search is only a relevance hint: parsed search results must
@@ -164,24 +158,45 @@ export function buildFocusedSearchQueries(
 async function fetchConfiguredSource(
   source: typeof onlineDiscoverySourcesTable.$inferSelect,
   criteria: DiscoveryCriteria,
+  progress: DiscoveryProgress,
+  knownUrls: Set<string>,
+  freshness: string,
+  report: DiscoveryReport,
+  warnings: string[],
 ): Promise<OnlineJobCandidate[]> {
+  const signature = JSON.stringify([source.url, criteria, freshness]);
+  const prior = progress.cursors[String(source.id)];
+  const run = prior?.signature === signature ? prior.run : 0;
+  async function search(queries: string[], provider: string) {
+    const result = await searchBeyondKnown(queries, provider, run, freshness, knownUrls, fetchGoogleSearchResults);
+    report.searchRequests += result.requests;
+    if (result.errors.length) {
+      if (!result.candidates.length) throw new Error(result.errors.join("; "));
+      warnings.push(`${source.name}: ${result.errors.join("; ")}`);
+    }
+    progress.cursors[String(source.id)] = { signature, run: run + 1 };
+    return result.candidates;
+  }
   if (source.kind === "builtin" && source.provider === "arbeitnow") {
-    return fetchArbeitnowJobs();
+    const page = run % 3 + 1;
+    const first = await fetchArbeitnowJobs(page);
+    const unseen = first.filter(candidate => !knownUrls.has(canonicalizeJobUrl(candidate.url))).length;
+    progress.cursors[String(source.id)] = { signature, run: run + 1 };
+    if (unseen >= 4) return first;
+    try {
+      return [...first, ...await fetchArbeitnowJobs(page % 3 + 1)];
+    } catch (error) {
+      warnings.push(`${source.name}: ${error instanceof Error ? error.message : "Next feed page failed"}`);
+      return first;
+    }
   }
   const site = source.kind === "builtin" ? sourceSite(source.provider) : null;
   if (site) {
-    const queries = buildFocusedSearchQueries(site, criteria, rotationFor(source.provider));
-    const batches = await Promise.all(queries.map((query) => fetchGoogleSearchResults(braveSearchUrl(query), `brave:${source.id}`)));
-    const seen = new Set<string>();
-    return batches.flat().filter((candidate) => {
-      const canonical = canonicalizeJobUrl(candidate.url);
-      if (seen.has(canonical)) return false;
-      seen.add(canonical);
-      return true;
-    });
+    const queries = buildFocusedSearchQueries(site, criteria, run * 2);
+    return search(queries, `brave:${source.id}`);
   }
   if (source.kind === "search" && (source.provider === "brave" || source.provider === "google")) {
-    return fetchGoogleSearchResults(source.url, `brave:${source.id}`);
+    return search([new URL(source.url).searchParams.get("q") ?? ""], `brave:${source.id}`);
   }
   if (source.provider === "hiringcafe" || isHiringCafeUrl(source.url)) {
     try {
@@ -190,21 +205,14 @@ async function fetchConfiguredSource(
       const fallbackQueries = buildFocusedSearchQueries(
         "hiringcafe.com/job",
         criteria,
-        rotationFor("hiringcafe"),
+        run * 2,
       );
       if (fallbackQueries.length === 0) throw error;
       logger.warn(
         { sourceId: source.id, error },
         "HiringCafe direct request failed; falling back to Brave",
       );
-      const batches = await Promise.all(fallbackQueries.map((query) => fetchGoogleSearchResults(braveSearchUrl(query), `hiringcafe:${source.id}`)));
-      const seen = new Set<string>();
-      return batches.flat().filter((candidate) => {
-        const canonical = canonicalizeJobUrl(candidate.url);
-        if (seen.has(canonical)) return false;
-        seen.add(canonical);
-        return true;
-      });
+      return search(fallbackQueries, `hiringcafe:${source.id}`);
     }
   }
   return fetchCustomFeed(source.url, `custom:${source.id}`);
@@ -416,7 +424,7 @@ function nextRunAt(lastRunAt: Date | null, scheduleHours: number | null): Date |
   return lastRunAt && scheduleHours ? new Date(lastRunAt.getTime() + scheduleHours * 3_600_000) : null;
 }
 
-export function toDiscoveryStatus(profile: typeof userProfilesTable.$inferSelect | undefined) {
+export function toDiscoveryStatus(profile: typeof userProfilesTable.$inferSelect | undefined, report?: DiscoveryReport) {
   const criteria = buildDiscoveryCriteria(profile ?? {});
   return {
     source: SOURCE,
@@ -430,6 +438,7 @@ export function toDiscoveryStatus(profile: typeof userProfilesTable.$inferSelect
     lastDuplicates: profile?.lastOnlineDiscoveryDuplicates ?? 0,
     lastError: profile?.lastOnlineDiscoveryError ?? null,
     criteria,
+    report,
   };
 }
 
@@ -462,7 +471,28 @@ export async function runOnlineDiscovery(userId: string) {
 
     const configuredSources = await getOnlineDiscoverySources(userId);
     const activeSources = configuredSources.sources.filter((source) => !source.isSuppressed);
-     const sourceFetches = await Promise.allSettled(activeSources.map((source) => fetchConfiguredSource(source, criteria)));
+    const [sourceRows, postingRows, feedbackRows, progressRows] = await Promise.all([
+      db.select().from(jobPostingSourcesTable).where(eq(jobPostingSourcesTable.userId, userId)),
+      db.select({ id: jobPostingsTable.id, link: jobPostingsTable.link }).from(jobPostingsTable).where(eq(jobPostingsTable.userId, userId)),
+      loadResponseHistory(userId),
+      db.select().from(onlineDiscoveryProgressTable).where(eq(onlineDiscoveryProgressTable.userId, userId)),
+    ]);
+    const progress: DiscoveryProgress = progressRows[0]?.state ?? { cursors: {}, rejected: {} };
+    const sourceByUrl = new Map(sourceRows.map((row) => [row.canonicalUrl, row.jobPostingId]));
+    const sourceById = new Map(sourceRows.filter((row) => row.sourceJobId).map((row) => [`${row.provider}:${row.sourceJobId}`, row.jobPostingId]));
+    const postingByUrl = new Map(postingRows.filter((row): row is { id: number; link: string } => Boolean(row.link)).map((row) => [canonicalizeJobUrl(row.link), row.id]));
+    const knownUrls = new Set([...sourceByUrl.keys(), ...postingByUrl.keys()]);
+    const report: DiscoveryReport = { retrieved: 0, alreadySaved: 0, repeated: 0, excluded: 0, recentlyChecked: 0, deferred: 0, imported: 0, pageChecks: 0, unverified: 0, sourceFailures: 0, searchRequests: 0 };
+    const context = createHash("sha256").update(JSON.stringify([
+      criteria, profile?.titleExcludeKeywords, profile?.companyFilterSettings,
+      profile?.emailFilterSettings, profile?.onlineDiscoveryMinMatchScore,
+      profile?.onlineDiscoveryFreshnessWindow, feedbackRows,
+    ])).digest("hex");
+    progress.rejected = pruneRejected(progress.rejected, context);
+    for (const url of Object.keys(progress.rejected)) knownUrls.add(url);
+    const searchWarnings: string[] = [];
+    const sourceFetches = await Promise.allSettled(activeSources.map((source) =>
+      fetchConfiguredSource(source, criteria, progress, knownUrls, profile?.onlineDiscoveryFreshnessWindow ?? "any_time", report, searchWarnings)));
     const sourceErrors = sourceFetches.flatMap((result, index) => {
       if (result.status === "fulfilled") return [];
       return [`${activeSources[index]?.name ?? "Unknown source"}: ${result.reason instanceof Error ? result.reason.message : "request failed"}`];
@@ -471,18 +501,35 @@ export async function runOnlineDiscovery(userId: string) {
     if (activeSources.length > 0 && feed.length === 0 && sourceErrors.length === activeSources.length) {
       throw new Error(`All online job sources failed. ${sourceErrors.join(" ")}`);
     }
+    sourceErrors.push(...searchWarnings);
 
-    const [sourceRows, postingRows, feedbackRows] = await Promise.all([
-      db.select().from(jobPostingSourcesTable).where(eq(jobPostingSourcesTable.userId, userId)),
-      db.select({ id: jobPostingsTable.id, link: jobPostingsTable.link }).from(jobPostingsTable).where(eq(jobPostingsTable.userId, userId)),
-      loadResponseHistory(userId),
-    ]);
+    report.retrieved = feed.length;
+    report.sourceFailures = sourceErrors.length;
+    let duplicates = 0;
+    let matchedExisting = 0;
+    const seenFeed = new Set<string>();
+    const freshFeed: OnlineJobCandidate[] = [];
+    for (const candidate of feed) {
+      const url = canonicalizeJobUrl(candidate.url);
+      if (seenFeed.has(url)) { report.repeated++; duplicates++; continue; }
+      seenFeed.add(url);
+      const existing = sourceByUrl.get(url) ?? postingByUrl.get(url)
+        ?? (candidate.sourceJobId ? sourceById.get(`${candidate.provider}:${candidate.sourceJobId}`) : undefined);
+      if (existing) {
+        await attachSource(userId, existing, candidate);
+        report.alreadySaved++; duplicates++; matchedExisting++;
+      } else if (progress.rejected[url]) {
+        report.recentlyChecked++;
+      } else {
+        freshFeed.push(candidate);
+      }
+    }
     const minimum = profile?.onlineDiscoveryMinMatchScore ?? 12;
     const emailFilterSettings = profile?.emailFilterSettings ?? DEFAULT_EMAIL_FILTER_CRITERIA;
     const flaggedClosedUrls = new Set(feedbackRows
       .filter((feedback) => feedback.kind === "already_closed" && feedback.link)
       .map((feedback) => canonicalizeJobUrl(feedback.link as string)));
-    const candidates = feed
+    const candidates = freshFeed
       .map((candidate) => ({
         candidate,
         preliminaryScore: scoreCandidateForDiscovery(
@@ -509,13 +556,10 @@ export async function runOnlineDiscovery(userId: string) {
       .sort((a, b) => b.preliminaryScore - a.preliminaryScore
         || compareCandidateRecency(a.candidate, b.candidate));
 
-    const sourceByUrl = new Map(sourceRows.map((row) => [row.canonicalUrl, row.jobPostingId]));
-    const sourceById = new Map(sourceRows.filter((row) => row.sourceJobId).map((row) => [`${row.provider}:${row.sourceJobId}`, row.jobPostingId]));
-    const postingByUrl = new Map(postingRows.filter((row): row is { id: number; link: string } => Boolean(row.link)).map((row) => [canonicalizeJobUrl(row.link), row.id]));
+    report.excluded += freshFeed.length - candidates.length;
     let imported = 0;
-    let duplicates = 0;
-    let matchedExisting = 0;
     let screened = 0;
+    let visited = 0;
     const seenScreenedUrls = new Set<string>();
     const screenedShortlist: Array<{
       candidate: OnlineJobCandidate;
@@ -539,6 +583,7 @@ export async function runOnlineDiscovery(userId: string) {
 
     for (const { candidate } of candidates) {
       if (screened >= MAX_SCREENED_CANDIDATES_PER_RUN) break;
+      visited++;
 
       // Keep the inexpensive URL/provider duplicate check before page fetches.
       const initialCanonicalUrl = canonicalizeJobUrl(candidate.url);
@@ -549,6 +594,7 @@ export async function runOnlineDiscovery(userId: string) {
         await attachSource(userId, knownId, candidate);
         duplicates++;
         matchedExisting++;
+        report.alreadySaved++;
         continue;
       }
 
@@ -556,6 +602,7 @@ export async function runOnlineDiscovery(userId: string) {
       // not consume the bounded page budget more than once.
       if (seenScreenedUrls.has(initialCanonicalUrl)) {
         duplicates++;
+        report.repeated++;
         continue;
       }
       seenScreenedUrls.add(initialCanonicalUrl);
@@ -569,6 +616,14 @@ export async function runOnlineDiscovery(userId: string) {
         evidence: [],
       };
       const metadata = pageResult?.metadata ?? null;
+      if (availability.status === "unverified") report.unverified++;
+      function reject() {
+        report.excluded++;
+        // Never cache a network failure or an unreadable page as a mismatch.
+        if (pageResult?.metadata?.title) {
+          progress.rejected[initialCanonicalUrl] = { context, expiresAt: Date.now() + 6 * 60 * 60 * 1000 };
+        }
+      }
       const screenedCandidate: OnlineJobCandidate = pageResult
         ? {
             ...candidate,
@@ -600,6 +655,7 @@ export async function runOnlineDiscovery(userId: string) {
         fieldEvidence: metadata?.fieldEvidence ?? {},
       });
       if (availability.status === "closed") {
+        reject();
         logger.info(
           { userId, title: screenedCandidate.title, company: screenedCandidate.company, availability },
           "online discovery skipped confirmed-closed listing",
@@ -608,6 +664,7 @@ export async function runOnlineDiscovery(userId: string) {
       }
       // Also reject an alias whose final URL was previously reported closed.
       if (flaggedClosedUrls.has(canonicalUrl)) {
+        reject();
         logger.info({ userId, url: screenedCandidate.url }, "online discovery skipped URL previously marked closed");
         continue;
       }
@@ -619,11 +676,12 @@ export async function runOnlineDiscovery(userId: string) {
         await attachSource(userId, redirectedExistingId, screenedCandidate);
         duplicates++;
         matchedExisting++;
+        report.alreadySaved++;
         continue;
       }
 
       const blockedKeyword = blockedKeywordForCandidate(screenedCandidate, emailFilterSettings.blockedBodyKeywords ?? []);
-      if (blockedKeyword || !matchesOnlineEmailCriteria(screenedCandidate, emailFilterSettings)) continue;
+      if (blockedKeyword || !matchesOnlineEmailCriteria(screenedCandidate, emailFilterSettings)) { reject(); continue; }
       const remoteKnown = Boolean(metadata?.fieldEvidence.remote)
         || candidate.remote
         || candidate.provider === "arbeitnow";
@@ -639,6 +697,7 @@ export async function runOnlineDiscovery(userId: string) {
       );
       const preference = evaluateResponses(screenedCandidate, feedbackRows);
       if (preference.suppress) {
+        reject();
         logger.info({ userId, reasons: preference.reasons }, "online discovery skipped listing based on job responses");
         continue;
       }
@@ -652,6 +711,7 @@ export async function runOnlineDiscovery(userId: string) {
       // One dislike changes ranking only. A pattern is filtered only by the
       // repeated-evidence rule above; positive examples may improve eligibility.
       if (score === null || baseMatchScore === null || baseMatchScore + Math.max(0, preference.adjustment) < minimum) {
+        reject();
         logger.info(
           { userId, title: screenedCandidate.title, company: screenedCandidate.company, score, matchScore, minimum },
           "online discovery skipped listing below final match threshold",
@@ -661,11 +721,12 @@ export async function runOnlineDiscovery(userId: string) {
       screenedShortlist.push({ candidate: screenedCandidate, score, availability, metadata, canonicalUrl });
     }
 
+    report.deferred += candidates.length - visited;
     screenedShortlist.sort((a, b) => b.score - a.score
       || compareCandidateRecency(a.candidate, b.candidate));
     for (const { candidate: screenedCandidate, availability, metadata, canonicalUrl } of screenedShortlist) {
       const preference = evaluateResponses(screenedCandidate, feedbackRows);
-      if (imported >= MAX_CANDIDATES_PER_RUN) break;
+      if (imported >= MAX_CANDIDATES_PER_RUN) { report.deferred++; continue; }
 
       let existingId = sourceByUrl.get(canonicalUrl)
         ?? postingByUrl.get(canonicalUrl)
@@ -680,6 +741,7 @@ export async function runOnlineDiscovery(userId: string) {
         await attachSource(userId, existingId, screenedCandidate);
         duplicates++;
         matchedExisting++;
+        report.alreadySaved++;
         continue;
       }
 
@@ -734,6 +796,7 @@ export async function runOnlineDiscovery(userId: string) {
         if (screenedCandidate.sourceJobId) sourceById.set(`${screenedCandidate.provider}:${screenedCandidate.sourceJobId}`, winner.jobPostingId);
         duplicates++;
         matchedExisting++;
+        report.alreadySaved++;
         continue;
       }
       scorePostingBackground(posting.id, userId);
@@ -743,6 +806,12 @@ export async function runOnlineDiscovery(userId: string) {
     }
 
     const now = new Date();
+    report.imported = imported;
+    report.pageChecks = screened;
+    progress.rejected = pruneRejected(progress.rejected, context);
+    progress.lastReport = report;
+    await db.insert(onlineDiscoveryProgressTable).values({ userId, state: progress })
+      .onConflictDoUpdate({ target: onlineDiscoveryProgressTable.userId, set: { state: progress, updatedAt: now } });
     const [updatedProfile] = await db.update(userProfilesTable).set({
       lastOnlineDiscoveryAt: now,
       lastOnlineDiscoveryFound: candidates.length,
@@ -764,7 +833,7 @@ export async function runOnlineDiscovery(userId: string) {
       sourceErrors,
     }, "online discovery completed");
     return {
-      ...toDiscoveryStatus(updatedProfile),
+      ...toDiscoveryStatus(updatedProfile, report),
       fetched: feed.length,
       considered: screened,
       imported,

@@ -577,16 +577,10 @@ export default function DashboardPage() {
           qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }),
         ]);
         setOnlineProcessing(false);
-        const filtered = Math.max(0, result.lastFound - result.imported - result.duplicates);
-        const resultSummary = result.imported
-          ? `Added ${result.imported} profile-matched job${result.imported === 1 ? "" : "s"} for scoring.`
-          : result.duplicates && filtered
-            ? `No new jobs added — ${result.duplicates} were already saved and ${filtered} were excluded by your filters.`
-            : result.duplicates
-              ? "No new jobs — matching postings were already saved."
-              : result.lastFound
-                ? "Matches were found, but they were excluded by your filters."
-                : "No new matches found this time.";
+        const resultSummary = result.report
+          ? `${result.report.imported} new jobs added from ${result.report.retrieved} results. ${result.report.alreadySaved} already saved; ${result.report.repeated} repeated results; ${result.report.excluded} excluded by matching or availability checks; ${result.report.recentlyChecked} recently checked.`
+            + (result.report.deferred ? ` ${result.report.deferred} deferred because this run reached its limit.` : "")
+          : `${result.imported} new jobs added; ${result.matchedExisting} matching jobs already saved.`;
         toast({
           title: result.lastError ? "Online search completed with warnings" : "Online search complete",
           description: result.lastError ? `${resultSummary} ${result.lastError}` : resultSummary,
@@ -1299,10 +1293,24 @@ export default function DashboardPage() {
                 />
                 <span className="text-xs text-muted-foreground">
                   {discoveryStatus?.lastRunAt
-                    ? `Last search ${formatAdded(discoveryStatus.lastRunAt)} · ${discoveryStatus.lastFound} matched · ${discoveryStatus.lastImported} added · ${discoveryStatus.lastDuplicates} already saved`
+                    ? `Last search ${formatAdded(discoveryStatus.lastRunAt)} · ${discoveryStatus.lastImported} added`
                     : "Uses your profile, US/Canada location, and the same screening as email listings"}
                 </span>
               </div>
+              {discoveryStatus?.report && (
+                <div className="text-xs text-muted-foreground space-y-1" data-testid="discovery-run-report">
+                  <p>
+                    {discoveryStatus.report.retrieved} results · {discoveryStatus.report.imported} added · {discoveryStatus.report.alreadySaved} already saved · {discoveryStatus.report.repeated} repeated
+                  </p>
+                  <p>
+                    {discoveryStatus.report.excluded} excluded by matching or availability checks · {discoveryStatus.report.recentlyChecked} recently checked · {discoveryStatus.report.deferred} deferred by run limits
+                  </p>
+                  <p>
+                    {discoveryStatus.report.pageChecks} pages checked · {discoveryStatus.report.unverified} availability unverified · {discoveryStatus.report.sourceFailures} source failures · {discoveryStatus.report.searchRequests} web searches
+                  </p>
+                  <p>Recent searches include a date-unrestricted fallback when few unseen results are found. Rejected listings can be checked again after six hours, or sooner if your preferences change.</p>
+                </div>
+              )}
               <div className="border-t border-border pt-3 space-y-3" data-testid="online-discovery-sources">
                 <div className="flex items-baseline justify-between gap-3">
                   <div>

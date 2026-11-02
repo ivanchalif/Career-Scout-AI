@@ -44,3 +44,9 @@ Workday exclusion is a reversible visibility preference, not an import ban.
 **Why:** The user explicitly chose to hide current and future Workday jobs while keeping them recoverable, rather than skipping future imports.
 
 **How to apply:** Retain detected Workday listings for review in Filtered and allow inclusion again through the saved dashboard filter. Do not let Workday dismissal history alone suppress imports; it may still affect ranking. Unknown ATS links remain eligible rather than guessing from a company name or a mention of Workday.
+
+Discovery should make bounded progress beyond repeated search results, not relax eligibility or weaken duplicate protection to increase import counts.
+
+**Why:** The user reported repeated runs returning previously processed listings and approved broader coverage plus accurate reporting. Unlimited requests would increase cost without guaranteeing eligible jobs.
+
+**How to apply:** Persist per-user search progress across restarts, include a date-unrestricted fallback for undated listings, and distinguish saved listings, repeated results, real exclusions, temporary history skips, and budget deferrals. Rejection history must expire and invalidate when relevant preferences or feedback change; network failures must never become cached mismatches.

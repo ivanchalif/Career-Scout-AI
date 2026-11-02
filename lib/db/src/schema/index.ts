@@ -10,3 +10,4 @@ export * from "./syncEvents";
 export * from "./filteredEmails";
 export * from "./emailSyncLog";
 export * from "./onlineDiscoverySources";
+export * from "./onlineDiscoveryProgress";

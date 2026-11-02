@@ -923,6 +923,21 @@ export const GetOnlineDiscoveryStatusResponse = zod.object({
     locations: zod.array(zod.string()),
     remotePreferences: zod.array(zod.string()),
   }),
+  report: zod
+    .object({
+      retrieved: zod.number(),
+      alreadySaved: zod.number(),
+      repeated: zod.number(),
+      excluded: zod.number(),
+      recentlyChecked: zod.number(),
+      deferred: zod.number(),
+      imported: zod.number(),
+      pageChecks: zod.number(),
+      unverified: zod.number(),
+      sourceFailures: zod.number(),
+      searchRequests: zod.number(),
+    })
+    .optional(),
 });
 
 /**
@@ -946,6 +961,21 @@ export const RunOnlineDiscoveryResponse = zod
       locations: zod.array(zod.string()),
       remotePreferences: zod.array(zod.string()),
     }),
+    report: zod
+      .object({
+        retrieved: zod.number(),
+        alreadySaved: zod.number(),
+        repeated: zod.number(),
+        excluded: zod.number(),
+        recentlyChecked: zod.number(),
+        deferred: zod.number(),
+        imported: zod.number(),
+        pageChecks: zod.number(),
+        unverified: zod.number(),
+        sourceFailures: zod.number(),
+        searchRequests: zod.number(),
+      })
+      .optional(),
   })
   .and(
     zod.object({
@@ -1019,6 +1049,21 @@ export const UpdateOnlineDiscoverySettingsResponse = zod.object({
     locations: zod.array(zod.string()),
     remotePreferences: zod.array(zod.string()),
   }),
+  report: zod
+    .object({
+      retrieved: zod.number(),
+      alreadySaved: zod.number(),
+      repeated: zod.number(),
+      excluded: zod.number(),
+      recentlyChecked: zod.number(),
+      deferred: zod.number(),
+      imported: zod.number(),
+      pageChecks: zod.number(),
+      unverified: zod.number(),
+      sourceFailures: zod.number(),
+      searchRequests: zod.number(),
+    })
+    .optional(),
 });
 
 /**

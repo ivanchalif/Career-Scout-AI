@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { and, eq } from "drizzle-orm";
-import { db, onlineDiscoverySourcesTable, userProfilesTable } from "@workspace/db";
+import { db, onlineDiscoverySourcesTable, onlineDiscoveryProgressTable, userProfilesTable } from "@workspace/db";
 import {
   CreateOnlineDiscoverySourceBody,
   DeleteOnlineDiscoverySourceParams,
@@ -27,7 +27,8 @@ const router: IRouter = Router();
 
 router.get("/online-discovery/status", requireAuth, async (req, res): Promise<void> => {
   const [profile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, req.userId));
-  res.json(GetOnlineDiscoveryStatusResponse.parse(toDiscoveryStatus(profile)));
+  const [progress] = await db.select().from(onlineDiscoveryProgressTable).where(eq(onlineDiscoveryProgressTable.userId, req.userId));
+  res.json(GetOnlineDiscoveryStatusResponse.parse(toDiscoveryStatus(profile, progress?.state.lastReport)));
 });
 
 router.put("/online-discovery/settings", requireAuth, async (req, res): Promise<void> => {
@@ -50,7 +51,8 @@ router.put("/online-discovery/settings", requireAuth, async (req, res): Promise<
       updatedAt: new Date(),
     },
   }).returning();
-  res.json(UpdateOnlineDiscoverySettingsResponse.parse(toDiscoveryStatus(profile)));
+  const [progress] = await db.select().from(onlineDiscoveryProgressTable).where(eq(onlineDiscoveryProgressTable.userId, req.userId));
+  res.json(UpdateOnlineDiscoverySettingsResponse.parse(toDiscoveryStatus(profile, progress?.state.lastReport)));
 });
 
 router.get("/online-discovery/sources", requireAuth, async (req, res): Promise<void> => {

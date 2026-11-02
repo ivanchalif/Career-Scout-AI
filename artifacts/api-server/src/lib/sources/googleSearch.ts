@@ -163,7 +163,10 @@ export function parseBraveSearchResults(
   return candidates;
 }
 
-export async function fetchGoogleSearchResults(rawUrl: string, provider: string): Promise<OnlineJobCandidate[]> {
+export async function fetchGoogleSearchResults(
+  rawUrl: string, provider: string,
+  options: { offset?: number; freshness?: "pw" | "pm" } = {},
+): Promise<OnlineJobCandidate[]> {
   const searchUrl = validateGoogleSearchUrl(rawUrl);
   const query = searchUrl.searchParams.get("q") ?? "";
   const country = /\b(?:canada|toronto|vancouver|montreal|calgary|ottawa|edmonton|winnipeg)\b/i.test(query)
@@ -176,6 +179,8 @@ export async function fetchGoogleSearchResults(rawUrl: string, provider: string)
     search_lang: "en",
     safesearch: "moderate",
     extra_snippets: "true",
+    offset: String(Math.max(0, Math.min(9, options.offset ?? 0))),
+    ...(options.freshness ? { freshness: options.freshness } : {}),
   });
   const connectors = new ReplitConnectors();
   const response = await connectors.proxy("brave", `/res/v1/web/search?${params.toString()}`, {

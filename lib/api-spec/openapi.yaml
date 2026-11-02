@@ -1736,6 +1736,22 @@ components:
         - locations
         - remotePreferences
 
+    OnlineDiscoveryReport:
+      type: object
+      properties:
+        retrieved: { type: integer }
+        alreadySaved: { type: integer }
+        repeated: { type: integer }
+        excluded: { type: integer }
+        recentlyChecked: { type: integer }
+        deferred: { type: integer }
+        imported: { type: integer }
+        pageChecks: { type: integer }
+        unverified: { type: integer }
+        sourceFailures: { type: integer }
+        searchRequests: { type: integer }
+      required: [retrieved, alreadySaved, repeated, excluded, recentlyChecked, deferred, imported, pageChecks, unverified, sourceFailures, searchRequests]
+
     OnlineDiscoveryStatus:
       type: object
       properties:
@@ -1764,6 +1780,8 @@ components:
           type: ["string", "null"]
         criteria:
           $ref: "#/components/schemas/OnlineDiscoveryCriteria"
+        report:
+          $ref: "#/components/schemas/OnlineDiscoveryReport"
       required:
         - source
         - minimumMatchScore

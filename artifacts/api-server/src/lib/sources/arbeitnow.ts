@@ -71,11 +71,11 @@ export function parseArbeitnowPayload(payload: unknown): OnlineJobCandidate[] {
   });
 }
 
-export async function fetchArbeitnowJobs(): Promise<OnlineJobCandidate[]> {
+export async function fetchArbeitnowJobs(page = 1): Promise<OnlineJobCandidate[]> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
   try {
-    const response = await fetch("https://www.arbeitnow.com/api/job-board-api", {
+    const response = await fetch(`https://www.arbeitnow.com/api/job-board-api?page=${Math.max(1, Math.min(3, page))}`, {
       signal: controller.signal,
       headers: { Accept: "application/json", "User-Agent": "CareerScout/1.0" },
     });
