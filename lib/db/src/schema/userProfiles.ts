@@ -25,6 +25,7 @@ export const userProfilesTable = pgTable("user_profiles", {
   lastOnlineDiscoveryError: text("last_online_discovery_error"),
   companyFilterSettings: jsonb("company_filter_settings").$type<{
     excludeWorkday?: boolean;
+    bayAreaNonRemoteOnly?: boolean;
     mode: "off" | "include" | "exclude";
     companies: string[];
   }>().notNull().default({ mode: "off", companies: [] }),

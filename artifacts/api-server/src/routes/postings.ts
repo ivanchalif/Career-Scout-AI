@@ -29,6 +29,7 @@ import { fetchSingleEmail } from "../lib/gmailClient";
 import { isFuzzyDuplicate, sweepDuplicatesOf, runDedupSweep, dbNormalizeSql } from "../lib/dedup";
 import { logger } from "../lib/logger";
 import { isHiddenByWorkday } from "../lib/workdayFilter";
+import { bayAreaFilterReason } from "../lib/bayAreaFilter";
 import { fetchJobPageContent } from "../lib/pageScraper";
 import { buildDiscoveryCriteria, rankCandidate } from "../lib/onlineDiscovery";
 import multer from "multer";
@@ -202,6 +203,8 @@ router.get("/postings", requireAuth, async (req, res): Promise<void> => {
   );
 
   type FilterReason = {
+    byLocation: boolean;
+    locationReason: string | null;
     byAts: boolean;
     byCompany: boolean;
     companyReason: string | null;
@@ -236,8 +239,10 @@ router.get("/postings", requireAuth, async (req, res): Promise<void> => {
     const byTitle = titleReasons.length > 0;
 
     const byAts = isHiddenByWorkday(p, companyFilter);
-    if (!byCompany && !byTitle && !byAts) return null;
-    return { byCompany, companyReason, byTitle, titleReasons, byAts };
+    const locationReason = bayAreaFilterReason(p, companyFilter);
+    const byLocation = locationReason !== null;
+    if (!byCompany && !byTitle && !byAts && !byLocation) return null;
+    return { byCompany, companyReason, byTitle, titleReasons, byAts, byLocation, locationReason };
   };
 
   const filtered = postings.filter((p) => {

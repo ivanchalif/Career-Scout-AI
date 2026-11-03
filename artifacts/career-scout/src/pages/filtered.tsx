@@ -236,6 +236,7 @@ export default function FilteredPage() {
         if (suppReason === "company" && !filterReason?.byCompany) return false;
         if (suppReason === "title" && !filterReason?.byTitle) return false;
         if (suppReason === "workday" && !filterReason?.byAts) return false;
+        if (suppReason === "location" && !filterReason?.byLocation) return false;
         if (q) {
           const haystack = `${posting.title} ${posting.company} ${posting.location ?? ""}`.toLowerCase();
           if (!haystack.includes(q)) return false;
@@ -331,6 +332,7 @@ export default function FilteredPage() {
                 { value: "company", label: "Company filter" },
                 { value: "title", label: "Title keyword" },
                 { value: "workday", label: "Workday ATS" },
+                { value: "location", label: "Location / remote" },
               ]}
             />
 
@@ -388,6 +390,11 @@ export default function FilteredPage() {
                         </div>
                         {filterReason && (
                           <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                            {filterReason.byLocation && (
+                              <span className="sem-badge" data-tone="hidden" title="Turn off Bay Area non-remote only in Dashboard filters to show this job again.">
+                                {filterReason.locationReason ?? "Location / remote"}
+                              </span>
+                            )}
                             {filterReason.byAts && (
                               <span className="sem-badge" data-tone="hidden" title="Turn off Hide Workday ATS in Dashboard filters to show this job again.">Workday ATS</span>
                             )}

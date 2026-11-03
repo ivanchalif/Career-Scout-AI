@@ -262,6 +262,8 @@ export const ListPostingsResponseItem = zod.object({
     .describe("Profile match score used by online discovery"),
   filterReason: zod
     .object({
+      byLocation: zod.boolean().optional(),
+      locationReason: zod.string().nullish(),
       byAts: zod
         .boolean()
         .optional()
@@ -407,6 +409,8 @@ export const ListDeletedPostingsResponseItem = zod.object({
     .describe("Profile match score used by online discovery"),
   filterReason: zod
     .object({
+      byLocation: zod.boolean().optional(),
+      locationReason: zod.string().nullish(),
       byAts: zod
         .boolean()
         .optional()
@@ -544,6 +548,8 @@ export const GetPostingResponse = zod.object({
     .describe("Profile match score used by online discovery"),
   filterReason: zod
     .object({
+      byLocation: zod.boolean().optional(),
+      locationReason: zod.string().nullish(),
       byAts: zod
         .boolean()
         .optional()
@@ -802,6 +808,8 @@ export const UndoPostingDismissalResponse = zod.object({
     .describe("Profile match score used by online discovery"),
   filterReason: zod
     .object({
+      byLocation: zod.boolean().optional(),
+      locationReason: zod.string().nullish(),
       byAts: zod
         .boolean()
         .optional()
@@ -1307,6 +1315,12 @@ export const UpdateFilterSettingsResponse = zod.object({
  * @summary Get company filter settings
  */
 export const GetCompanyFilterSettingsResponse = zod.object({
+  bayAreaNonRemoteOnly: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Show only confirmed SF Bay Area jobs not marked remote. Unknown locations are hidden recoverably. Enabled when omitted.",
+    ),
   excludeWorkday: zod
     .boolean()
     .optional()
@@ -1321,6 +1335,12 @@ export const GetCompanyFilterSettingsResponse = zod.object({
  * @summary Update company filter settings
  */
 export const UpdateCompanyFilterSettingsBody = zod.object({
+  bayAreaNonRemoteOnly: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Show only confirmed SF Bay Area jobs not marked remote. Unknown locations are hidden recoverably. Enabled when omitted.",
+    ),
   excludeWorkday: zod
     .boolean()
     .optional()
@@ -1332,6 +1352,12 @@ export const UpdateCompanyFilterSettingsBody = zod.object({
 });
 
 export const UpdateCompanyFilterSettingsResponse = zod.object({
+  bayAreaNonRemoteOnly: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Show only confirmed SF Bay Area jobs not marked remote. Unknown locations are hidden recoverably. Enabled when omitted.",
+    ),
   excludeWorkday: zod
     .boolean()
     .optional()
@@ -1593,6 +1619,8 @@ export const GetDashboardSummaryResponse = zod.object({
         .describe("Profile match score used by online discovery"),
       filterReason: zod
         .object({
+          byLocation: zod.boolean().optional(),
+          locationReason: zod.string().nullish(),
           byAts: zod
             .boolean()
             .optional()

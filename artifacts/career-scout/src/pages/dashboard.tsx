@@ -1666,6 +1666,12 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {companyFilterQ.data?.bayAreaNonRemoteOnly !== false && !companyFilterQ.isLoading && !companyFilterQ.isError && (
+          <p className="text-xs text-muted-foreground mb-3" data-testid="bay-area-filter-notice">
+            Showing confirmed SF Bay Area jobs that are not marked remote. Other and unknown locations stay in{" "}
+            <Link href="/filtered" className="underline underline-offset-2">Filtered</Link>.
+          </p>
+        )}
         {companyFilterQ.data?.excludeWorkday !== false && !companyFilterQ.isLoading && !companyFilterQ.isError && (
           <p className="text-xs text-muted-foreground mb-3" data-testid="workday-filter-notice">
             Workday ATS jobs are hidden.{" "}
@@ -1764,6 +1770,34 @@ export default function DashboardPage() {
 
             {showFilters && (
               <div className="flex flex-wrap items-end gap-3 mb-4 p-4 bg-card border border-border rounded-lg">
+                <div className="basis-full space-y-1 border-b border-border pb-3">
+                  <label className="inline-flex items-center gap-2 text-sm font-medium">
+                    <input
+                      type="checkbox"
+                      checked={companyFilterQ.data?.bayAreaNonRemoteOnly !== false}
+                      disabled={companyFilterQ.isLoading || companyFilterQ.isError || updateCompanyFilterMutation.isPending}
+                      data-testid="bay-area-only-toggle"
+                      onChange={(event) => {
+                        const bayAreaNonRemoteOnly = event.target.checked;
+                        const settings = { ...(companyFilterQ.data ?? { mode: "off" as const, companies: [] }), bayAreaNonRemoteOnly };
+                        updateCompanyFilterMutation.mutate({ data: settings }, {
+                          onSuccess: (saved) => {
+                            qc.setQueryData(getGetCompanyFilterSettingsQueryKey(), saved);
+                            qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
+                            qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+                            toast({ title: bayAreaNonRemoteOnly ? "Bay Area non-remote filter enabled" : "Location filter disabled", description: "No job postings were deleted." });
+                          },
+                          onError: () => toast({ title: "Filter not saved", description: "Please try again.", variant: "destructive" }),
+                        });
+                      }}
+                    />
+                    Bay Area non-remote only
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    Keep on-site and hybrid SF Bay Area roles. Hide remote roles and locations that cannot be confirmed.
+                    {" "}<Link href="/filtered" className="underline underline-offset-2">Review hidden jobs in Filtered</Link>; turn this off to include them again.
+                  </p>
+                </div>
                 <div className="basis-full space-y-1 border-b border-border pb-3">
                   <label className="inline-flex items-center gap-2 text-sm font-medium">
                     <input

@@ -50,3 +50,9 @@ Discovery should make bounded progress beyond repeated search results, not relax
 **Why:** The user reported repeated runs returning previously processed listings and approved broader coverage plus accurate reporting. Unlimited requests would increase cost without guaranteeing eligible jobs.
 
 **How to apply:** Persist per-user search progress across restarts, include a date-unrestricted fallback for undated listings, and distinguish saved listings, repeated results, real exclusions, temporary history skips, and budget deferrals. Rejection history must expire and invalidate when relevant preferences or feedback change; network failures must never become cached mismatches.
+
+The user explicitly requested filtering out roles outside the SF Bay Area and roles marked remote, including remote roles with a Bay Area location. Keep Bay Area hybrid and on-site roles; unknown locations cannot satisfy this stricter visibility rule.
+
+**Why:** This is an explicit geographic restriction, unlike inferred negative feedback. Recoverable hiding preserves jobs whose location may be incomplete or misclassified.
+
+**How to apply:** Apply the reversible visibility setting to existing and future postings and dashboard counts, retain hidden jobs in Filtered with a reason, and allow disabling the setting. Do not delete jobs or infer location from company headquarters.

@@ -32,8 +32,8 @@ describe("GET /dashboard/summary", () => {
       id: 7, userId: "test-user", title: "Product Manager", company: "Example",
       link: null, fullDescription: "Own product strategy and execution.", extractedSkills: [],
       salaryMin: null, salaryMax: null, source: "arbeitnow", sourcePostedAt: null,
-      gmailMessageId: null, senderName: null, appliedAt: null, location: "Remote",
-      remoteType: "remote", deletedAt: null, deletedBy: null, closedAt: null, createdAt: new Date(),
+      gmailMessageId: null, senderName: null, appliedAt: null, location: "San Francisco, CA",
+      remoteType: "hybrid", deletedAt: null, deletedBy: null, closedAt: null, createdAt: new Date(),
     };
     const report = {
       id: 1, jobPostingId: 7, userId: "test-user", fitScore: 91, reasoning: "Strong match.",
@@ -54,5 +54,22 @@ describe("GET /dashboard/summary", () => {
     expect(response.body.topMatches).toHaveLength(1);
     expect(response.body.topMatches[0].posting.id).toBe(7);
     expect(response.body.topMatches[0].report.fitScore).toBe(91);
+  });
+  it.each([true, false])("keeps summary counts aligned with the location visibility preference (%s)", async (enabled) => {
+    const postings = [
+      { id: 1, title: "Engineer", location: "New York, NY", remoteType: "onsite", company: "Example", appliedAt: null },
+      { id: 2, title: "Engineer", location: "San Francisco, CA", remoteType: "remote", company: "Example", appliedAt: null },
+    ];
+    dbSelect
+      .mockReturnValueOnce(chain([{ companyFilterSettings: { mode: "off", companies: [], bayAreaNonRemoteOnly: enabled } }]))
+      .mockReturnValueOnce(chain([]))
+      .mockReturnValueOnce(chain(postings))
+      .mockReturnValueOnce(chain([]));
+    const { default: dashboardRouter } = await import("../dashboard");
+    const app = express();
+    app.use(dashboardRouter);
+    const response = await request(app).get("/dashboard/summary");
+    expect(response.status).toBe(200);
+    expect(response.body.totalPostings).toBe(enabled ? 0 : 2);
   });
 });

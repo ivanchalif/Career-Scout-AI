@@ -4,6 +4,7 @@ import { db, jobPostingsTable, matchReportsTable, userProfilesTable, gmailConnec
 import { GetDashboardSummaryResponse } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
 import { isHiddenByWorkday } from "../lib/workdayFilter";
+import { bayAreaFilterReason } from "../lib/bayAreaFilter";
 
 const router: IRouter = Router();
 
@@ -34,6 +35,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     if (p.closedAt) return false;
     if (p.appliedAt) return false;
     if (isHiddenByWorkday(p, profile?.companyFilterSettings)) return false;
+    if (bayAreaFilterReason(p, profile?.companyFilterSettings)) return false;
     if (companyFilter.mode !== "off" && companyFilter.companies.length > 0) {
       const company = p.company.toLowerCase();
       const matches = companyFilter.companies.some((c: string) => {

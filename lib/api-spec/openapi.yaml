@@ -1445,6 +1445,10 @@ components:
     PostingFilterReason:
       type: object
       properties:
+        byLocation:
+          type: boolean
+        locationReason:
+          type: ["string", "null"]
         byAts:
           type: boolean
           description: Hidden because the application URL uses Workday.
@@ -2031,6 +2035,9 @@ components:
     CompanyFilterSettings:
       type: object
       properties:
+        bayAreaNonRemoteOnly:
+          type: boolean
+          description: Show only confirmed SF Bay Area jobs not marked remote. Unknown locations are hidden recoverably. Enabled when omitted.
         excludeWorkday:
           type: boolean
           description: Hide verified Workday application links without deleting or skipping imports. Enabled when omitted.

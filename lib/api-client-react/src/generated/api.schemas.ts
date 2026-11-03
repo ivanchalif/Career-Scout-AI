@@ -216,6 +216,9 @@ export interface PostingFeedback {
 }
 
 export interface PostingFilterReason {
+  byLocation?: boolean;
+  /** @nullable */
+  locationReason?: string | null;
   /** Hidden because the application URL uses Workday. */
   byAts?: boolean;
   byCompany: boolean;
@@ -711,6 +714,8 @@ export const CompanyFilterSettingsMode = {
 } as const;
 
 export interface CompanyFilterSettings {
+  /** Show only confirmed SF Bay Area jobs not marked remote. Unknown locations are hidden recoverably. Enabled when omitted. */
+  bayAreaNonRemoteOnly?: boolean;
   /** Hide verified Workday application links without deleting or skipping imports. Enabled when omitted. */
   excludeWorkday?: boolean;
   mode: CompanyFilterSettingsMode;
