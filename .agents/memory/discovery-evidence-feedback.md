@@ -51,8 +51,8 @@ Discovery should make bounded progress beyond repeated search results, not relax
 
 **How to apply:** Persist per-user search progress across restarts, include a date-unrestricted fallback for undated listings, and distinguish saved listings, repeated results, real exclusions, temporary history skips, and budget deferrals. Rejection history must expire and invalidate when relevant preferences or feedback change; network failures must never become cached mismatches.
 
-The user explicitly requested filtering out roles outside the SF Bay Area and roles marked remote, including remote roles with a Bay Area location. Keep Bay Area hybrid and on-site roles; unknown locations cannot satisfy this stricter visibility rule.
+The user clarified the location rule: allow ANY SF Bay Area role (on-site, hybrid, or remote), ANY fully remote role anywhere, and anything whose location or work arrangement cannot be determined. Hide only clearly outside-Bay-Area roles requiring office work.
 
-**Why:** This is an explicit geographic restriction, unlike inferred negative feedback. Recoverable hiding preserves jobs whose location may be incomplete or misclassified.
+**Why:** The initial interpretation incorrectly excluded remote and uncertain listings. The user explicitly corrected it; uncertainty must pass, not become an exclusion.
 
-**How to apply:** Apply the reversible visibility setting to existing and future postings and dashboard counts, retain hidden jobs in Filtered with a reason, and allow disabling the setting. Do not delete jobs or infer location from company headquarters.
+**How to apply:** Recognize Bay Area cities as well as regional labels, apply the reversible rule to existing and future postings and dashboard counts, and retain hidden jobs in Filtered with a reason. Do not delete jobs, infer location from headquarters, or treat a hybrid role's remote days as fully remote.

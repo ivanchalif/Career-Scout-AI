@@ -1668,7 +1668,7 @@ export default function DashboardPage() {
 
         {companyFilterQ.data?.bayAreaNonRemoteOnly !== false && !companyFilterQ.isLoading && !companyFilterQ.isError && (
           <p className="text-xs text-muted-foreground mb-3" data-testid="bay-area-filter-notice">
-            Showing confirmed SF Bay Area jobs that are not marked remote. Other and unknown locations stay in{" "}
+            Allowing all SF Bay Area roles, fully remote jobs anywhere, and uncertain listings. Clearly non-local on-site or hybrid jobs stay in{" "}
             <Link href="/filtered" className="underline underline-offset-2">Filtered</Link>.
           </p>
         )}
@@ -1785,16 +1785,16 @@ export default function DashboardPage() {
                             qc.setQueryData(getGetCompanyFilterSettingsQueryKey(), saved);
                             qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
                             qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
-                            toast({ title: bayAreaNonRemoteOnly ? "Bay Area non-remote filter enabled" : "Location filter disabled", description: "No job postings were deleted." });
+                            toast({ title: bayAreaNonRemoteOnly ? "Bay Area or remote filter enabled" : "Location filter disabled", description: "No job postings were deleted." });
                           },
                           onError: () => toast({ title: "Filter not saved", description: "Please try again.", variant: "destructive" }),
                         });
                       }}
                     />
-                    Bay Area non-remote only
+                    SF Bay Area or fully remote
                   </label>
                   <p className="text-xs text-muted-foreground">
-                    Keep on-site and hybrid SF Bay Area roles. Hide remote roles and locations that cannot be confirmed.
+                    Allow any SF Bay Area role and fully remote roles anywhere. If location or work arrangement is uncertain, keep the job visible.
                     {" "}<Link href="/filtered" className="underline underline-offset-2">Review hidden jobs in Filtered</Link>; turn this off to include them again.
                   </p>
                 </div>

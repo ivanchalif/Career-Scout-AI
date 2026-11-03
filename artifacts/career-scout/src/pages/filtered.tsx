@@ -391,7 +391,7 @@ export default function FilteredPage() {
                         {filterReason && (
                           <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                             {filterReason.byLocation && (
-                              <span className="sem-badge" data-tone="hidden" title="Turn off Bay Area non-remote only in Dashboard filters to show this job again.">
+                              <span className="sem-badge" data-tone="hidden" title="Turn off SF Bay Area or fully remote in Dashboard filters to show this job again.">
                                 {filterReason.locationReason ?? "Location / remote"}
                               </span>
                             )}

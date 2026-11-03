@@ -59,6 +59,9 @@ describe("GET /dashboard/summary", () => {
     const postings = [
       { id: 1, title: "Engineer", location: "New York, NY", remoteType: "onsite", company: "Example", appliedAt: null },
       { id: 2, title: "Engineer", location: "San Francisco, CA", remoteType: "remote", company: "Example", appliedAt: null },
+      { id: 3, title: "Engineer", location: "New York, NY", remoteType: "remote", company: "Example", appliedAt: null },
+      { id: 4, title: "Engineer", location: null, remoteType: "onsite", company: "Example", appliedAt: null },
+      { id: 5, title: "Engineer", location: "New York, NY", remoteType: null, company: "Example", appliedAt: null },
     ];
     dbSelect
       .mockReturnValueOnce(chain([{ companyFilterSettings: { mode: "off", companies: [], bayAreaNonRemoteOnly: enabled } }]))
@@ -70,6 +73,6 @@ describe("GET /dashboard/summary", () => {
     app.use(dashboardRouter);
     const response = await request(app).get("/dashboard/summary");
     expect(response.status).toBe(200);
-    expect(response.body.totalPostings).toBe(enabled ? 0 : 2);
+    expect(response.body.totalPostings).toBe(enabled ? 4 : 5);
   });
 });

@@ -1319,7 +1319,7 @@ export const GetCompanyFilterSettingsResponse = zod.object({
     .boolean()
     .optional()
     .describe(
-      "Show only confirmed SF Bay Area jobs not marked remote. Unknown locations are hidden recoverably. Enabled when omitted.",
+      "Allow all SF Bay Area roles and fully remote roles anywhere. Unknown or uncertain listings pass. Hide only confirmed outside-Bay-Area office roles. Legacy setting name retained for compatibility. Enabled when omitted.",
     ),
   excludeWorkday: zod
     .boolean()
@@ -1339,7 +1339,7 @@ export const UpdateCompanyFilterSettingsBody = zod.object({
     .boolean()
     .optional()
     .describe(
-      "Show only confirmed SF Bay Area jobs not marked remote. Unknown locations are hidden recoverably. Enabled when omitted.",
+      "Allow all SF Bay Area roles and fully remote roles anywhere. Unknown or uncertain listings pass. Hide only confirmed outside-Bay-Area office roles. Legacy setting name retained for compatibility. Enabled when omitted.",
     ),
   excludeWorkday: zod
     .boolean()
@@ -1356,7 +1356,7 @@ export const UpdateCompanyFilterSettingsResponse = zod.object({
     .boolean()
     .optional()
     .describe(
-      "Show only confirmed SF Bay Area jobs not marked remote. Unknown locations are hidden recoverably. Enabled when omitted.",
+      "Allow all SF Bay Area roles and fully remote roles anywhere. Unknown or uncertain listings pass. Hide only confirmed outside-Bay-Area office roles. Legacy setting name retained for compatibility. Enabled when omitted.",
     ),
   excludeWorkday: zod
     .boolean()
