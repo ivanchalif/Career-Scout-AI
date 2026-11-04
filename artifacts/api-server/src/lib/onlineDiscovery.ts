@@ -7,6 +7,7 @@ import {
   onlineDiscoverySourcesTable,
   userProfilesTable,
   onlineDiscoveryProgressTable,
+  jobPostingFeedbackTable,
   type DiscoveryProgress,
   type DiscoveryReport,
 } from "@workspace/db";
@@ -20,6 +21,7 @@ import { fetchGoogleSearchResults, isGoogleSearchUrl } from "./sources/googleSea
 import { fetchHiringCafeJobs, isHiringCafeUrl } from "./sources/hiringCafe";
 import { expandSearchListings } from "./sources/expandListings";
 import { jobLinkKind } from "./sources/jobLinks";
+import { buildSourceHealth, countsAsAdded, sourceIdForProvider } from "./sourceHealth";
 import { DEFAULT_EMAIL_FILTER_CRITERIA, matchesEmailFilterCriteria, type EmailFilterCriteria } from "./gmailClient";
 import { loadResponseHistory } from "./responseHistory";
 import { evaluateResponses, type ResponseExample } from "./responseLearning";
@@ -80,13 +82,37 @@ export async function ensureDefaultOnlineDiscoverySource(userId: string): Promis
   });
 }
 
-export async function getOnlineDiscoverySources(userId: string) {
+export async function getOnlineDiscoverySources(userId: string, includeHealth = true) {
   await ensureDefaultOnlineDiscoverySource(userId);
   const sources = await db.select()
     .from(onlineDiscoverySourcesTable)
     .where(eq(onlineDiscoverySourcesTable.userId, userId))
     .orderBy(onlineDiscoverySourcesTable.createdAt);
-  return { sources, availableSources: ONLINE_SOURCE_CATALOG };
+  if (!includeHealth) return { sources, availableSources: ONLINE_SOURCE_CATALOG };
+  const [postings, provenance, feedback, profiles, progress] = await Promise.all([
+    db.select({
+      id: jobPostingsTable.id, source: jobPostingsTable.source, title: jobPostingsTable.title,
+      company: jobPostingsTable.company, link: jobPostingsTable.link, location: jobPostingsTable.location,
+      remoteType: jobPostingsTable.remoteType, sourcePostedAt: jobPostingsTable.sourcePostedAt,
+      createdAt: jobPostingsTable.createdAt, appliedAt: jobPostingsTable.appliedAt,
+      deletedAt: jobPostingsTable.deletedAt, deletedBy: jobPostingsTable.deletedBy,
+    }).from(jobPostingsTable).where(eq(jobPostingsTable.userId, userId)),
+    db.select({
+      jobPostingId: jobPostingSourcesTable.jobPostingId, provider: jobPostingSourcesTable.provider,
+      isPrimary: jobPostingSourcesTable.isPrimary,
+    }).from(jobPostingSourcesTable).where(eq(jobPostingSourcesTable.userId, userId)),
+    db.select({ jobPostingId: jobPostingFeedbackTable.jobPostingId, kind: jobPostingFeedbackTable.kind })
+      .from(jobPostingFeedbackTable).where(eq(jobPostingFeedbackTable.userId, userId)),
+    db.select({
+      companyFilterSettings: userProfilesTable.companyFilterSettings,
+      titleExcludeKeywords: userProfilesTable.titleExcludeKeywords,
+    }).from(userProfilesTable).where(eq(userProfilesTable.userId, userId)),
+    db.select().from(onlineDiscoveryProgressTable).where(eq(onlineDiscoveryProgressTable.userId, userId)),
+  ]);
+  return { sources: sources.map(source => ({
+    ...source,
+    health: buildSourceHealth(source, sources, postings, provenance, feedback, profiles[0], progress[0]?.state.sourceRuns),
+  })), availableSources: ONLINE_SOURCE_CATALOG };
 }
 
 export function prepareCustomSourceInput(name: string, url: string) {
@@ -472,7 +498,7 @@ export async function runOnlineDiscovery(userId: string) {
       throw new DiscoveryProfileRequiredError("Add work experience or skills to your profile before discovering online jobs.");
     }
 
-    const configuredSources = await getOnlineDiscoverySources(userId);
+    const configuredSources = await getOnlineDiscoverySources(userId, false);
     const activeSources = configuredSources.sources.filter((source) => !source.isSuppressed);
     const [sourceRows, postingRows, feedbackRows, progressRows] = await Promise.all([
       db.select().from(jobPostingSourcesTable).where(eq(jobPostingSourcesTable.userId, userId)),
@@ -481,6 +507,15 @@ export async function runOnlineDiscovery(userId: string) {
       db.select().from(onlineDiscoveryProgressTable).where(eq(onlineDiscoveryProgressTable.userId, userId)),
     ]);
     const progress: DiscoveryProgress = progressRows[0]?.state ?? { cursors: {}, rejected: {} };
+    const sourceRuns = new Map(activeSources.map(source => [source.id, {
+      at: new Date().toISOString(), addedPostingIds: [] as number[], error: null as string | null,
+    }]));
+    function recordSourceRuns() {
+      progress.sourceRuns ??= {};
+      for (const [id, run] of sourceRuns) {
+        progress.sourceRuns[String(id)] = [...(progress.sourceRuns[String(id)] ?? []), run].slice(-30);
+      }
+    }
     const sourceByUrl = new Map(sourceRows.map((row) => [row.canonicalUrl, row.jobPostingId]));
     const sourceById = new Map(sourceRows.filter((row) => row.sourceJobId).map((row) => [`${row.provider}:${row.sourceJobId}`, row.jobPostingId]));
     const postingByUrl = new Map(postingRows.filter((row): row is { id: number; link: string } => Boolean(row.link)).map((row) => [canonicalizeJobUrl(row.link), row.id]));
@@ -501,7 +536,16 @@ export async function runOnlineDiscovery(userId: string) {
       return [`${activeSources[index]?.name ?? "Unknown source"}: ${result.reason instanceof Error ? result.reason.message : "request failed"}`];
     });
     const feed = sourceFetches.flatMap((result) => result.status === "fulfilled" ? result.value : []);
+    sourceFetches.forEach((result, index) => {
+      if (result.status === "rejected") {
+        const run = sourceRuns.get(activeSources[index]!.id);
+        if (run) run.error = result.reason instanceof Error ? result.reason.message : "Source request failed";
+      }
+    });
     if (activeSources.length > 0 && feed.length === 0 && sourceErrors.length === activeSources.length) {
+      recordSourceRuns();
+      await db.insert(onlineDiscoveryProgressTable).values({ userId, state: progress })
+        .onConflictDoUpdate({ target: onlineDiscoveryProgressTable.userId, set: { state: progress, updatedAt: new Date() } });
       throw new Error(`All online job sources failed. ${sourceErrors.join(" ")}`);
     }
     sourceErrors.push(...searchWarnings);
@@ -811,6 +855,8 @@ export async function runOnlineDiscovery(userId: string) {
       sourceByUrl.set(canonicalUrl, posting.id);
       if (screenedCandidate.sourceJobId) sourceById.set(`${screenedCandidate.provider}:${screenedCandidate.sourceJobId}`, posting.id);
       imported++;
+      const sourceId = sourceIdForProvider(screenedCandidate.provider, activeSources);
+      if (sourceId != null && countsAsAdded(posting, profile)) sourceRuns.get(sourceId)?.addedPostingIds.push(posting.id);
     }
 
     const now = new Date();
@@ -818,6 +864,7 @@ export async function runOnlineDiscovery(userId: string) {
     report.pageChecks = screened;
     progress.rejected = pruneRejected(progress.rejected, context);
     progress.lastReport = report;
+    recordSourceRuns();
     await db.insert(onlineDiscoveryProgressTable).values({ userId, state: progress })
       .onConflictDoUpdate({ target: onlineDiscoveryProgressTable.userId, set: { state: progress, updatedAt: now } });
     const [updatedProfile] = await db.update(userProfilesTable).set({

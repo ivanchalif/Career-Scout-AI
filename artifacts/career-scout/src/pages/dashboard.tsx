@@ -63,6 +63,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import Layout from "@/components/layout";
 import { StatusBadge } from "@/components/status-badge";
+import { SourceHealth } from "@/components/source-health";
 import { PostingDecisionControls } from "@/components/posting-decision-controls";
 import { PreferenceBadge } from "@/components/preference-badge";
 import { FitScoreBadge, fitTier } from "@/components/fit-score";
@@ -380,7 +381,7 @@ export default function DashboardPage() {
     },
   });
   const discoveryQ = useGetOnlineDiscoveryStatus();
-  const discoverySourcesQ = useGetOnlineDiscoverySources();
+  const discoverySourcesQ = useGetOnlineDiscoverySources({ query: { queryKey: getGetOnlineDiscoverySourcesQueryKey(), staleTime: 0, refetchInterval: 15_000, refetchOnMount: "always" } });
   const createMutation = useCreatePosting();
   const deleteMutation = useDeletePosting();
   const decision = usePostingDecision();
@@ -1375,6 +1376,7 @@ export default function DashboardPage() {
                             <div className="min-w-0 flex-1">
                               <p className="text-xs font-medium text-foreground truncate">{source.name}</p>
                               <p className="text-[11px] text-muted-foreground truncate">{source.url}</p>
+                              <SourceHealth health={source.health} name={source.name} />
                             </div>
                           )}
                           {source.isSuppressed && <StatusBadge tone="hidden">Suppressed</StatusBadge>}

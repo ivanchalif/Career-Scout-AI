@@ -243,6 +243,8 @@ export const ListPostingsResponseItem = zod.object({
           "already_closed",
           "workday",
           "duplicate",
+          "wrong_domain",
+          "too_junior",
           "more_like_this",
         ]),
         createdAt: zod.coerce.date(),
@@ -390,6 +392,8 @@ export const ListDeletedPostingsResponseItem = zod.object({
           "already_closed",
           "workday",
           "duplicate",
+          "wrong_domain",
+          "too_junior",
           "more_like_this",
         ]),
         createdAt: zod.coerce.date(),
@@ -529,6 +533,8 @@ export const GetPostingResponse = zod.object({
           "already_closed",
           "workday",
           "duplicate",
+          "wrong_domain",
+          "too_junior",
           "more_like_this",
         ]),
         createdAt: zod.coerce.date(),
@@ -595,6 +601,8 @@ export const SetPostingFeedbackBody = zod.object({
     "already_closed",
     "workday",
     "duplicate",
+    "wrong_domain",
+    "too_junior",
     "more_like_this",
   ]),
 });
@@ -606,6 +614,8 @@ export const SetPostingFeedbackResponse = zod.object({
     "already_closed",
     "workday",
     "duplicate",
+    "wrong_domain",
+    "too_junior",
     "more_like_this",
   ]),
   createdAt: zod.coerce.date(),
@@ -633,6 +643,8 @@ export const DismissPostingBody = zod.object({
       zod.literal("already_closed"),
       zod.literal("workday"),
       zod.literal("duplicate"),
+      zod.literal("wrong_domain"),
+      zod.literal("too_junior"),
       zod.literal(null),
     ])
     .nullish(),
@@ -649,6 +661,8 @@ export const DismissPostingResponse = zod.object({
         "already_closed",
         "workday",
         "duplicate",
+        "wrong_domain",
+        "too_junior",
         "more_like_this",
       ]),
       createdAt: zod.coerce.date(),
@@ -672,6 +686,8 @@ export const SetDismissalReasonBody = zod.object({
     "already_closed",
     "workday",
     "duplicate",
+    "wrong_domain",
+    "too_junior",
   ]),
 });
 
@@ -686,6 +702,8 @@ export const SetDismissalReasonResponse = zod.object({
         "already_closed",
         "workday",
         "duplicate",
+        "wrong_domain",
+        "too_junior",
         "more_like_this",
       ]),
       createdAt: zod.coerce.date(),
@@ -789,6 +807,8 @@ export const UndoPostingDismissalResponse = zod.object({
           "already_closed",
           "workday",
           "duplicate",
+          "wrong_domain",
+          "too_junior",
           "more_like_this",
         ]),
         createdAt: zod.coerce.date(),
@@ -1080,6 +1100,21 @@ export const UpdateOnlineDiscoverySettingsResponse = zod.object({
 export const GetOnlineDiscoverySourcesResponse = zod.object({
   sources: zod.array(
     zod.object({
+      health: zod
+        .object({
+          color: zod.enum(["green", "yellow", "red"]),
+          label: zod.string(),
+          reasons: zod.array(zod.string()),
+          latestSearchAdded: zod.number().nullable(),
+          totalAdded: zod.number(),
+          recentAdded: zod.number(),
+          applied: zod.number(),
+          dismissed: zod.number(),
+          knownPostingDates: zod.number(),
+          recentPostings: zod.number(),
+          lastSearchAt: zod.coerce.date().nullable(),
+        })
+        .optional(),
       id: zod.number(),
       provider: zod.string(),
       name: zod.string(),
@@ -1126,6 +1161,21 @@ export const UpdateOnlineDiscoverySourceBody = zod.object({
 });
 
 export const UpdateOnlineDiscoverySourceResponse = zod.object({
+  health: zod
+    .object({
+      color: zod.enum(["green", "yellow", "red"]),
+      label: zod.string(),
+      reasons: zod.array(zod.string()),
+      latestSearchAdded: zod.number().nullable(),
+      totalAdded: zod.number(),
+      recentAdded: zod.number(),
+      applied: zod.number(),
+      dismissed: zod.number(),
+      knownPostingDates: zod.number(),
+      recentPostings: zod.number(),
+      lastSearchAt: zod.coerce.date().nullable(),
+    })
+    .optional(),
   id: zod.number(),
   provider: zod.string(),
   name: zod.string(),
@@ -1600,6 +1650,8 @@ export const GetDashboardSummaryResponse = zod.object({
               "already_closed",
               "workday",
               "duplicate",
+              "wrong_domain",
+              "too_junior",
               "more_like_this",
             ]),
             createdAt: zod.coerce.date(),

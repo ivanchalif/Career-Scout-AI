@@ -103,6 +103,7 @@ describe("persisted discovery progress and accounting", () => {
       retrieved: 4, alreadySaved: 1, repeated: 2, excluded: 1,
       recentlyChecked: 0, imported: 0, pageChecks: 1, deferred: 0,
     });
+    expect(state.progress.sourceRuns["1"].at(-1).addedPostingIds).toEqual([]);
     expect(state.page).toHaveBeenCalledTimes(1);
     expect(state.progress.cursors["1"].run).toBe(1);
     expect(state.progress.lastReport).toEqual(first.report);
@@ -136,12 +137,29 @@ describe("persisted discovery progress and accounting", () => {
 
   it("imports a genuinely new match while preserving duplicate protection", async () => {
     state.profile.titleExcludeKeywords = [];
+    state.profile.companyFilterSettings = { mode: "off", companies: [], bayAreaNonRemoteOnly: false };
     const result = await runOnlineDiscovery("isolated-user");
     expect(result.report).toMatchObject({
       retrieved: 4, alreadySaved: 1, repeated: 2, imported: 1, excluded: 0,
     });
     expect(result.imported).toBe(1);
     expect(state.progress.lastReport.imported).toBe(1);
+    expect(state.progress.sourceRuns["1"].at(-1).addedPostingIds).toEqual([100]);
+  });
+
+  it("does not credit additions that the user's location filter hides", async () => {
+    state.profile.titleExcludeKeywords = [];
+    const result = await runOnlineDiscovery("isolated-user");
+    expect(result.imported).toBe(1);
+    expect(state.progress.sourceRuns["1"].at(-1).addedPostingIds).toEqual([]);
+  });
+
+  it("persists source failure health even when all searches fail", async () => {
+    state.search.mockRejectedValue(new Error("Provider unavailable"));
+    await expect(runOnlineDiscovery("isolated-user")).rejects.toThrow("All online job sources failed");
+    expect(state.progress.sourceRuns["1"].at(-1)).toMatchObject({
+      addedPostingIds: [], error: "Provider unavailable",
+    });
   });
 
   it("does not import a posting that redirects to a company job board", async () => {

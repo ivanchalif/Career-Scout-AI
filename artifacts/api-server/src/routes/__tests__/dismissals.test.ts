@@ -174,7 +174,7 @@ describe("reversible posting dismissals", () => {
     expect(updateValues[0]).not.toHaveProperty("fullDescription");
   });
 
-  it.each(["not_my_role", "wrong_location", "already_closed", "workday", "duplicate"])("snapshots feedback before setting optional reason %s", async (reason) => {
+  it.each(["not_my_role", "wrong_location", "already_closed", "workday", "duplicate", "wrong_domain", "too_junior"])("snapshots feedback before setting optional reason %s", async (reason) => {
     const priorCreatedAt = new Date("2024-11-10T11:12:13.000Z");
     const newCreatedAt = new Date("2026-01-05T06:07:08.000Z");
     const tx = makeTransaction(
@@ -198,7 +198,7 @@ describe("reversible posting dismissals", () => {
     expect(tx.update).toHaveBeenCalledTimes(1);
   });
 
-  it.each(["not_my_role", "wrong_location", "already_closed", "workday", "duplicate"])("sets dismissal reason %s only for the current token and preserves the original snapshot", async (reason) => {
+  it.each(["not_my_role", "wrong_location", "already_closed", "workday", "duplicate", "wrong_domain", "too_junior"])("sets dismissal reason %s only for the current token and preserves the original snapshot", async (reason) => {
     const snapshot = { kind: "more_like_this", createdAt: "2024-11-10T11:12:13.000Z" };
     const lockCalls: string[] = [];
     const insertValues: Record<string, unknown>[] = [];

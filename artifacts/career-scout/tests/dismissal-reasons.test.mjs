@@ -5,12 +5,16 @@ import { dismissReasons, reasonLabel } from "../src/lib/dismissal-reasons.ts";
 
 test("all dismissal choices have one uniform order and label", () => {
   assert.deepEqual(dismissReasons, [
-    { kind: "not_my_role", label: "Not my role" },
-    { kind: "wrong_location", label: "Wrong location" },
-    { kind: "already_closed", label: "Mark as closed" },
-    { kind: "workday", label: "Workday" },
     { kind: "duplicate", label: "Flag as duplicate" },
+    { kind: "already_closed", label: "Mark as closed" },
+    { kind: "not_my_role", label: "Not my role" },
+    { kind: "too_junior", label: "Too junior" },
+    { kind: "workday", label: "Workday" },
+    { kind: "wrong_domain", label: "Wrong domain" },
+    { kind: "wrong_location", label: "Wrong location" },
   ]);
+  const labels = dismissReasons.map(({ label }) => label);
+  assert.deepEqual(labels, [...labels].sort((a, b) => a.localeCompare(b)));
   assert.equal(new Set(dismissReasons.map(({ kind }) => kind)).size, dismissReasons.length);
   for (const { kind, label } of dismissReasons) assert.equal(reasonLabel(kind), label);
 });

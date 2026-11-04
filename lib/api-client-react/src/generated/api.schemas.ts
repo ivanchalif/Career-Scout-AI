@@ -207,6 +207,8 @@ export const PostingFeedbackKind = {
   already_closed: "already_closed",
   workday: "workday",
   duplicate: "duplicate",
+  wrong_domain: "wrong_domain",
+  too_junior: "too_junior",
   more_like_this: "more_like_this",
 } as const;
 
@@ -269,6 +271,8 @@ export const PostingFeedbackInputKind = {
   already_closed: "already_closed",
   workday: "workday",
   duplicate: "duplicate",
+  wrong_domain: "wrong_domain",
+  too_junior: "too_junior",
   more_like_this: "more_like_this",
 } as const;
 
@@ -289,6 +293,8 @@ export const PostingDismissalInputReason = {
   already_closed: "already_closed",
   workday: "workday",
   duplicate: "duplicate",
+  wrong_domain: "wrong_domain",
+  too_junior: "too_junior",
 } as const;
 
 export interface PostingDismissalInput {
@@ -311,6 +317,8 @@ export const DismissalReasonInputReason = {
   already_closed: "already_closed",
   workday: "workday",
   duplicate: "duplicate",
+  wrong_domain: "wrong_domain",
+  too_junior: "too_junior",
 } as const;
 
 export interface DismissalReasonInput {
@@ -449,6 +457,31 @@ export interface OnlineDiscoverySettings {
   freshnessWindow: OnlineDiscoverySettingsFreshnessWindow;
 }
 
+export type OnlineDiscoverySourceHealthColor =
+  (typeof OnlineDiscoverySourceHealthColor)[keyof typeof OnlineDiscoverySourceHealthColor];
+
+export const OnlineDiscoverySourceHealthColor = {
+  green: "green",
+  yellow: "yellow",
+  red: "red",
+} as const;
+
+export interface OnlineDiscoverySourceHealth {
+  color: OnlineDiscoverySourceHealthColor;
+  label: string;
+  reasons: string[];
+  /** @nullable */
+  latestSearchAdded: number | null;
+  totalAdded: number;
+  recentAdded: number;
+  applied: number;
+  dismissed: number;
+  knownPostingDates: number;
+  recentPostings: number;
+  /** @nullable */
+  lastSearchAt: string | null;
+}
+
 export type OnlineDiscoverySourceKind =
   (typeof OnlineDiscoverySourceKind)[keyof typeof OnlineDiscoverySourceKind];
 
@@ -459,6 +492,7 @@ export const OnlineDiscoverySourceKind = {
 } as const;
 
 export interface OnlineDiscoverySource {
+  health?: OnlineDiscoverySourceHealth;
   id: number;
   provider: string;
   name: string;

@@ -1395,7 +1395,7 @@ components:
       properties:
         kind:
           type: string
-          enum: [not_my_role, wrong_location, already_closed, workday, duplicate, more_like_this]
+          enum: [not_my_role, wrong_location, already_closed, workday, duplicate, wrong_domain, too_junior, more_like_this]
         createdAt:
           type: string
           format: date-time
@@ -1406,7 +1406,7 @@ components:
       properties:
         kind:
           type: string
-          enum: [not_my_role, wrong_location, already_closed, workday, duplicate, more_like_this]
+          enum: [not_my_role, wrong_location, already_closed, workday, duplicate, wrong_domain, too_junior, more_like_this]
       required: [kind]
 
     PostingDismissalInput:
@@ -1414,7 +1414,7 @@ components:
       properties:
         reason:
           type: ["string", "null"]
-          enum: [not_my_role, wrong_location, already_closed, workday, duplicate, null]
+          enum: [not_my_role, wrong_location, already_closed, workday, duplicate, wrong_domain, too_junior, null]
 
     PostingDismissal:
       type: object
@@ -1433,7 +1433,7 @@ components:
         undoToken: { type: string, minLength: 1 }
         reason:
           type: string
-          enum: [not_my_role, wrong_location, already_closed, workday, duplicate]
+          enum: [not_my_role, wrong_location, already_closed, workday, duplicate, wrong_domain, too_junior]
       required: [undoToken, reason]
 
     DismissalUndoInput:
@@ -1627,9 +1627,27 @@ components:
         - minimumMatchScore
         - freshnessWindow
 
+    OnlineDiscoverySourceHealth:
+      type: object
+      required: [color, label, reasons, latestSearchAdded, totalAdded, recentAdded, applied, dismissed, knownPostingDates, recentPostings, lastSearchAt]
+      properties:
+        color: { type: string, enum: [green, yellow, red] }
+        label: { type: string }
+        reasons: { type: array, items: { type: string } }
+        latestSearchAdded: { type: [integer, "null"] }
+        totalAdded: { type: integer }
+        recentAdded: { type: integer }
+        applied: { type: integer }
+        dismissed: { type: integer }
+        knownPostingDates: { type: integer }
+        recentPostings: { type: integer }
+        lastSearchAt: { type: [string, "null"], format: date-time }
+
     OnlineDiscoverySource:
       type: object
       properties:
+        health:
+          $ref: "#/components/schemas/OnlineDiscoverySourceHealth"
         id:
           type: integer
         provider:

@@ -69,6 +69,12 @@ Check content negotiation and public page bootstrap data before treating a listi
 
 **How to apply:** Request the source's supported representation, inspect public embedded job records when server-rendered links are absent, and distinguish genuine authentication gates from unsupported response formats. Do not reconstruct jobs from sign-in URLs.
 
+Source health measures usable additions, authentic posting recency, and applied/dismissed outcomes—not raw retrieval volume or HTTP success alone.
+
+**Why:** The user explicitly requested red/yellow/green source health based on added jobs, excluding filtered/excluded results, plus latest-search and total addition counts.
+
+**How to apply:** Credit only the original importing source, not duplicate sightings. Preserve unknown posting dates and untracked historical per-search counts as unknown rather than substituting import dates or zero. Keep the health explanation visible so technical retrieval success is not confused with useful results.
+
 The user's location rule allows ANY SF Bay Area role (on-site, hybrid, or remote), ANY fully remote role anywhere, and genuinely unknown locations. Known non-local locations require explicit remote eligibility even when the work-arrangement field is blank.
 
 **Why:** After correcting the initial overly strict filter, known non-local roles still appeared because blank work arrangements were treated as uncertainty. The user explicitly chose to require remote evidence for known non-local jobs.

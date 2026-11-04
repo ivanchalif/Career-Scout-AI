@@ -20,6 +20,11 @@ export type DiscoveryProgress = {
   cursors: Record<string, { signature: string; run: number }>;
   rejected: Record<string, { context: string; expiresAt: number }>;
   lastReport?: DiscoveryReport;
+  sourceRuns?: Record<string, Array<{
+    at: string;
+    addedPostingIds: number[];
+    error: string | null;
+  }>>;
 };
 
 export const onlineDiscoveryProgressTable = pgTable("online_discovery_progress", {
