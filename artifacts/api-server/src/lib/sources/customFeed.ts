@@ -1,7 +1,7 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { htmlToPlainText, type OnlineJobCandidate } from "./arbeitnow";
-import { parseWarmadaPage } from "./warmada";
+import { parseHtmlListings } from "./htmlListings";
 
 const MAX_DESCRIPTION_CHARS = 12_000;
 
@@ -114,7 +114,11 @@ function parseXmlFeed(raw: string, provider: string): OnlineJobCandidate[] {
   });
 }
 
-export function parseCustomFeed(raw: string, contentType: string, provider: string): OnlineJobCandidate[] {
+export function parseCustomFeed(raw: string, contentType: string, provider: string, baseUrl?: string): OnlineJobCandidate[] {
+  if (contentType.includes("text/html") || /^\s*(?:<!doctype html|<html\b)/i.test(raw)) {
+    if (!baseUrl) throw new Error("HTML job sources require their source URL to resolve posting links.");
+    return parseHtmlListings(raw, baseUrl, provider);
+  }
   if (contentType.includes("json") || raw.trimStart().startsWith("{") || raw.trimStart().startsWith("[")) {
     const payload = JSON.parse(raw) as unknown;
     return recordsFromJson(payload).flatMap((record) => {
@@ -189,7 +193,9 @@ export async function fetchCustomFeed(url: string, provider: string): Promise<On
         signal: controller.signal,
         redirect: "manual",
         headers: {
-          Accept: "application/json, application/rss+xml, application/atom+xml, application/xml, text/xml, text/html",
+          Accept: parsedUrl.hostname.replace(/^www\./, "") === "workatastartup.com"
+            ? "text/html, application/xhtml+xml"
+            : "application/json, application/rss+xml, application/atom+xml, application/xml, text/xml, text/html",
           "User-Agent": "CareerScout/1.0",
         },
       });
@@ -202,11 +208,29 @@ export async function fetchCustomFeed(url: string, provider: string): Promise<On
     if (!response) throw new Error("Source followed too many redirects.");
     if (!response.ok) throw new Error(`Source request failed (${response.status}).`);
     const contentType = response.headers.get("content-type") ?? "";
-    const raw = await response.text();
-    if (["warmada.com", "www.warmada.com"].includes(parsedUrl.hostname) && contentType.includes("text/html")) {
-      return parseWarmadaPage(raw, provider);
+    const maxBytes = 2_000_000;
+    if (Number(response.headers.get("content-length")) > maxBytes) throw new Error("Source response exceeded the 2 MB limit.");
+    let raw = "";
+    const reader = response.body?.getReader();
+    if (reader) {
+      const decoder = new TextDecoder();
+      let bytes = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        bytes += value.byteLength;
+        if (bytes > maxBytes) {
+          await reader.cancel();
+          throw new Error("Source response exceeded the 2 MB limit.");
+        }
+        raw += decoder.decode(value, { stream: true });
+      }
+      raw += decoder.decode();
+    } else {
+      raw = await response.text();
+      if (Buffer.byteLength(raw) > maxBytes) throw new Error("Source response exceeded the 2 MB limit.");
     }
-    return parseCustomFeed(raw, contentType, provider);
+    return parseCustomFeed(raw, contentType, provider, parsedUrl.href);
   } finally {
     clearTimeout(timeout);
   }

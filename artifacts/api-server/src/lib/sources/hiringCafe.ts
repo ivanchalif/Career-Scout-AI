@@ -41,7 +41,10 @@ export function parseHiringCafePage(raw: string, provider: string): OnlineJobCan
   if (!nextData) throw new Error("HiringCafe page did not contain job data.");
   const payload = JSON.parse(nextData) as JsonRecord;
   const pageProps = record(record(payload.props).pageProps);
-  const hits = Array.isArray(pageProps.ssrHits) ? pageProps.ssrHits : [];
+  if (!Array.isArray(pageProps.ssrHits)) {
+    throw new Error("HiringCafe page did not contain its expected job list.");
+  }
+  const hits = pageProps.ssrHits;
 
   return hits.slice(0, MAX_RESULTS).flatMap((rawHit) => {
     const hit = record(rawHit);

@@ -57,6 +57,18 @@ Sparse discovery searches should broaden retrieval terms within the same source,
 
 **How to apply:** Preserve the source site and explicit exclusions, use broader role terms without exact geographic phrases when focused results are thin or already known, and keep the existing bounded request budget. Validate retrieval separately from importing so checking source health does not modify jobs.
 
+Configured source links that represent collections of jobs must yield their individual postings; a company board or category page is not itself a job.
+
+**Why:** The user requested extraction support for all online sources whose links need page parsing, after validation exposed a listing page being treated as an empty feed.
+
+**How to apply:** Route feeds, structured HTML, and known board links through appropriate parsers, expand search-result listing pages within a bounded budget, reject job redirects to known category pages, and report blocked or unsupported formats explicitly instead of returning a misleading empty success.
+
+Check content negotiation and public page bootstrap data before treating a listing page as blocked or requiring browser automation.
+
+**Why:** A public source returned HTTP 406 for JSON-preferred requests but HTTP 200 for HTML requests; its jobs were embedded in escaped page data rather than visible anchors.
+
+**How to apply:** Request the source's supported representation, inspect public embedded job records when server-rendered links are absent, and distinguish genuine authentication gates from unsupported response formats. Do not reconstruct jobs from sign-in URLs.
+
 The user's location rule allows ANY SF Bay Area role (on-site, hybrid, or remote), ANY fully remote role anywhere, and genuinely unknown locations. Known non-local locations require explicit remote eligibility even when the work-arrangement field is blank.
 
 **Why:** After correcting the initial overly strict filter, known non-local roles still appeared because blank work arrangements were treated as uncertainty. The user explicitly chose to require remote evidence for known non-local jobs.

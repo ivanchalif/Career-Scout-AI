@@ -143,4 +143,17 @@ describe("persisted discovery progress and accounting", () => {
     expect(result.imported).toBe(1);
     expect(state.progress.lastReport.imported).toBe(1);
   });
+
+  it("does not import a posting that redirects to a company job board", async () => {
+    state.profile.titleExcludeKeywords = [];
+    state.page.mockResolvedValue({
+      finalUrl: "https://jobs.lever.co/example",
+      content: "Example careers and open positions",
+      metadata: null,
+      availability: { status: "unverified", checkedAt: new Date(), reason: "no_job_metadata", confidence: 0, evidence: [] },
+    });
+    const result = await runOnlineDiscovery("isolated-user");
+    expect(result.imported).toBe(0);
+    expect(result.report?.excluded).toBe(1);
+  });
 });

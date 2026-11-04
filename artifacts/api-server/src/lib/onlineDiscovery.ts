@@ -18,6 +18,8 @@ import { fetchArbeitnowJobs, type OnlineJobCandidate } from "./sources/arbeitnow
 import { fetchCustomFeed, validatePublicFeedUrl } from "./sources/customFeed";
 import { fetchGoogleSearchResults, isGoogleSearchUrl } from "./sources/googleSearch";
 import { fetchHiringCafeJobs, isHiringCafeUrl } from "./sources/hiringCafe";
+import { expandSearchListings } from "./sources/expandListings";
+import { jobLinkKind } from "./sources/jobLinks";
 import { DEFAULT_EMAIL_FILTER_CRITERIA, matchesEmailFilterCriteria, type EmailFilterCriteria } from "./gmailClient";
 import { loadResponseHistory } from "./responseHistory";
 import { evaluateResponses, type ResponseExample } from "./responseLearning";
@@ -176,7 +178,7 @@ async function fetchConfiguredSource(
       warnings.push(`${source.name}: ${result.errors.join("; ")}`);
     }
     progress.cursors[String(source.id)] = { signature, run: run + 1 };
-    return result.candidates;
+    return expandSearchListings(result.candidates, fetchCustomFeed, message => warnings.push(`${source.name}: ${message}`));
   }
   if (source.kind === "builtin" && source.provider === "arbeitnow") {
     const page = run % 3 + 1;
@@ -216,7 +218,7 @@ async function fetchConfiguredSource(
       return search(fallbackQueries, `hiringcafe:${source.id}`);
     }
   }
-  return fetchCustomFeed(source.url, `custom:${source.id}`);
+  return expandSearchListings(await fetchCustomFeed(source.url, `custom:${source.id}`), fetchCustomFeed, message => warnings.push(`${source.name}: ${message}`));
 }
 
 export type DiscoveryCriteria = {
@@ -609,6 +611,11 @@ export async function runOnlineDiscovery(userId: string) {
       seenScreenedUrls.add(initialCanonicalUrl);
       screened++;
       const pageResult = await fetchJobPageContent(candidate.url);
+      // A removed job can redirect to its company/category board. It is not a job.
+      if (pageResult && jobLinkKind(pageResult.finalUrl) === "listing") {
+        report.excluded++;
+        continue;
+      }
       const availability = pageResult?.availability ?? {
         status: "unverified" as const,
         checkedAt: new Date(),
