@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { searchBeyondKnown, pruneRejected } from "../discoverySearch";
+import { searchBeyondKnown, pruneRejected, buildBroaderSearchQuery } from "../discoverySearch";
 import type { OnlineJobCandidate } from "../sources/arbeitnow";
 
 function job(id: string): OnlineJobCandidate {
@@ -11,6 +11,30 @@ function job(id: string): OnlineJobCandidate {
 }
 
 describe("discovery coverage", () => {
+  it("broadens exact senior titles without carrying the exact location into the fallback", () => {
+    expect(buildBroaderSearchQuery('site:linkedin.com/jobs/view "VP of Product" "SF Bay Area" jobs', "VP of Product"))
+      .toBe("site:linkedin.com/jobs/view product manager");
+    expect(buildBroaderSearchQuery('site:hiringcafe.com/job "Director of Product Management" "SF Bay Area" jobs', "Director of Product Management"))
+      .toBe("site:hiringcafe.com/job product manager");
+    expect(buildBroaderSearchQuery("site:lever.co Head of Product San Francisco -internship", "VP of Product"))
+      .toBe("site:lever.co product manager -internship");
+    expect(buildBroaderSearchQuery("custom query", "VP of Product")).toBe("custom query");
+  });
+
+  it("uses a broader undated fallback when the focused search is empty", async () => {
+    const fetch = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([job("new")]);
+    const result = await searchBeyondKnown(['site:linkedin.com/jobs/view "VP of Product" "SF Bay Area"'], "test", 0, "past_week", new Set(), fetch, ["site:linkedin.com/jobs/view product manager"]);
+    expect(new URL(fetch.mock.calls[1][0]).searchParams.get("q")).toBe("site:linkedin.com/jobs/view product manager");
+    expect(fetch.mock.calls[1][2]).toEqual({ offset: 0 });
+    expect(result.candidates).toEqual([job("new")]);
+    expect(result.requests).toBe(2);
+  });
+
+  it("does not broaden a source already returning enough unseen jobs", async () => {
+    const fetch = vi.fn().mockResolvedValue([job("1"), job("2"), job("3"), job("4")]);
+    await searchBeyondKnown(["focused"], "test", 0, "past_week", new Set(), fetch, ["broad"]);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
   it("goes past a page of saved jobs and uses an undated fallback", async () => {
     const saved = job("saved");
     const fresh = job("new");

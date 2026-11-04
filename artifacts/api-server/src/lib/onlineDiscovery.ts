@@ -21,7 +21,7 @@ import { fetchHiringCafeJobs, isHiringCafeUrl } from "./sources/hiringCafe";
 import { DEFAULT_EMAIL_FILTER_CRITERIA, matchesEmailFilterCriteria, type EmailFilterCriteria } from "./gmailClient";
 import { loadResponseHistory } from "./responseHistory";
 import { evaluateResponses, type ResponseExample } from "./responseLearning";
-import { searchBeyondKnown, pruneRejected } from "./discoverySearch";
+import { searchBeyondKnown, pruneRejected, buildBroaderSearchQuery } from "./discoverySearch";
 
 const SOURCE = "online";
 const MAX_CANDIDATES_PER_RUN = 12;
@@ -168,7 +168,8 @@ async function fetchConfiguredSource(
   const prior = progress.cursors[String(source.id)];
   const run = prior?.signature === signature ? prior.run : 0;
   async function search(queries: string[], provider: string) {
-    const result = await searchBeyondKnown(queries, provider, run, freshness, knownUrls, fetchGoogleSearchResults);
+    const broaderQueries = queries.map(query => buildBroaderSearchQuery(query, criteria.roleTitles[0] ?? criteria.skills[0] ?? ""));
+    const result = await searchBeyondKnown(queries, provider, run, freshness, knownUrls, fetchGoogleSearchResults, broaderQueries);
     report.searchRequests += result.requests;
     if (result.errors.length) {
       if (!result.candidates.length) throw new Error(result.errors.join("; "));

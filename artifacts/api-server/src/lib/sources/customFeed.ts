@@ -1,6 +1,7 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { htmlToPlainText, type OnlineJobCandidate } from "./arbeitnow";
+import { parseWarmadaPage } from "./warmada";
 
 const MAX_DESCRIPTION_CHARS = 12_000;
 
@@ -188,7 +189,7 @@ export async function fetchCustomFeed(url: string, provider: string): Promise<On
         signal: controller.signal,
         redirect: "manual",
         headers: {
-          Accept: "application/json, application/rss+xml, application/atom+xml, application/xml, text/xml",
+          Accept: "application/json, application/rss+xml, application/atom+xml, application/xml, text/xml, text/html",
           "User-Agent": "CareerScout/1.0",
         },
       });
@@ -201,7 +202,11 @@ export async function fetchCustomFeed(url: string, provider: string): Promise<On
     if (!response) throw new Error("Source followed too many redirects.");
     if (!response.ok) throw new Error(`Source request failed (${response.status}).`);
     const contentType = response.headers.get("content-type") ?? "";
-    return parseCustomFeed(await response.text(), contentType, provider);
+    const raw = await response.text();
+    if (["warmada.com", "www.warmada.com"].includes(parsedUrl.hostname) && contentType.includes("text/html")) {
+      return parseWarmadaPage(raw, provider);
+    }
+    return parseCustomFeed(raw, contentType, provider);
   } finally {
     clearTimeout(timeout);
   }

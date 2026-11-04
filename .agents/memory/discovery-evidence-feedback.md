@@ -51,6 +51,12 @@ Discovery should make bounded progress beyond repeated search results, not relax
 
 **How to apply:** Persist per-user search progress across restarts, include a date-unrestricted fallback for undated listings, and distinguish saved listings, repeated results, real exclusions, temporary history skips, and budget deferrals. Rejection history must expire and invalidate when relevant preferences or feedback change; network failures must never become cached mismatches.
 
+Sparse discovery searches should broaden retrieval terms within the same source, not only remove the date constraint or advance the page. Keep actual eligibility decisions in the posting-screening stage.
+
+**Why:** Live validation found healthy search providers returning no results for exact senior titles combined with the exact phrase "SF Bay Area"; broader same-source queries returned candidates. The user approved this correction without relaxing eligibility or duplicate checks.
+
+**How to apply:** Preserve the source site and explicit exclusions, use broader role terms without exact geographic phrases when focused results are thin or already known, and keep the existing bounded request budget. Validate retrieval separately from importing so checking source health does not modify jobs.
+
 The user's location rule allows ANY SF Bay Area role (on-site, hybrid, or remote), ANY fully remote role anywhere, and genuinely unknown locations. Known non-local locations require explicit remote eligibility even when the work-arrangement field is blank.
 
 **Why:** After correcting the initial overly strict filter, known non-local roles still appeared because blank work arrangements were treated as uncertainty. The user explicitly chose to require remote evidence for known non-local jobs.
