@@ -51,8 +51,8 @@ Discovery should make bounded progress beyond repeated search results, not relax
 
 **How to apply:** Persist per-user search progress across restarts, include a date-unrestricted fallback for undated listings, and distinguish saved listings, repeated results, real exclusions, temporary history skips, and budget deferrals. Rejection history must expire and invalidate when relevant preferences or feedback change; network failures must never become cached mismatches.
 
-The user clarified the location rule: allow ANY SF Bay Area role (on-site, hybrid, or remote), ANY fully remote role anywhere, and anything whose location or work arrangement cannot be determined. Hide only clearly outside-Bay-Area roles requiring office work.
+The user's location rule allows ANY SF Bay Area role (on-site, hybrid, or remote), ANY fully remote role anywhere, and genuinely unknown locations. Known non-local locations require explicit remote eligibility even when the work-arrangement field is blank.
 
-**Why:** The initial interpretation incorrectly excluded remote and uncertain listings. The user explicitly corrected it; uncertainty must pass, not become an exclusion.
+**Why:** After correcting the initial overly strict filter, known non-local roles still appeared because blank work arrangements were treated as uncertainty. The user explicitly chose to require remote evidence for known non-local jobs.
 
-**How to apply:** Recognize Bay Area cities as well as regional labels, apply the reversible rule to existing and future postings and dashboard counts, and retain hidden jobs in Filtered with a reason. Do not delete jobs, infer location from headquarters, or treat a hybrid role's remote days as fully remote.
+**How to apply:** Recognize Bay Area cities as well as regional labels; distinguish unknown location from unknown remote eligibility at a known outside location. Apply the reversible rule to existing and future postings and dashboard counts, and retain hidden jobs in Filtered with a reason. Do not delete jobs, infer location from headquarters, or treat a hybrid role's remote days as fully remote.

@@ -7,11 +7,23 @@ describe("recoverable Bay Area or remote filter", () => {
     expect(bayAreaFilterReason({ location, remoteType: "onsite" })).toBeNull();
     expect(bayAreaFilterReason({ location, remoteType: "remote" })).toBeNull();
   });
-  it.each(["New York, NY", "Austin, TX", "Richmond, VA", "Richmond, Virginia", "Newark, NJ", "Dublin, OH", "Dublin, Ireland", "Los Angeles, CA", "Seattle", "Boston"])("hides only known outside locations requiring office work: %s", (location) => {
+  it.each(["New York, NY", "Austin, TX", "Richmond, VA", "Richmond, Virginia", "Newark, NJ", "Dublin, OH", "Dublin, Ireland", "Los Angeles, CA", "Seattle", "Boston"])("requires explicit remote eligibility for known outside locations: %s", (location) => {
     expect(bayAreaFilterReason({ location, remoteType: "onsite" })).not.toBeNull();
     expect(bayAreaFilterReason({ location, remoteType: "hybrid" })).not.toBeNull();
     expect(bayAreaFilterReason({ location, remoteType: "remote" })).toBeNull();
-    expect(bayAreaFilterReason({ location })).toBeNull();
+    expect(bayAreaFilterReason({ location })).not.toBeNull();
+    expect(bayAreaFilterReason({ location, remoteType: "unknown" })).not.toBeNull();
+  });
+  it.each([
+    { company: "IQVIA Digital", title: "Director of Product- Media OS Activation", location: "Washington, DC", remoteType: null },
+    { company: "Quantinuum", title: "Director of Operations and Special Projects, Product Technologies", location: "Broomfield, CO", remoteType: null },
+  ])("hides reported non-local examples without remote eligibility: $company", (posting) => {
+    expect(bayAreaFilterReason(posting)).toBe("Outside SF Bay Area; remote eligibility not confirmed");
+    expect(bayAreaFilterReason({ ...posting, remoteType: "remote" })).toBeNull();
+    expect(bayAreaFilterReason(posting, { bayAreaNonRemoteOnly: false })).toBeNull();
+  });
+  it.each(["not remote", "not fully remote", "non-remote"])("does not treat negated remote eligibility as permission: %s", (remoteType) => {
+    expect(bayAreaFilterReason({ location: "Broomfield, CO", remoteType })).not.toBeNull();
   });
   it.each([
     { location: "San Francisco, CA", remoteType: "remote" },
@@ -27,6 +39,7 @@ describe("recoverable Bay Area or remote filter", () => {
   });
   it.each(["California", "United States", "Unknown", "Not specified", "Various offices", "Unrecognized town", "", null])("allows uncertain locations, even for office work: %s", (location) => {
     expect(bayAreaFilterReason({ location, remoteType: "onsite" })).toBeNull();
+    expect(bayAreaFilterReason({ location, remoteType: null })).toBeNull();
   });
   it("does not mistake partial remote days for a fully remote role", () => {
     expect(bayAreaFilterReason({ location: "New York, NY (2 remote days)", remoteType: "hybrid" })).not.toBeNull();

@@ -1668,7 +1668,7 @@ export default function DashboardPage() {
 
         {companyFilterQ.data?.bayAreaNonRemoteOnly !== false && !companyFilterQ.isLoading && !companyFilterQ.isError && (
           <p className="text-xs text-muted-foreground mb-3" data-testid="bay-area-filter-notice">
-            Allowing all SF Bay Area roles, fully remote jobs anywhere, and uncertain listings. Clearly non-local on-site or hybrid jobs stay in{" "}
+            Allowing all SF Bay Area roles, explicitly remote jobs anywhere, and unknown locations. Non-local jobs without confirmed remote eligibility stay in{" "}
             <Link href="/filtered" className="underline underline-offset-2">Filtered</Link>.
           </p>
         )}
@@ -1794,7 +1794,7 @@ export default function DashboardPage() {
                     SF Bay Area or fully remote
                   </label>
                   <p className="text-xs text-muted-foreground">
-                    Allow any SF Bay Area role and fully remote roles anywhere. If location or work arrangement is uncertain, keep the job visible.
+                    Allow any SF Bay Area role, fully remote roles anywhere, and unknown locations. Known non-local jobs need explicit remote eligibility; a blank work arrangement does not qualify.
                     {" "}<Link href="/filtered" className="underline underline-offset-2">Review hidden jobs in Filtered</Link>; turn this off to include them again.
                   </p>
                 </div>

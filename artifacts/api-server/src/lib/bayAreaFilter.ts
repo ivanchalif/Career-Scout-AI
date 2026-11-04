@@ -11,19 +11,20 @@ export function bayAreaFilterReason(
   settings?: { bayAreaNonRemoteOnly?: boolean } | null,
 ): string | null {
   // Retain the existing persisted key so current saved preferences still work.
-  // The setting now means Bay Area OR fully remote, with uncertainty allowed.
+  // The setting means Bay Area OR explicitly remote. Unknown locations pass;
+  // a known outside location with unknown remote eligibility does not.
   if (settings?.bayAreaNonRemoteOnly === false) return null;
+  const withoutRemoteNegations = (value: string) =>
+    value.replace(/\b(?:not|no|non[- ]?)\s*(?:(?:fully|100%|100 percent)\s*)?remote\b/gi, "");
   const indicatesRemote = (value: string) =>
-    /\bremote\b|\bwork\s+from\s+home\b|\bwfh\b/i.test(
-      value.replace(/\b(?:not|no|non[- ]?)\s*remote\b/gi, ""),
-    );
+    /\bremote\b|\bwork\s+from\s+home\b|\bwfh\b/i.test(withoutRemoteNegations(value));
   const workArrangement = posting.remoteType ?? "";
   const requiresOffice = /\bhybrid\b|\bon[- ]?site\b|\bin[- ]?person\b|\b(?:not|no|non[- ]?)\s*remote\b/i;
   // Structured hybrid/on-site metadata is not made fully remote by "2 days
   // remote" elsewhere in the listing. Fully remote evidence always qualifies.
   const fullyRemote = /\b(?:fully|100%|100 percent)\s*remote\b|\bremote[- ]only\b/i;
   const fields = [workArrangement, posting.location ?? "", posting.title ?? ""];
-  if (fields.some((value) => fullyRemote.test(value))) return null;
+  if (fields.some((value) => fullyRemote.test(withoutRemoteNegations(value)))) return null;
   if (!requiresOffice.test(workArrangement) && fields.some(indicatesRemote)) return null;
   const location = posting.location?.trim() ?? "";
   if (!location || /^(?:unknown|not specified|unspecified|n\/a)$/i.test(location)) {
@@ -36,9 +37,8 @@ export function bayAreaFilterReason(
     (BAY_AREA.test(office) || ADDITIONAL_BAY_CITIES.test(office) || /^sf(?:,\s*(?:ca|california))?$/i.test(office.trim())) &&
     !OTHER_STATE.test(office) && !OTHER_REGION.test(office),
   )) return null;
-  // Neither an unrecognized city nor an unknown work arrangement is proof
-  // that a role is ineligible. Hide only a known outside location AND office work.
+  // Unknown locations still pass, but missing remote metadata is not evidence
+  // of remote eligibility for a location we know is outside the Bay Area.
   const outsideBayArea = OTHER_STATE.test(location) || OTHER_REGION.test(location) || OTHER_CITY.test(location);
-  const officeRequired = requiresOffice.test(workArrangement) || requiresOffice.test(location) || requiresOffice.test(posting.title ?? "");
-  return outsideBayArea && officeRequired ? "Outside SF Bay Area; on-site or hybrid" : null;
+  return outsideBayArea ? "Outside SF Bay Area; remote eligibility not confirmed" : null;
 }

@@ -2037,7 +2037,7 @@ components:
       properties:
         bayAreaNonRemoteOnly:
           type: boolean
-          description: Allow all SF Bay Area roles and fully remote roles anywhere. Unknown or uncertain listings pass. Hide only confirmed outside-Bay-Area office roles. Legacy setting name retained for compatibility. Enabled when omitted.
+          description: Allow all SF Bay Area roles, explicitly remote roles anywhere, and unknown locations. Known outside-Bay-Area locations require explicit remote eligibility even when work arrangement is blank. Legacy setting name retained for compatibility. Enabled when omitted.
         excludeWorkday:
           type: boolean
           description: Hide verified Workday application links without deleting or skipping imports. Enabled when omitted.

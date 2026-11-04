@@ -714,7 +714,7 @@ export const CompanyFilterSettingsMode = {
 } as const;
 
 export interface CompanyFilterSettings {
-  /** Allow all SF Bay Area roles and fully remote roles anywhere. Unknown or uncertain listings pass. Hide only confirmed outside-Bay-Area office roles. Legacy setting name retained for compatibility. Enabled when omitted. */
+  /** Allow all SF Bay Area roles, explicitly remote roles anywhere, and unknown locations. Known outside-Bay-Area locations require explicit remote eligibility even when work arrangement is blank. Legacy setting name retained for compatibility. Enabled when omitted. */
   bayAreaNonRemoteOnly?: boolean;
   /** Hide verified Workday application links without deleting or skipping imports. Enabled when omitted. */
   excludeWorkday?: boolean;

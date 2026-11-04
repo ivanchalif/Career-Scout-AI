@@ -73,6 +73,6 @@ describe("GET /dashboard/summary", () => {
     app.use(dashboardRouter);
     const response = await request(app).get("/dashboard/summary");
     expect(response.status).toBe(200);
-    expect(response.body.totalPostings).toBe(enabled ? 4 : 5);
+    expect(response.body.totalPostings).toBe(enabled ? 3 : 5);
   });
 });
