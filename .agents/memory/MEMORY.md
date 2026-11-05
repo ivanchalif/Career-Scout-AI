@@ -12,3 +12,4 @@
 - [Semantic state meaning](semantic-state-meaning.md) — distinguish reversible hidden states and uncertain availability from concrete errors or removals.
 - [Safe interaction regressions](safe-interaction-regressions.md) — prefer isolated UI integration tests for decision controls; do not require shared logins or touch existing jobs.
 - [Dashboard density](dashboard-density.md) — minimize the header/control area's vertical space; keep secondary controls accessible and current errors/progress apparent.
+- [Duplicate identity policy](duplicate-identity-policy.md) — automatic dedup needs listing identity; review needs supporting evidence; persist distinct-pair feedback and preserve history.

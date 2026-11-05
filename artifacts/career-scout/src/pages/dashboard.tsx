@@ -125,7 +125,6 @@ function formatDate(date: string): string {
   return new Date(date).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
-let _dedupSweepInFlight = false;
 
 export default function DashboardPage() {
   const { toast } = useToast();
@@ -169,9 +168,13 @@ export default function DashboardPage() {
     salary_min1: number | null; salary_min2: number | null;
     salary_max1: number | null; salary_max2: number | null;
     created_at1: string; created_at2: string;
+    evidence: string[];
+    confidence: "review" | "duplicate";
   };
   const [nearDupMap, setNearDupMap] = useState<Map<number, NearDupPair & { isId1: boolean }>>(new Map());
-  const [dismissedNearDups, setDismissedNearDups] = useState<Set<number>>(new Set());
+  const [dismissedNearDups, setDismissedNearDups] = useState<Set<string>>(new Set());
+  const [nearDupRevision, setNearDupRevision] = useState(0);
+  const [savingDistinctPair, setSavingDistinctPair] = useState<string | null>(null);
   const [reviewingNearDups, setReviewingNearDups] = useState<Set<number>>(new Set());
   const [autoSweepCount, setAutoSweepCount] = useState<number | null>(null);
   const [discoveryMinScore, setDiscoveryMinScore] = useState(12);
@@ -187,34 +190,12 @@ export default function DashboardPage() {
   const [onlineProcessing, setOnlineProcessing] = useState(false);
   const [latestAvailabilityChecks, setLatestAvailabilityChecks] = useState<DiscoveryAvailabilityCheck[] | null>(null);
 
+  // Historical jobs are not swept merely by opening the dashboard.
   useEffect(() => {
-    const SESSION_KEY = "dedup-sweep-done";
-    if (sessionStorage.getItem(SESSION_KEY)) return;
-    if (_dedupSweepInFlight) return;
-    _dedupSweepInFlight = true;
-    getToken().then((token) => {
-      return fetch("/api/postings/dedup-sweep", {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-    }).then(async (res) => {
-      if (res.ok) {
-        sessionStorage.setItem(SESSION_KEY, "1");
-        const { removed } = await res.json() as { removed: number };
-        if (removed > 0) setAutoSweepCount(removed);
-        qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
-        qc.invalidateQueries({ queryKey: getListDeletedPostingsQueryKey() });
-        qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
-      } else {
-        _dedupSweepInFlight = false;
-        console.warn("[dedup-sweep] sweep request failed with status", res.status);
-      }
-    }).catch((err) => {
-      _dedupSweepInFlight = false;
-      console.warn("[dedup-sweep] sweep request error", err);
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    setDismissedNearDups(new Set());
+    setNearDupMap(new Map());
+    setSavingDistinctPair(null);
+  }, [userId]);
 
   async function flagAsDuplicate(postingId: number) {
     if (!await decision.dismiss(postingId, "duplicate")) return;
@@ -228,21 +209,36 @@ export default function DashboardPage() {
     });
   }
 
-  function dismissNearDup(postingId: number) {
+  async function dismissNearDup(postingId: number) {
     const entry = nearDupMap.get(postingId);
     const pairedId = entry ? (entry.isId1 ? entry.id2 : entry.id1) : undefined;
-    setDismissedNearDups((prev) => {
-      const next = new Set(prev);
-      next.add(postingId);
-      if (pairedId !== undefined) next.add(pairedId);
-      return next;
-    });
-    setReviewingNearDups((prev) => {
-      const next = new Set(prev);
-      next.delete(postingId);
-      if (pairedId !== undefined) next.delete(pairedId);
-      return next;
-    });
+    if (!entry || pairedId === undefined) return;
+    const key = [postingId, pairedId].sort((a, b) => a - b).join(":");
+    setSavingDistinctPair(key);
+    try {
+      const token = await getToken();
+      const result = await fetch("/api/postings/not-duplicates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ postingId, otherPostingId: pairedId }),
+      });
+      if (!result.ok) throw new Error("Could not save this comparison");
+      setDismissedNearDups((prev) => {
+        const next = new Set(prev);
+        next.add(key);
+        return next;
+      });
+      setReviewingNearDups((prev) => {
+        const next = new Set(prev);
+        next.delete(postingId);
+        next.delete(pairedId);
+        return next;
+      });
+      setNearDupRevision((revision) => revision + 1);
+      toast({ title: "Saved as different jobs", description: "This specific pair will no longer be suggested as duplicates." });
+    } catch {
+      toast({ title: "Could not save comparison", description: "Nothing changed. Please try again.", variant: "destructive" });
+    } finally { setSavingDistinctPair(null); }
   }
 
   function toggleReviewNearDup(postingId: number) {
@@ -597,23 +593,28 @@ export default function DashboardPage() {
   }, [activeCountQ.data, appliedCountQ.data]);
 
   useEffect(() => {
-    if (rawPostings.length < 2) return;
+    if (!rawPostings.length) {
+      setNearDupMap((previous) => previous.size ? new Map() : previous);
+      return;
+    }
+    let cancelled = false;
     getToken().then((token) => {
       return fetch("/api/postings/near-duplicates", {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-    }).then((r) => r.ok ? r.json() : [])
+    }).then((r) => { if (!r.ok) throw new Error("Duplicate review unavailable"); return r.json(); })
       .then((pairs: NearDupPair[]) => {
         const map = new Map<number, NearDupPair & { isId1: boolean }>();
         for (const pair of pairs) {
           map.set(pair.id1, { ...pair, isId1: true });
           map.set(pair.id2, { ...pair, isId1: false });
         }
-        setNearDupMap(map);
+        if (!cancelled) setNearDupMap(map);
       })
       .catch(() => {});
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rawPostings]);
+  }, [rawPostings, nearDupRevision, userId]);
 
   const postings = useMemo(() => {
     let items = [...rawPostings];
@@ -2216,7 +2217,7 @@ export default function DashboardPage() {
                     </DropdownMenu>
                   </div>
                 </div>
-                {nearDupMap.has(posting.id) && !dismissedNearDups.has(posting.id) && (() => {
+                {nearDupMap.has(posting.id) && !dismissedNearDups.has([nearDupMap.get(posting.id)!.id1, nearDupMap.get(posting.id)!.id2].sort((a, b) => a - b).join(":")) && (() => {
                   const entry = nearDupMap.get(posting.id)!;
                   const isId1 = entry.isId1;
                   const pairedId    = isId1 ? entry.id2 : entry.id1;
@@ -2288,13 +2289,13 @@ export default function DashboardPage() {
                         <span className="flex-1 flex items-center gap-1.5 flex-wrap">
                           {isAppliedPair ? (
                             <>
-                              Already applied to a similar role at{" "}
+                              Possible duplicate of an applied listing at{" "}
                               <span className="font-semibold">{pairedCompany}</span>
                               <StatusPill appliedAt={pairedAppliedAt} deletedAt={pairedDeletedAt} company={pairedCompany} />
                             </>
                           ) : (
                             <>
-                              Looks like a duplicate of{" "}
+                              Possible duplicate of{" "}
                               <span className="font-semibold">{pairedTitle} at {pairedCompany}</span>
                               <StatusPill appliedAt={pairedAppliedAt} deletedAt={pairedDeletedAt} company={pairedCompany} />
                             </>
@@ -2324,12 +2325,19 @@ export default function DashboardPage() {
                           type="button"
                           className={`${isAppliedPair ? "text-orange-700 hover:text-orange-500" : "text-amber-600 hover:text-amber-400"}`}
                           onClick={() => dismissNearDup(posting.id)}
+                          disabled={savingDistinctPair !== null}
+                          aria-busy={savingDistinctPair === [entry.id1, entry.id2].sort((a, b) => a - b).join(":")}
                         >
                           Not a dup
                         </button>
                       </div>
 
                       {/* Expandable side-by-side comparison */}
+                      {isReviewing && (
+                        <p className="px-4 pb-2 text-xs text-muted-foreground" data-testid={`duplicate-evidence-${posting.id}`}>
+                          <strong>Why this comparison:</strong> {entry.evidence?.join(" · ") ?? "Listing identity needs review."}
+                        </p>
+                      )}
                       {isReviewing && (
                         <div className="grid grid-cols-2 gap-px mx-4 mb-3 rounded-lg overflow-hidden border border-amber-800/20 text-xs">
                           {/* Self (this card) */}

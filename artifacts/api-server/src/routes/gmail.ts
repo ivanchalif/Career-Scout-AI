@@ -247,7 +247,7 @@ router.post("/gmail/reprocess", requireAuth, async (req: Request, res: Response)
 
       await db.insert(gmailSeenKeysTable).values({ userId, gmailKey }).onConflictDoNothing();
 
-      const { isDuplicate } = await isFuzzyDuplicate(userId, title, company);
+      const { isDuplicate } = await isFuzzyDuplicate(userId, title, company, { link: listing.url });
       if (isDuplicate) continue;
 
       let fullDescription = listing.description;

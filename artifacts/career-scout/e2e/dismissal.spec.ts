@@ -1,4 +1,44 @@
 import { test, expect } from "./support/dismissal-fixture";
+
+test("distinct-job comparison persists after reload without dismissing the job", async ({ page, dismissal }) => {
+  dismissal.duplicatePair = {
+    id1: dismissal.id, id2: dismissal.id + 1,
+    title1: dismissal.item.posting.title, title2: "Same-employer review candidate",
+    company1: dismissal.item.posting.company, company2: dismissal.item.posting.company,
+    applied_at2: "2026-01-01T00:00:00.000Z", confidence: "review",
+    evidence: ["Same employer", "Matching specialty"],
+  };
+  await page.goto("/dashboard");
+  await page.getByRole("button", { name: "Review", exact: true }).click();
+  await expect(page.getByTestId(`duplicate-evidence-${dismissal.id}`)).toContainText("Matching specialty");
+  await page.getByRole("button", { name: "Not a dup", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Not a dup", exact: true })).toHaveCount(0);
+  await expect(page.getByTestId(`posting-card-${dismissal.id}`)).toBeVisible();
+  expect(dismissal.pairSaved).toBe(true);
+  expect(dismissal.mutations).toEqual([]);
+  await page.reload();
+  await expect(page.getByTestId(`posting-card-${dismissal.id}`)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Not a dup", exact: true })).toHaveCount(0);
+});
+
+test("distinct-job comparison save failure preserves the suggestion and allows retry", async ({ page, dismissal }) => {
+  dismissal.duplicatePair = {
+    id1: dismissal.id, id2: dismissal.id + 1,
+    title1: dismissal.item.posting.title, title2: "Review candidate",
+    company1: dismissal.item.posting.company, company2: dismissal.item.posting.company,
+    applied_at2: "2026-01-01T00:00:00.000Z", confidence: "review", evidence: ["Same employer"],
+  };
+  dismissal.failPairSave = true;
+  await page.goto("/dashboard");
+  const button = page.getByRole("button", { name: "Not a dup", exact: true });
+  await button.click();
+  await expect(page.getByText("Could not save comparison", { exact: true })).toBeVisible();
+  await expect(button).toBeEnabled();
+  expect(dismissal.pairSaved).toBe(false);
+  await button.click();
+  await expect(button).toHaveCount(0);
+  expect(dismissal.pairSaved).toBe(true);
+});
 // Independent contract: deriving this from the renderer's array would allow a
 // deleted option or incorrect label to silently shrink the coverage.
 const expectedReasons = [

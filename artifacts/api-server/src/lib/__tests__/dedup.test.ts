@@ -1,208 +1,89 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { db } from "@workspace/db";
+import { isFuzzyDuplicate, runDedupSweep, sweepDuplicatesOf } from "../dedup";
 
-// ---------------------------------------------------------------------------
-// DB mock — captures SQL executed by runDedupSweep / sweepDuplicatesOf
-// ---------------------------------------------------------------------------
-
-// Rows returned by db.execute — set per-test
-let mockSelectRows: { id: number }[] = [];
-let mockAffectedRows: { id: number }[] | null = null;
-// Fields captured by the UPDATE .set() call
-let capturedUpdateFields: Record<string, unknown> = {};
-// IDs captured from the UPDATE .where() / inArray condition
-let capturedUpdateIds: number[] = [];
-let capturedUpdateCondition: unknown = null;
-// Last SQL args passed to db.execute
-let lastExecuteArg: unknown = null;
-
-vi.mock("drizzle-orm", () => ({
-  sql: new Proxy(
-    (..._args: unknown[]) => ({ _type: "sql", _args }),
-    {
-      get: (_t, prop) => {
-        if (prop === "raw") return (s: string) => ({ _type: "raw", s });
-        return undefined;
-      },
-    },
-  ),
-  and: (...conds: unknown[]) => ({ _type: "and", conds }),
-  eq: (col: unknown, val: unknown) => ({ _type: "eq", col, val }),
-  inArray: (col: unknown, vals: unknown) => ({ _type: "inArray", col, vals }),
-  isNull: (col: unknown) => ({ _type: "isNull", col }),
+const state = vi.hoisted(() => ({
+  postings: [] as any[], exceptions: [] as any[], fields: {} as any, conditions: [] as any[], affected: null as null | any[],
 }));
-
-vi.mock("@workspace/db", () => {
-  const fakeTable = {
-    id: "posting.id",
-    userId: "posting.userId",
-    deletedAt: "posting.deletedAt",
-    closedAt: "posting.closedAt",
-    appliedAt: "posting.appliedAt",
-    dismissalUndoToken: "posting.dismissalUndoToken",
-  };
-
-  return {
-    db: {
-      execute: vi.fn(async (arg: unknown) => {
-        lastExecuteArg = arg;
-        return { rows: mockSelectRows };
-      }),
-      update: vi.fn(() => ({
-        set: (fields: Record<string, unknown>) => {
-          capturedUpdateFields = fields;
-          return {
-            where: (cond: unknown) => {
-              const c = cond as { _type: string; conds?: Array<{ _type: string; vals?: number[] }> };
-              capturedUpdateCondition = cond;
-              if (c._type === "and") {
-                const ia = c.conds?.find((x) => x._type === "inArray");
-                capturedUpdateIds = ia?.vals ?? [];
-              }
-              return {
-                returning: vi.fn().mockResolvedValue(mockAffectedRows ?? mockSelectRows),
-              };
-            },
-          };
-        },
-      })),
-    },
-    jobPostingsTable: fakeTable,
-  };
+vi.mock("drizzle-orm", () => ({
+  and: (...conditions: unknown[]) => conditions,
+  eq: (field: unknown, value: unknown) => ({ op: "eq", field, value }),
+  inArray: (field: unknown, value: unknown) => ({ op: "in", field, value }),
+  isNull: (field: unknown) => ({ op: "null", field }),
+}));
+vi.mock("@workspace/db", () => ({
+  jobPostingsTable: { id: "id", userId: "userId", deletedAt: "deletedAt", closedAt: "closedAt", appliedAt: "appliedAt", dismissalUndoToken: "dismissalUndoToken" },
+  jobDuplicateExceptionsTable: { userId: "exception.userId" },
+  db: {
+    select: vi.fn(() => ({ from: (table: any) => ({ where: vi.fn(async () => table.userId === "exception.userId" ? state.exceptions : state.postings) }) })),
+    update: vi.fn(() => ({ set: (fields: any) => {
+      state.fields = fields;
+      return { where: (conditions: any[]) => {
+        state.conditions = conditions;
+        return { returning: async () => state.affected ?? conditions.find((c) => c.op === "in").value.map((id: number) => ({ id })) };
+      } };
+    } })),
+  },
+}));
+const posting = (id: number, overrides = {}) => ({
+  id, userId: "owner", title: "Product Manager", company: "Acme Inc", link: "https://jobs.lever.co/acme/req-1",
+  fullDescription: "Original complete description", createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000),
+  deletedAt: null, closedAt: null, appliedAt: null, dismissalUndoToken: null, ...overrides,
 });
+beforeEach(() => { vi.clearAllMocks(); state.postings = []; state.exceptions = []; state.fields = {}; state.conditions = []; state.affected = null; });
 
-// Import after mocks are registered
-import { runDedupSweep, sweepDuplicatesOf } from "../dedup";
-
-// ---------------------------------------------------------------------------
-// Test helpers
-// ---------------------------------------------------------------------------
-
-/** Extracts the Date value(s) from args passed to the sql template tag. */
-function findDateArg(sqlArg: unknown): Date | undefined {
-  const a = sqlArg as { _args?: unknown[] };
-  return a._args?.find((x): x is Date => x instanceof Date);
-}
-
-beforeEach(() => {
-  mockSelectRows = [];
-  mockAffectedRows = null;
-  capturedUpdateFields = {};
-  capturedUpdateIds = [];
-  capturedUpdateCondition = null;
-  lastExecuteArg = null;
-  vi.clearAllMocks();
-});
-
-// ---------------------------------------------------------------------------
-// runDedupSweep
-// ---------------------------------------------------------------------------
-
-describe("runDedupSweep", () => {
-  it("returns 0 and skips update when execute returns no rows", async () => {
-    mockSelectRows = [];
-    const removed = await runDedupSweep("user-1");
-    expect(removed).toBe(0);
-    expect(capturedUpdateIds).toEqual([]);
+describe("identity-based imports and cleanup", () => {
+  it("does not block same-title jobs without listing identity", async () => {
+    state.postings = [posting(1)];
+    expect(await isFuzzyDuplicate("owner", "Product Manager", "Acme Inc")).toEqual({ isDuplicate: false });
+    expect(db.select).not.toHaveBeenCalled();
   });
-
-  it("soft-deletes matched rows and tags them deletedBy: 'sweep'", async () => {
-    mockSelectRows = [{ id: 10 }, { id: 20 }];
-    const removed = await runDedupSweep("user-1");
-    expect(removed).toBe(2);
-    expect(capturedUpdateIds).toEqual([10, 20]);
-    expect(capturedUpdateFields).toMatchObject({
-      deletedBy: "sweep",
-      fullDescription: "",
-    });
-    expect(capturedUpdateFields.deletedAt).toBeInstanceOf(Date);
+  it("does not block a different requisition at the same company", async () => {
+    state.postings = [posting(1)];
+    expect((await isFuzzyDuplicate("owner", "Product Manager", "Acme Inc", { link: "https://jobs.lever.co/acme/req-2" })).isDuplicate).toBe(false);
   });
-
-  it("rechecks active untokened state and returns the actual affected count", async () => {
-    mockSelectRows = [{ id: 10 }, { id: 20 }];
-    mockAffectedRows = [{ id: 10 }];
-
-    const removed = await runDedupSweep("user-1");
-
-    expect(removed).toBe(1);
-    const conditions = (capturedUpdateCondition as { conds: Array<{ _type: string; col?: unknown }> }).conds;
-    expect(conditions.filter((condition) => condition._type === "isNull").map((condition) => condition.col)).toEqual([
-      "posting.deletedAt",
-      "posting.closedAt",
-      "posting.appliedAt",
-      "posting.dismissalUndoToken",
-    ]);
+  it("blocks a proven identical listing, including dismissed or applied ones", async () => {
+    state.postings = [posting(1, { appliedAt: new Date() })];
+    expect(await isFuzzyDuplicate("owner", "Different source wording", "Acme", { link: "https://jobs.lever.co/acme/req-1?utm_source=email" }))
+      .toMatchObject({ isDuplicate: true, matchedId: 1, wasApplied: true });
   });
-
-  it("passes a grace-cutoff date ~4 hours ago in the SQL query", async () => {
-    mockSelectRows = [];
-    const before = new Date(Date.now() - 4 * 60 * 60 * 1000 - 1000);
-    await runDedupSweep("user-1");
-    const after = new Date(Date.now() - 4 * 60 * 60 * 1000 + 1000);
-
-    const graceCutoff = findDateArg(lastExecuteArg);
-    expect(graceCutoff, "sql template should include a Date for the grace period").toBeDefined();
-    expect(graceCutoff!.getTime()).toBeGreaterThanOrEqual(before.getTime());
-    expect(graceCutoff!.getTime()).toBeLessThanOrEqual(after.getTime());
+  it("does not remove the Uber/Cultura pair during cleanup", async () => {
+    state.postings = [
+      posting(1, { title: "Sr Product Manager - Uber Parcel", company: "Uber Technologies, Inc.", link: "https://uber.com/jobs/1" }),
+      posting(2, { title: "Product Manager", company: "Cultura Technologies", link: "https://cultura.com/jobs/2", appliedAt: new Date() }),
+    ];
+    expect(await runDedupSweep("owner")).toBe(0);
+    expect(db.update).not.toHaveBeenCalled();
   });
-});
-
-// ---------------------------------------------------------------------------
-// sweepDuplicatesOf
-// ---------------------------------------------------------------------------
-
-describe("sweepDuplicatesOf", () => {
-  it("returns 0 and skips update when execute returns no rows", async () => {
-    mockSelectRows = [];
-    const removed = await sweepDuplicatesOf("user-1", "VP Engineering", "Acme Corp", 99);
-    expect(removed).toBe(0);
-    expect(capturedUpdateIds).toEqual([]);
+  it("cleanup preserves full content and only removes proven identical listings", async () => {
+    state.postings = [posting(1), posting(2, { appliedAt: new Date() }), posting(3, { link: "https://jobs.lever.co/acme/req-2" })];
+    expect(await runDedupSweep("owner")).toBe(1);
+    expect(state.fields).toMatchObject({ deletedBy: "sweep" });
+    expect(state.fields).not.toHaveProperty("fullDescription");
+    expect(state.conditions.find((c) => c.op === "in").value).toEqual([1]);
+    expect(state.conditions.filter((c) => c.op === "null").map((c) => c.field))
+      .toEqual(["deletedAt", "closedAt", "appliedAt", "dismissalUndoToken"]);
   });
-
-  it("soft-deletes matched rows and tags them deletedBy: 'sweep'", async () => {
-    mockSelectRows = [{ id: 30 }];
-    const removed = await sweepDuplicatesOf("user-1", "VP Engineering", "Acme Corp", 99);
-    expect(removed).toBe(1);
-    expect(capturedUpdateIds).toEqual([30]);
-    expect(capturedUpdateFields).toMatchObject({
-      deletedBy: "sweep",
-      fullDescription: "",
-    });
-    expect(capturedUpdateFields.deletedAt).toBeInstanceOf(Date);
+  it("respects persistent pair exceptions without excluding unrelated pairs", async () => {
+    state.postings = [posting(1), posting(2, { appliedAt: new Date() }), posting(3, { appliedAt: new Date(), link: "https://jobs.lever.co/acme/req-3" }), posting(4, { link: "https://jobs.lever.co/acme/req-3" })];
+    state.exceptions = [{ postingIdLow: 1, postingIdHigh: 2 }];
+    expect(await runDedupSweep("owner")).toBe(1);
+    expect(state.conditions.find((c) => c.op === "in").value).toEqual([4]);
   });
-
-  it("rechecks active untokened state and counts only rows actually updated", async () => {
-    mockSelectRows = [{ id: 30 }, { id: 40 }];
-    mockAffectedRows = [{ id: 30 }];
-
-    const removed = await sweepDuplicatesOf("user-1", "VP Engineering", "Acme Corp", 99);
-
-    expect(removed).toBe(1);
-    const conditions = (capturedUpdateCondition as { conds: Array<{ _type: string; col?: unknown }> }).conds;
-    expect(conditions.filter((condition) => condition._type === "isNull").map((condition) => condition.col)).toEqual([
-      "posting.deletedAt",
-      "posting.closedAt",
-      "posting.appliedAt",
-      "posting.dismissalUndoToken",
-    ]);
+  it("preserves the grace period and tokenized reversible dismissals", async () => {
+    state.postings = [
+      posting(1, { createdAt: new Date() }), posting(2, { dismissalUndoToken: "undo" }),
+      posting(3, { appliedAt: new Date() }),
+    ];
+    expect(await runDedupSweep("owner")).toBe(0);
   });
-
-  it("returns 0 without querying when title or company normalises to empty string", async () => {
-    const { db } = await import("@workspace/db");
-    // "!!!" and "---" both normalise to "" after stripping non-alphanum
-    const removed = await sweepDuplicatesOf("user-1", "!!!", "---", 1);
-    expect(removed).toBe(0);
-    expect(db.execute).not.toHaveBeenCalled();
+  it("action-triggered cleanup anchors to the exact actioned posting", async () => {
+    state.postings = [posting(1), posting(2, { appliedAt: new Date() }), posting(3, { link: "https://jobs.lever.co/acme/req-3", appliedAt: new Date() })];
+    expect(await sweepDuplicatesOf("owner", "ignored title", "ignored employer", 3)).toBe(0);
+    expect(await sweepDuplicatesOf("owner", "ignored title", "ignored employer", 2)).toBe(1);
   });
-
-  it("passes a grace-cutoff date ~4 hours ago in the SQL query", async () => {
-    mockSelectRows = [];
-    const before = new Date(Date.now() - 4 * 60 * 60 * 1000 - 1000);
-    await sweepDuplicatesOf("user-1", "Director of Product", "Acme Corp", 1);
-    const after = new Date(Date.now() - 4 * 60 * 60 * 1000 + 1000);
-
-    const graceCutoff = findDateArg(lastExecuteArg);
-    expect(graceCutoff, "sql template should include a Date for the grace period").toBeDefined();
-    expect(graceCutoff!.getTime()).toBeGreaterThanOrEqual(before.getTime());
-    expect(graceCutoff!.getTime()).toBeLessThanOrEqual(after.getTime());
+  it("returns the actual affected count", async () => {
+    state.postings = [posting(1), posting(2, { appliedAt: new Date() })]; state.affected = [];
+    expect(await runDedupSweep("owner")).toBe(0);
   });
 });

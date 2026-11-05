@@ -29,6 +29,7 @@ import type {
   ErrorResponse,
   FilterStats,
   FilteredEmail,
+  GetDuplicateReviews200Item,
   GetFilterStatsParams,
   GmailAuthorizationError,
   GmailCallbackParams,
@@ -58,6 +59,7 @@ import type {
   PostingFeedback,
   PostingFeedbackInput,
   PostingWithReport,
+  RecordNotDuplicateBody,
   ReopenPosting200,
   RestorePosting200,
   TitleExcludeSettings,
@@ -1847,6 +1849,170 @@ export const useImportPostingsCsv = <
   TContext
 > => {
   return useMutation(getImportPostingsCsvMutationOptions(options));
+};
+
+/**
+ * @summary Review same-employer jobs with supporting duplicate evidence
+ */
+export const getGetDuplicateReviewsUrl = () => {
+  return `/api/postings/near-duplicates`;
+};
+
+export const getDuplicateReviews = async (
+  options?: RequestInit,
+): Promise<GetDuplicateReviews200Item[]> => {
+  return customFetch<GetDuplicateReviews200Item[]>(
+    getGetDuplicateReviewsUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetDuplicateReviewsQueryKey = () => {
+  return [`/api/postings/near-duplicates`] as const;
+};
+
+export const getGetDuplicateReviewsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDuplicateReviews>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDuplicateReviews>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDuplicateReviewsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getDuplicateReviews>>
+  > = ({ signal }) => getDuplicateReviews({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDuplicateReviews>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDuplicateReviewsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDuplicateReviews>>
+>;
+export type GetDuplicateReviewsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Review same-employer jobs with supporting duplicate evidence
+ */
+
+export function useGetDuplicateReviews<
+  TData = Awaited<ReturnType<typeof getDuplicateReviews>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDuplicateReviews>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDuplicateReviewsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Save that a specific owned pair represents different jobs
+ */
+export const getRecordNotDuplicateUrl = () => {
+  return `/api/postings/not-duplicates`;
+};
+
+export const recordNotDuplicate = async (
+  recordNotDuplicateBody: RecordNotDuplicateBody,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getRecordNotDuplicateUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(recordNotDuplicateBody),
+  });
+};
+
+export const getRecordNotDuplicateMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recordNotDuplicate>>,
+    TError,
+    { data: BodyType<RecordNotDuplicateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof recordNotDuplicate>>,
+  TError,
+  { data: BodyType<RecordNotDuplicateBody> },
+  TContext
+> => {
+  const mutationKey = ["recordNotDuplicate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof recordNotDuplicate>>,
+    { data: BodyType<RecordNotDuplicateBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return recordNotDuplicate(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RecordNotDuplicateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof recordNotDuplicate>>
+>;
+export type RecordNotDuplicateMutationBody = BodyType<RecordNotDuplicateBody>;
+export type RecordNotDuplicateMutationError = ErrorType<void>;
+
+/**
+ * @summary Save that a specific owned pair represents different jobs
+ */
+export const useRecordNotDuplicate = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recordNotDuplicate>>,
+    TError,
+    { data: BodyType<RecordNotDuplicateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof recordNotDuplicate>>,
+  TError,
+  { data: BodyType<RecordNotDuplicateBody> },
+  TContext
+> => {
+  return useMutation(getRecordNotDuplicateMutationOptions(options));
 };
 
 /**

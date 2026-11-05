@@ -44,6 +44,9 @@ export const test = base.extend<{ dismissal: DismissalFixture }>({
 export { expect };
 
 class DismissalFixture {
+  duplicatePair: Record<string, unknown> | null = null;
+  pairSaved = false;
+  failPairSave = false;
   readonly account = { id: `dismissal-test-${randomUUID()}`, email: `dismissal-${randomUUID()}@example.test` };
   readonly id = 61001;
   readonly originalFeedback: PostingFeedback = { kind: "more_like_this", createdAt: "2024-11-10T11:12:13.000Z" };
@@ -106,11 +109,18 @@ class DismissalFixture {
           criteria: { roleTitles: [], skills: [], locations: [], remotePreferences: [] },
         } satisfies OnlineDiscoveryStatus);
         case "/api/online-discovery/sources": return json({ sources: [], availableSources: [] });
+        case "/api/postings/near-duplicates": return json(this.duplicatePair && !this.pairSaved ? [this.duplicatePair] : []);
         default: return null;
       }
     }
     if (method === "POST" && path === "/api/postings/dedup-sweep") {
       return json({ removed: 0, remaining: this.item.posting.deletedAt ? 0 : 1 });
+    }
+    if (method === "POST" && path === "/api/postings/not-duplicates") {
+      if (this.failPairSave) { this.failPairSave = false; return json({ error: "Simulated save failure" }, 500); }
+      if (body?.postingId !== this.id || body?.otherPostingId !== this.id + 1) return json({ error: "Unexpected pair" }, 400);
+      this.pairSaved = true;
+      return { status: 204 };
     }
     const action = path.replace(`/api/postings/${this.id}/`, "") as Action;
     if (!["dismiss", "dismissal-reason", "undo-dismissal"].includes(action)) return null;

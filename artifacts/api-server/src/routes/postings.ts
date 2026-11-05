@@ -26,7 +26,9 @@ import {
 import { requireAuth } from "../middlewares/requireAuth";
 import { scorePosting, scorePostingBackground, extractJobListings } from "../lib/scoringService";
 import { fetchSingleEmail } from "../lib/gmailClient";
-import { isFuzzyDuplicate, sweepDuplicatesOf, runDedupSweep, dbNormalizeSql } from "../lib/dedup";
+import { isFuzzyDuplicate, sweepDuplicatesOf, runDedupSweep, loadDuplicateExceptions } from "../lib/dedup";
+import { compareJobs, pairKey } from "../lib/duplicatePolicy";
+import { jobDuplicateExceptionsTable } from "@workspace/db";
 import { logger } from "../lib/logger";
 import { isHiddenByWorkday } from "../lib/workdayFilter";
 import { bayAreaFilterReason } from "../lib/bayAreaFilter";
@@ -393,102 +395,56 @@ router.get("/postings/deleted", requireAuth, async (req, res): Promise<void> => 
   res.json(ListPostingsResponse.parse(results));
 });
 
-// Returns pairs of postings whose titles are similar enough to be possible
-// duplicates but below the auto-dedup threshold.
-//
-// Two separate queries are run and merged:
-//   1. Active-vs-applied  (title 0.40–0.69, company > 0.40) — highest priority;
-//      flags active jobs the user has already applied to something similar for.
-//   2. Active-vs-active   (title 0.45–0.69, company > 0.35) — existing behaviour.
-//
-// Simple normalization (lowercase + strip non-alphanumeric + collapse spaces) is
-// used intentionally — the full dbNormalizeSql() expansion embeds 10+ nested
-// regexp_replace calls on each side of the join, making the query time out at
-// scale. Simple normalization is adequate for the advisory banner.
+// Evidence-based review only. Text resemblance alone cannot hide a job.
 router.get("/postings/near-duplicates", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId;
-  const safeId = userId.replace(/[^a-zA-Z0-9_]/g, "");
-
-  const norm = (col: string) =>
-    `btrim(regexp_replace(regexp_replace(lower(${col}), '[^a-z0-9 ]', ' ', 'g'), ' +', ' ', 'g'))`;
-
-  // CTEs pre-filter to small row-sets before the cross-join so that
-  // similarity() is only evaluated on O(active × applied) pairs, not
-  // the full O(total²) table cross-product.
-  const CTE_ACTIVE = `
-    SELECT id, title, company, location, link AS url, applied_at, deleted_at,
-           salary_min, salary_max, created_at,
-           ${norm("title")} AS ntitle, ${norm("company")} AS ncompany
-    FROM job_postings
-    WHERE user_id = '${safeId}'
-      AND deleted_at IS NULL AND applied_at IS NULL AND closed_at IS NULL
-  `;
-  const CTE_APPLIED = `
-    SELECT id, title, company, location, link AS url, applied_at, deleted_at,
-           salary_min, salary_max, created_at,
-           ${norm("title")} AS ntitle, ${norm("company")} AS ncompany
-    FROM job_postings
-    WHERE user_id = '${safeId}'
-      AND applied_at IS NOT NULL AND deleted_at IS NULL AND closed_at IS NULL
-  `;
-
-  const SELECT_COLS = (a: string, b: string) => `
-    ${a}.id AS id1, ${b}.id AS id2,
-    ${a}.title AS title1, ${b}.title AS title2,
-    ${a}.company AS company1, ${b}.company AS company2,
-    ${a}.location AS location1, ${b}.location AS location2,
-    ${a}.url AS url1, ${b}.url AS url2,
-    ${a}.applied_at AS applied_at1, ${b}.applied_at AS applied_at2,
-    ${a}.deleted_at AS deleted_at1, ${b}.deleted_at AS deleted_at2,
-    ${a}.salary_min AS salary_min1, ${b}.salary_min AS salary_min2,
-    ${a}.salary_max AS salary_max1, ${b}.salary_max AS salary_max2,
-    ${a}.created_at AS created_at1, ${b}.created_at AS created_at2,
-    similarity(${a}.ntitle, ${b}.ntitle) AS title_sim
-  `;
-
-  // Query 1: active jobs similar to something the user already applied to.
-  // id1 = active, id2 = applied (applied_at2 is always set).
-  const appliedPairsQ = `
-    WITH active AS (${CTE_ACTIVE}), applied AS (${CTE_APPLIED})
-    SELECT ${SELECT_COLS("a", "p")}
-    FROM active a, applied p
-    WHERE similarity(a.ntitle, p.ntitle) BETWEEN 0.40 AND 0.69
-      AND similarity(a.ncompany, p.ncompany) > 0.40
-    ORDER BY title_sim DESC
-    LIMIT 20
-  `;
-
-  // Query 2: pairs of active jobs that look similar to each other.
-  const activePairsQ = `
-    WITH active AS (${CTE_ACTIVE})
-    SELECT ${SELECT_COLS("a", "b")}
-    FROM active a, active b
-    WHERE a.id < b.id
-      AND similarity(a.ntitle, b.ntitle) BETWEEN 0.45 AND 0.69
-      AND similarity(a.ncompany, b.ncompany) > 0.35
-    ORDER BY title_sim DESC
-    LIMIT 20
-  `;
-
-  const [appliedPairs, activePairs] = await Promise.all([
-    db.execute(sql.raw(appliedPairsQ)),
-    db.execute(sql.raw(activePairsQ)),
-  ]);
-
-  // Merge: applied-vs-active pairs first (higher priority). Deduplicate by
-  // posting ID so each card only gets one banner.
+  const postings = await db.select().from(jobPostingsTable).where(and(
+    eq(jobPostingsTable.userId, userId), isNull(jobPostingsTable.deletedAt), isNull(jobPostingsTable.closedAt),
+  ));
+  const exceptions = await loadDuplicateExceptions(userId);
   const seen = new Set<number>();
   const results: unknown[] = [];
-  for (const row of [...appliedPairs.rows, ...activePairs.rows]) {
-    const r = row as { id1: number; id2: number };
-    if (!seen.has(r.id1) && !seen.has(r.id2)) {
-      seen.add(r.id1);
-      seen.add(r.id2);
+  const active = postings.filter((p) => !p.appliedAt);
+  const partners = [...postings.filter((p) => p.appliedAt), ...active];
+  for (const a of active) {
+    if (seen.has(a.id)) continue;
+    for (const b of partners) {
+      if (a.id === b.id || seen.has(b.id) || exceptions.has(pairKey(a.id, b.id))) continue;
+      const decision = compareJobs(a, b);
+      if (decision.kind === "distinct") continue;
+      seen.add(a.id); seen.add(b.id);
+      const row: Record<string, unknown> = { id1: a.id, id2: b.id, evidence: decision.evidence, confidence: decision.kind };
+      for (const [posting, suffix] of [[a, "1"], [b, "2"]] as const) {
+        Object.assign(row, {
+          [`title${suffix}`]: posting.title, [`company${suffix}`]: posting.company,
+          [`location${suffix}`]: posting.location, [`url${suffix}`]: posting.link,
+          [`applied_at${suffix}`]: posting.appliedAt, [`deleted_at${suffix}`]: posting.deletedAt,
+          [`salary_min${suffix}`]: posting.salaryMin, [`salary_max${suffix}`]: posting.salaryMax,
+          [`created_at${suffix}`]: posting.createdAt,
+        });
+      }
       results.push(row);
+      break;
     }
+    if (results.length >= 40) break;
   }
-
   res.json(results);
+});
+
+router.post("/postings/not-duplicates", requireAuth, async (req, res): Promise<void> => {
+  const body = req.body as { postingId?: unknown; otherPostingId?: unknown };
+  if (!Number.isSafeInteger(body?.postingId) || !Number.isSafeInteger(body?.otherPostingId)
+    || Number(body.postingId) <= 0 || Number(body.otherPostingId) <= 0 || body.postingId === body.otherPostingId) {
+    res.status(400).json({ error: "Two different positive posting IDs are required" }); return;
+  }
+  const ids = [Number(body.postingId), Number(body.otherPostingId)].sort((a, b) => a - b);
+  const owned = await db.select({ id: jobPostingsTable.id }).from(jobPostingsTable)
+    .where(and(eq(jobPostingsTable.userId, req.userId), inArray(jobPostingsTable.id, ids)));
+  if (owned.length !== 2) { res.status(404).json({ error: "Posting not found" }); return; }
+  await db.insert(jobDuplicateExceptionsTable).values({
+    userId: req.userId, postingIdLow: ids[0], postingIdHigh: ids[1],
+  }).onConflictDoNothing();
+  res.sendStatus(204);
 });
 
 const CSV_COLUMNS = ["title", "company", "link", "location", "remoteType", "salaryMin", "salaryMax", "fitScore", "source", "applied", "dateAdded"] as const;
@@ -564,10 +520,6 @@ router.post("/postings/import", requireAuth, upload.single("file"), async (req, 
     .from(jobPostingsTable)
     .where(and(eq(jobPostingsTable.userId, userId), isNull(jobPostingsTable.deletedAt)));
 
-  const existingLinks = new Set(existingPostings.map((p) => p.link?.trim().toLowerCase()).filter(Boolean));
-  const existingTitleCompany = new Set(
-    existingPostings.map((p) => `${p.title.trim().toLowerCase()}||${p.company.trim().toLowerCase()}`),
-  );
 
   let imported = 0;
   let skipped = 0;
@@ -590,10 +542,7 @@ router.post("/postings/import", requireAuth, upload.single("file"), async (req, 
     const salaryMin = isNaN(salaryMinRaw) ? null : salaryMinRaw;
     const salaryMax = isNaN(salaryMaxRaw) ? null : salaryMaxRaw;
 
-    const linkKey = link?.toLowerCase();
-    const titleCompanyKey = `${title.toLowerCase()}||${company.toLowerCase()}`;
-
-    if ((linkKey && existingLinks.has(linkKey)) || existingTitleCompany.has(titleCompanyKey)) {
+    if (existingPostings.some((posting) => compareJobs({ title, company, link }, posting).kind === "duplicate")) {
       skipped++;
       continue;
     }
@@ -617,8 +566,7 @@ router.post("/postings/import", requireAuth, upload.single("file"), async (req, 
       })
       .returning();
 
-    existingLinks.add(linkKey ?? "");
-    existingTitleCompany.add(titleCompanyKey);
+    existingPostings.push({ title, company, link });
 
     imported++;
     scorePostingBackground(inserted.id, userId);
@@ -864,7 +812,6 @@ router.delete("/postings/:id", requireAuth, async (req, res): Promise<void> => {
     .set({
       deletedAt: new Date(),
       deletedBy: "user",
-      fullDescription: "",
       dismissalUndoToken: null,
       dismissalPreviousFeedback: null,
     })
@@ -1193,7 +1140,6 @@ router.post("/postings/:id/flag-duplicate", requireAuth, async (req, res): Promi
     .set({
       deletedAt: new Date(),
       deletedBy: "duplicate",
-      fullDescription: "",
       dismissalUndoToken: null,
       dismissalPreviousFeedback: null,
     })

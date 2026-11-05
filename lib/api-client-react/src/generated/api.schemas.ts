@@ -828,6 +828,29 @@ export type ImportPostingsCsvBody = {
   file: Blob;
 };
 
+export type GetDuplicateReviews200ItemConfidence =
+  (typeof GetDuplicateReviews200ItemConfidence)[keyof typeof GetDuplicateReviews200ItemConfidence];
+
+export const GetDuplicateReviews200ItemConfidence = {
+  review: "review",
+  duplicate: "duplicate",
+} as const;
+
+export type GetDuplicateReviews200Item = {
+  id1: number;
+  id2: number;
+  confidence: GetDuplicateReviews200ItemConfidence;
+  evidence: string[];
+  [key: string]: unknown;
+};
+
+export type RecordNotDuplicateBody = {
+  /** @minimum 1 */
+  postingId: number;
+  /** @minimum 1 */
+  otherPostingId: number;
+};
+
 export type GetFilterStatsParams = {
   from?: string;
   to?: string;

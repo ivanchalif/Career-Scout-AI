@@ -1,345 +1,65 @@
-import { sql, and, eq, inArray, isNull } from "drizzle-orm";
-import { db, jobPostingsTable } from "@workspace/db";
+import { and, eq, inArray, isNull } from "drizzle-orm";
+import { db, jobPostingsTable, jobDuplicateExceptionsTable } from "@workspace/db";
+import { compareJobs, normalizeTitle, pairKey, type DuplicateCandidate } from "./duplicatePolicy";
+export { canonicalizeJobUrl } from "./duplicatePolicy";
+/** Compatibility for discovery retrieval keys; not an automatic duplicate test. */
+export const normalizeFuzzy = normalizeTitle;
 
-// Common job-title abbreviations expanded before similarity comparison so that
-// e.g. "Director AI Product Mgmt" matches "Director AI Product Management".
-const JOB_TITLE_ABBREVIATIONS: [RegExp, string][] = [
-  [/\bmgmt\b/gi, "management"],
-  [/\bmgr\b/gi, "manager"],
-  [/\bsvp\b/gi, "senior vice president"],
-  [/\bevp\b/gi, "executive vice president"],
-  [/\bvp\b/gi, "vice president"],
-  [/\bdir\b/gi, "director"],
-  [/\bsr\b/gi, "senior"],
-  [/\bjr\b/gi, "junior"],
-  [/\basst\b/gi, "assistant"],
-  [/\bengg?\b/gi, "engineering"],
-];
+const SWEEP_GRACE_PERIOD_MS = 4 * 60 * 60 * 1000;
+export type DuplicatePosting = typeof jobPostingsTable.$inferSelect;
 
-export function normalizeFuzzy(text: string): string {
-  let s = text.toLowerCase();
-  for (const [pattern, replacement] of JOB_TITLE_ABBREVIATIONS) {
-    s = s.replace(pattern, replacement);
-  }
-  return s
-    .replace(/\s*\([^)]*\)/g, " ")
-    .replace(
-      /\b(inc|llc|ltd|corp|co|gmbh|ag|plc|sa|technologies|technology|tech|solutions|group|holdings|services)\.?\b/gi,
-      " ",
-    )
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+export async function loadDuplicateExceptions(userId: string): Promise<Set<string>> {
+  const rows = await db.select().from(jobDuplicateExceptionsTable).where(eq(jobDuplicateExceptionsTable.userId, userId));
+  return new Set(rows.map((row) => pairKey(row.postingIdLow, row.postingIdHigh)));
 }
 
-/** Removes tracking-only URL details so reposts and email redirects share one identity. */
-export function canonicalizeJobUrl(rawUrl: string): string {
-  try {
-    const url = new URL(rawUrl.trim());
-    url.hash = "";
-    for (const key of [...url.searchParams.keys()]) {
-      if (/^(utm_|ref$|source$|src$|gclid$|fbclid$|trk$)/i.test(key)) {
-        url.searchParams.delete(key);
-      }
-    }
-    url.hostname = url.hostname.toLowerCase().replace(/^www\./, "");
-    url.pathname = url.pathname.replace(/\/+$/, "") || "/";
-    url.searchParams.sort();
-    return url.toString();
-  } catch {
-    return rawUrl.trim().toLowerCase().replace(/\/+$/, "");
-  }
-}
-
-// Suffix list kept in sync with normalizeFuzzy() above so DB-side normalization
-// produces the same output as the JS function.
-const SUFFIX_REGEX =
-  "\\m(inc|llc|ltd|corp|co|gmbh|ag|plc|sa|technologies|technology|tech|solutions|group|holdings|services)\\M";
-
-// Job-title abbreviation expansions mirrored in SQL so stored titles are also
-// expanded (handles the case where the stored title has the abbreviation).
-const SQL_ABBREV_REPLACEMENTS: [string, string][] = [
-  ["\\mmgmt\\M", "management"],
-  ["\\mmgr\\M", "manager"],
-  ["\\msvp\\M", "senior vice president"],
-  ["\\mevp\\M", "executive vice president"],
-  ["\\mvp\\M", "vice president"],
-  ["\\mdir\\M", "director"],
-  ["\\msr\\M", "senior"],
-  ["\\mjr\\M", "junior"],
-  ["\\masst\\M", "assistant"],
-  ["\\mengg?\\M", "engineering"],
-];
-
-/**
- * Applies the same normalization as normalizeFuzzy() but inside PostgreSQL.
- *
- * Steps (matching normalizeFuzzy order):
- *   1. lowercase
- *   2. expand common job-title abbreviations (mgmt→management, etc.)
- *   3. strip common company suffixes using ARE word-boundary tokens (\m / \M)
- *   4. replace remaining non-alphanumeric chars with spaces
- *   5. collapse runs of spaces to a single space
- *   6. trim
- */
-export function dbNormalizeSql(col: string): string {
-  // Build nested regexp_replace calls for each abbreviation expansion
-  let expr = `lower(${col})`;
-  for (const [pattern, replacement] of SQL_ABBREV_REPLACEMENTS) {
-    expr = `regexp_replace(${expr}, '${pattern}', '${replacement}', 'g')`;
-  }
-  return `btrim(regexp_replace(
-      regexp_replace(
-        regexp_replace(${expr}, '${SUFFIX_REGEX}', ' ', 'g'),
-        '[^a-z0-9 ]', ' ', 'g'
-      ),
-      ' +', ' ', 'g'
-    ))`;
-}
-
-/**
- * Returns true when a posting with a very similar (title, company) pair already
- * exists for this user — regardless of source (Gmail, IMAP, manual, etc.).
- *
- * Thresholds:
- *   title   > 0.70  (slightly looser to catch minor wording diffs)
- *   company > 0.60  (catches suffix/abbrev variants e.g. "Google LLC" vs "Google")
- *
- * Both must match simultaneously to flag a duplicate.
- *
- * All row states are included — active, applied, and soft-deleted — so that
- * previously applied or dismissed postings are never re-imported.
- * `wasDeleted` / `wasApplied` in the return value let callers log the reason.
- * Preference order: active-unapplied > applied > deleted.
- */
+/** Kept as a compatibility name; text similarity NEVER blocks an import. */
 export async function isFuzzyDuplicate(
-  userId: string,
-  title: string,
-  company: string,
-  options?: {
-    /** Exclude this posting ID from the match (used by dedup sweep to avoid self-match). */
-    excludeId?: number;
-    /** When true, only match against deleted or applied rows (ignores active duplicates). */
-    deletedOrAppliedOnly?: boolean;
-  },
-): Promise<{
-  isDuplicate: boolean;
-  matchedTitle?: string;
-  matchedCompany?: string;
-  matchedId?: number;
-  wasDeleted?: boolean;
-  wasApplied?: boolean;
-}> {
-  const normTitle = normalizeFuzzy(title);
-  const normCompany = normalizeFuzzy(company);
-
-  if (!normTitle || !normCompany) return { isDuplicate: false };
-
-  const titleNorm = dbNormalizeSql("title");
-  const companyNorm = dbNormalizeSql("company");
-
-  const excludeClause = options?.excludeId != null
-    ? sql`AND id != ${options.excludeId}`
-    : sql``;
-  const stateClause = options?.deletedOrAppliedOnly
-    ? sql`AND (deleted_at IS NOT NULL OR applied_at IS NOT NULL)`
-    : sql``;
-
-  const rows = await db.execute(sql`
-    SELECT id, title, company, deleted_at, applied_at
-    FROM job_postings
-    WHERE user_id = ${userId}
-      AND closed_at IS NULL
-      AND similarity(
-        ${sql.raw(titleNorm)},
-        ${normTitle}
-      ) > 0.70
-      AND similarity(
-        ${sql.raw(companyNorm)},
-        ${normCompany}
-      ) > 0.60
-      ${excludeClause}
-      ${stateClause}
-    ORDER BY
-      deleted_at IS NOT NULL,   -- active rows first
-      applied_at IS NOT NULL    -- unapplied before applied
-    LIMIT 1
-  `);
-
-  if (rows.rows.length > 0) {
-    const match = rows.rows[0] as {
-      id: number;
-      title: string;
-      company: string;
-      deleted_at: string | null;
-      applied_at: string | null;
-    };
-    return {
-      isDuplicate: true,
-      matchedId: match.id,
-      matchedTitle: match.title,
-      matchedCompany: match.company,
-      wasDeleted: match.deleted_at !== null,
-      wasApplied: match.applied_at !== null,
-    };
-  }
-  return { isDuplicate: false };
+  userId: string, title: string, company: string,
+  options?: { excludeId?: number; deletedOrAppliedOnly?: boolean; link?: string | null },
+): Promise<{ isDuplicate: boolean; matchedTitle?: string; matchedCompany?: string; matchedId?: number; wasDeleted?: boolean; wasApplied?: boolean }> {
+  if (!options?.link) return { isDuplicate: false };
+  const postings = await db.select().from(jobPostingsTable).where(eq(jobPostingsTable.userId, userId));
+  const exceptions = options.excludeId ? await loadDuplicateExceptions(userId) : new Set<string>();
+  const candidate: DuplicateCandidate = { title, company, link: options.link };
+  const match = postings.find((posting) => posting.id !== options.excludeId
+    && (!options.deletedOrAppliedOnly || posting.deletedAt || posting.appliedAt)
+    && (!options.excludeId || !exceptions.has(pairKey(options.excludeId, posting.id)))
+    && compareJobs(candidate, posting).kind === "duplicate");
+  return match ? {
+    isDuplicate: true, matchedId: match.id, matchedTitle: match.title, matchedCompany: match.company,
+    wasDeleted: Boolean(match.deletedAt), wasApplied: Boolean(match.appliedAt),
+  } : { isDuplicate: false };
 }
 
-/**
- * How long (in milliseconds) a freshly-imported posting is protected from the
- * auto-dedup sweep. Jobs created within this window are exempt so that users
- * always get a chance to see newly-arrived roles before any sweep removes them.
- */
-const SWEEP_GRACE_PERIOD_MS = 4 * 60 * 60 * 1000; // 4 hours
-
-/**
- * Sweeps all active postings for `userId` and soft-deletes any that fuzzy-match
- * a posting the user has already deleted or applied to.
- *
- * Uses a single threshold:
- *   Standard path  — title > 0.70 AND company > 0.60
- *
- * The former second-tier (title > 0.50 AND company > 0.85) has been removed
- * because it was too aggressive: generic VP/Director titles at the same company
- * caused legitimate new roles to be deleted within minutes of import.
- *
- * Grace period: postings created within SWEEP_GRACE_PERIOD_MS (4 hours) are
- * excluded from deletion so users always see freshly-imported jobs first.
- *
- * Only matches against applied or deleted rows so that active duplicates of
- * *other* active postings are never silently removed here (that is handled by
- * sweepDuplicatesOf).
- *
- * Runs as a single SQL query instead of N+1 isFuzzyDuplicate calls.
- *
- * Returns the count of postings removed.
- */
-export async function runDedupSweep(userId: string): Promise<number> {
-  // Pre-compute normalised strings in CTEs so similarity() is evaluated on
-  // the small pre-filtered sets rather than the full O(total²) cross-product.
-  // Simple normalisation (lowercase + strip non-alphanum) is used here because:
-  //   a) it is computed once per row, not once per pair
-  //   b) it is adequate for the advisory sweep (full normalisation including
-  //      abbreviation expansion is still used by isFuzzyDuplicate at import time)
-  const simpleNorm = "btrim(regexp_replace(regexp_replace(lower(title), '[^a-z0-9 ]', ' ', 'g'), ' +', ' ', 'g'))";
-  const simpleNormCo = "btrim(regexp_replace(regexp_replace(lower(company), '[^a-z0-9 ]', ' ', 'g'), ' +', ' ', 'g'))";
-  const graceCutoff = new Date(Date.now() - SWEEP_GRACE_PERIOD_MS);
-
-  const rows = await db.execute(sql`
-    WITH active AS (
-      SELECT id,
-        ${sql.raw(simpleNorm)} AS ntitle,
-        ${sql.raw(simpleNormCo)} AS ncompany
-      FROM job_postings
-      WHERE user_id = ${userId}
-        AND deleted_at IS NULL AND closed_at IS NULL AND applied_at IS NULL
-        AND created_at < ${graceCutoff}
-    ),
-    already_actioned AS (
-      SELECT id,
-        ${sql.raw(simpleNorm)} AS ntitle,
-        ${sql.raw(simpleNormCo)} AS ncompany
-      FROM job_postings
-      WHERE user_id = ${userId}
-        AND closed_at IS NULL
-        AND (deleted_at IS NOT NULL OR applied_at IS NOT NULL)
-    )
-    SELECT DISTINCT a.id
-    FROM active a, already_actioned p
-    WHERE similarity(a.ntitle, p.ntitle) > 0.70
-      AND similarity(a.ncompany, p.ncompany) > 0.60
-  `);
-
-  const toDelete = (rows.rows as { id: number }[]).map((r) => r.id);
-
-  if (toDelete.length > 0) {
-    const removed = await db
-      .update(jobPostingsTable)
-      .set({ deletedAt: new Date(), deletedBy: "sweep", fullDescription: "" })
-      .where(and(
-        eq(jobPostingsTable.userId, userId),
-        inArray(jobPostingsTable.id, toDelete),
-        isNull(jobPostingsTable.deletedAt),
-        isNull(jobPostingsTable.closedAt),
-        isNull(jobPostingsTable.appliedAt),
-        isNull(jobPostingsTable.dismissalUndoToken),
-      ))
-      .returning({ id: jobPostingsTable.id });
-    return removed.length;
-  }
-
-  return toDelete.length;
-}
-
-/**
- * Finds all active (non-deleted, non-applied) postings for `userId` that
- * fuzzy-match `title` + `company`, excludes the posting that was just actioned
- * (`excludeId`), and soft-deletes them in bulk.
- *
- * Threshold: title > 0.70 AND company > 0.60 (same as runDedupSweep).
- * The former second-tier (title > 0.50 AND company > 0.85) has been removed
- * for the same reason as in runDedupSweep — it caused false positives on
- * generic VP/Director roles at the same company.
- *
- * Grace period: postings created within SWEEP_GRACE_PERIOD_MS are excluded so
- * that freshly imported jobs are always visible to the user before any
- * automatic sweep removes them. This mirrors the protection in runDedupSweep
- * and guarantees the 4-hour window across both automatic deletion paths.
- *
- * Intended to be called in the background after a posting is deleted or marked
- * applied so that near-duplicate active cards disappear automatically.
- *
- * Returns the count of postings removed.
- */
-export async function sweepDuplicatesOf(
-  userId: string,
-  title: string,
-  company: string,
-  excludeId: number,
-): Promise<number> {
-  const normTitle = normalizeFuzzy(title);
-  const normCompany = normalizeFuzzy(company);
-
-  if (!normTitle || !normCompany) return 0;
-
-  const graceCutoff = new Date(Date.now() - SWEEP_GRACE_PERIOD_MS);
-
-  const rows = await db.execute(sql`
-    SELECT id
-    FROM job_postings
-    WHERE user_id = ${userId}
-      AND id != ${excludeId}
-      AND deleted_at IS NULL
-      AND closed_at IS NULL
-      AND applied_at IS NULL
-      AND created_at < ${graceCutoff}
-      AND similarity(
-        btrim(regexp_replace(regexp_replace(lower(title), '[^a-z0-9 ]', ' ', 'g'), ' +', ' ', 'g')),
-        ${normTitle}
-      ) > 0.70
-      AND similarity(
-        btrim(regexp_replace(regexp_replace(lower(company), '[^a-z0-9 ]', ' ', 'g'), ' +', ' ', 'g')),
-        ${normCompany}
-      ) > 0.60
-  `);
-
-  if (rows.rows.length === 0) return 0;
-
-  const ids = (rows.rows as { id: number }[]).map((r) => r.id);
-
-  const removed = await db
-    .update(jobPostingsTable)
-    .set({ deletedAt: new Date(), deletedBy: "sweep", fullDescription: "" })
-    .where(and(
-      eq(jobPostingsTable.userId, userId),
-      inArray(jobPostingsTable.id, ids),
-      isNull(jobPostingsTable.deletedAt),
-      isNull(jobPostingsTable.closedAt),
-      isNull(jobPostingsTable.appliedAt),
-      isNull(jobPostingsTable.dismissalUndoToken),
-    ))
+async function removeConfirmedDuplicates(userId: string, anchorId?: number): Promise<number> {
+  const postings = await db.select().from(jobPostingsTable).where(eq(jobPostingsTable.userId, userId));
+  const exceptions = await loadDuplicateExceptions(userId);
+  const anchors = anchorId == null
+    ? postings.filter((p) => p.deletedAt || p.appliedAt)
+    : postings.filter((p) => p.id === anchorId);
+  const ids = postings.filter((p) => !p.deletedAt && !p.closedAt && !p.appliedAt && !p.dismissalUndoToken
+    && p.createdAt.getTime() < Date.now() - SWEEP_GRACE_PERIOD_MS
+    && anchors.some((anchor) => anchor.id !== p.id
+      && !exceptions.has(pairKey(anchor.id, p.id))
+      && compareJobs(p, anchor).kind === "duplicate")).map((p) => p.id);
+  if (!ids.length) return 0;
+  const removed = await db.update(jobPostingsTable).set({ deletedAt: new Date(), deletedBy: "sweep" })
+    .where(and(eq(jobPostingsTable.userId, userId), inArray(jobPostingsTable.id, ids),
+      isNull(jobPostingsTable.deletedAt), isNull(jobPostingsTable.closedAt),
+      isNull(jobPostingsTable.appliedAt), isNull(jobPostingsTable.dismissalUndoToken)))
     .returning({ id: jobPostingsTable.id });
-
   return removed.length;
+}
+
+export async function runDedupSweep(userId: string): Promise<number> {
+  return removeConfirmedDuplicates(userId);
+}
+export async function sweepDuplicatesOf(userId: string, _title: string, _company: string, excludeId: number): Promise<number> {
+  return removeConfirmedDuplicates(userId, excludeId);
+}
+
+/** Legacy callers may import this normalizer; never use it as identity proof. */
+export function dbNormalizeSql(col: string): string {
+  return `btrim(regexp_replace(lower(${col}), '[^a-z0-9 ]', ' ', 'g'))`;
 }

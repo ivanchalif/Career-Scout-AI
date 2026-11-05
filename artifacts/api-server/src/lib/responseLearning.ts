@@ -1,3 +1,5 @@
+import { compareJobs, individualJobUrl } from "./duplicatePolicy";
+
 export type ResponseExample = {
   kind: string;
   title: string;
@@ -74,18 +76,18 @@ export function evaluateResponses(
   examples: ResponseExample[],
   now = Date.now(),
 ): { adjustment: number; reasons: string[]; suppress: boolean } {
-  const url = listingUrl(candidate.link ?? candidate.url);
+  const url = individualJobUrl(candidate.link ?? candidate.url);
   const location = knownLocation(candidate.location);
   const workday = isWorkdayListing(candidate.link ?? candidate.url);
   const votes = new Map<string, { positive: number; negative: number; strong: boolean; reason: string }>();
   let repeat = false;
 
   for (const example of examples) {
-    const sameIdentity = Boolean(url && url === listingUrl(example.link))
-      || Boolean(candidate.company && example.company
-        && normalized(candidate.company) === normalized(example.company)
-        && normalized(candidate.title) === normalized(example.title));
-    const sameClosedListing = Boolean(url && url === listingUrl(example.link));
+    const sameIdentity = compareJobs(
+      { title: candidate.title, company: candidate.company ?? "", link: candidate.link ?? candidate.url },
+      { title: example.title, company: example.company ?? "", link: example.link },
+    ).kind === "duplicate";
+    const sameClosedListing = Boolean(url && url === individualJobUrl(example.link));
     if (example.kind === "already_closed" ? sameClosedListing
       : (example.excludeExact || ["applied", "dismissed", "duplicate"].includes(example.kind)) && sameIdentity) {
       repeat = true;

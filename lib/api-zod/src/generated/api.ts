@@ -912,6 +912,28 @@ export const ImportPostingsCsvResponse = zod.object({
 });
 
 /**
+ * @summary Review same-employer jobs with supporting duplicate evidence
+ */
+export const GetDuplicateReviewsResponseItem = zod.object({
+  id1: zod.number(),
+  id2: zod.number(),
+  confidence: zod.enum(["review", "duplicate"]),
+  evidence: zod.array(zod.string()),
+});
+export const GetDuplicateReviewsResponse = zod.array(
+  GetDuplicateReviewsResponseItem,
+);
+
+/**
+ * @summary Save that a specific owned pair represents different jobs
+ */
+
+export const RecordNotDuplicateBody = zod.object({
+  postingId: zod.number().min(1),
+  otherPostingId: zod.number().min(1),
+});
+
+/**
  * @summary Trigger AI analysis of a job posting
  */
 export const AnalyzePostingParams = zod.object({

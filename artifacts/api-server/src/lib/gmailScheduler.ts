@@ -4,7 +4,7 @@ import type { EmailSyncOutcome } from "@workspace/db";
 import { fetchJobEmails, markEmailAsRead, estimateEmailCount, DEFAULT_EMAIL_FILTER_CRITERIA } from "./gmailClient";
 import { extractJobListings } from "./scoringService";
 import { scorePostingBackground, sweepUnscoredPostings } from "./scoringService";
-import { isFuzzyDuplicate, runDedupSweep } from "./dedup";
+import { isFuzzyDuplicate } from "./dedup";
 import { fetchJobPageContent } from "./pageScraper";
 import { missingJobFields } from "./jobLinkHealth";
 import { logger } from "./logger";
@@ -273,7 +273,7 @@ async function _syncUserInner(
         .values({ userId: conn.userId, gmailKey })
         .onConflictDoNothing();
 
-      const { isDuplicate, matchedTitle, matchedCompany, wasDeleted, wasApplied } = await isFuzzyDuplicate(conn.userId, title, company);
+      const { isDuplicate, matchedTitle, matchedCompany, wasDeleted, wasApplied } = await isFuzzyDuplicate(conn.userId, title, company, { link: resolvedUrl });
       if (isDuplicate) {
         logger.info(
           { userId: conn.userId, title, company, matchedTitle, matchedCompany, wasDeleted, wasApplied },
@@ -398,13 +398,8 @@ async function _syncUserInner(
     logger.warn({ userId: conn.userId, err }, "Gmail scheduler: sweep unscored postings failed");
   });
 
-  runDedupSweep(conn.userId).then((removed) => {
-    if (removed > 0) {
-      logger.info({ userId: conn.userId, removed }, "Gmail scheduler: dedup sweep removed duplicate postings");
-    }
-  }).catch((err) => {
-    logger.warn({ userId: conn.userId, err }, "Gmail scheduler: dedup sweep failed");
-  });
+  // Imports already enforce listing identity. Do not retroactively sweep
+  // historical jobs just because a scheduled Gmail sync completed.
 
   return { synced, lastSyncedAt };
 }

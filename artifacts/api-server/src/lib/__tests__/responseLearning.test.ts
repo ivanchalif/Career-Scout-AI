@@ -7,7 +7,7 @@ const candidate = {
 };
 const example = (kind: string, company = "Past Company", overrides: Partial<ResponseExample> = {}): ResponseExample => ({
   kind, title: "Product Manager", company, location: "Toronto, Ontario",
-  link: `https://past.example/${company.replaceAll(" ", "-")}`, ...overrides,
+  link: `https://past.example/jobs/${company.replaceAll(" ", "-")}`, ...overrides,
 });
 
 describe("learning from job responses", () => {

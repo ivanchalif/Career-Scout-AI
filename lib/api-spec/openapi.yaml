@@ -500,6 +500,62 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /postings/near-duplicates:
+    get:
+      operationId: getDuplicateReviews
+      tags: [postings]
+      summary: Review same-employer jobs with supporting duplicate evidence
+      responses:
+        "200":
+          description: Candidate pairs, excluding saved distinct pairs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id1, id2, evidence, confidence]
+                  additionalProperties: true
+                  properties:
+                    id1:
+                      type: integer
+                    id2:
+                      type: integer
+                    confidence:
+                      type: string
+                      enum: [review, duplicate]
+                    evidence:
+                      type: array
+                      items:
+                        type: string
+
+  /postings/not-duplicates:
+    post:
+      operationId: recordNotDuplicate
+      tags: [postings]
+      summary: Save that a specific owned pair represents different jobs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [postingId, otherPostingId]
+              properties:
+                postingId:
+                  type: integer
+                  minimum: 1
+                otherPostingId:
+                  type: integer
+                  minimum: 1
+      responses:
+        "204":
+          description: Pair saved idempotently
+        "400":
+          description: Invalid or identical IDs
+        "404":
+          description: One or both postings do not belong to the current user
+
   /postings/{id}/analyze:
     post:
       operationId: analyzePosting
