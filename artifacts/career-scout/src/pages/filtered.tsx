@@ -196,17 +196,17 @@ export default function FilteredPage() {
   const [tab, setTab] = useState<Tab>("suppressed");
 
   // ── Suppressed tab filters ────
-  const [suppDateRange, setSuppDateRange] = useState<DateRange>("all");
+  const [suppDateRange, setSuppDateRange] = useState<DateRange>("today");
   const [suppText, setSuppText] = useState("");
   const [suppReason, setSuppReason] = useState("");
 
   // ── Skipped tab filters ───────
-  const [skipDateRange, setSkipDateRange] = useState<DateRange>("all");
+  const [skipDateRange, setSkipDateRange] = useState<DateRange>("today");
   const [skipText, setSkipText] = useState("");
   const [skipReason, setSkipReason] = useState("");
 
   // ── Sync log tab filters ──────
-  const [logDateRange, setLogDateRange] = useState<DateRange>("7d");
+  const [logDateRange, setLogDateRange] = useState<DateRange>("today");
   const [logText, setLogText] = useState("");
   const [logOutcome, setLogOutcome] = useState("");
 
