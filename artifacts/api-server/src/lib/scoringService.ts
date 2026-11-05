@@ -9,6 +9,7 @@ import { z } from "zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { logger } from "./logger";
 import { getResumeText } from "./resumeReader";
+import { checkJobLink } from "./jobLinkHealth";
 
 const parsedJobSchema = z.object({
   title: z.string().default(""),
@@ -512,12 +513,23 @@ export function scorePostingBackground(
   userId: string,
 ): void {
   backgroundQueue = backgroundQueue.then(async () => {
+    const [posting] = await db.select().from(jobPostingsTable)
+      .where(and(eq(jobPostingsTable.id, postingId), eq(jobPostingsTable.userId, userId)));
+    if (!posting || posting.closedAt || posting.deletedAt) return;
+    if (posting.link && !posting.availabilityCheckedAt) {
+      await checkJobLink(posting);
+      const [checked] = await db.select().from(jobPostingsTable)
+        .where(and(eq(jobPostingsTable.id, postingId), eq(jobPostingsTable.userId, userId)));
+      if (!checked || checked.closedAt || checked.deletedAt) return;
+    }
     await scorePosting(postingId, userId).catch((err) => {
       logger.error(
         { postingId, userId, err },
         "scoringService: background scoring failed",
       );
     });
+  }).catch((err) => {
+    logger.error({ postingId, err }, "scoringService: link validation failed");
   });
 }
 

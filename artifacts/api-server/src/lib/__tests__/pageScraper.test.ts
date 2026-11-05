@@ -23,6 +23,26 @@ afterEach(() => {
 });
 
 describe("job page extraction and availability", () => {
+  it("treats actual HTTP 404, including redirect destinations, as confirmed closure", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(htmlResponse("Not found", 404))
+      .mockResolvedValueOnce(new Response(null, { status: 302, headers: { location: "https://jobs.example.com/missing" } }))
+      .mockResolvedValueOnce(htmlResponse("Not found", 404)));
+    const direct = await fetchJobPageContent("https://jobs.example.com/direct");
+    const redirected = await fetchJobPageContent("https://jobs.example.com/tracking");
+    for (const result of [direct, redirected]) {
+      expect(result?.availability).toMatchObject({ status: "closed", reason: "http_404", confidence: 1, evidence: ["http_404"] });
+      expect(result?.contentUsable).toBe(false);
+    }
+    expect(redirected?.finalUrl).toBe("https://jobs.example.com/missing");
+  });
+
+  it.each([401, 403, 429, 500, 502, 503])("keeps HTTP %i unverified rather than closed", async (status) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(htmlResponse("Unavailable", status)));
+    expect((await fetchJobPageContent("https://jobs.example.com/jobs/test"))?.availability)
+      .toMatchObject({ status: "unverified", reason: `http_${status}` });
+  });
+
   it("extracts authentic JobPosting fields and datePosted from JSON-LD", () => {
     const metadata = extractJobPostingMetadata(`<script type="application/ld+json">${JSON.stringify({
       "@type": "JobPosting",

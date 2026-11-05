@@ -6,6 +6,7 @@ import { extractJobListings } from "./scoringService";
 import { scorePostingBackground, sweepUnscoredPostings } from "./scoringService";
 import { isFuzzyDuplicate, runDedupSweep } from "./dedup";
 import { fetchJobPageContent } from "./pageScraper";
+import { missingJobFields } from "./jobLinkHealth";
 import { logger } from "./logger";
 import { loadResponseHistory } from "./responseHistory";
 import { evaluateResponses } from "./responseLearning";
@@ -211,10 +212,12 @@ async function _syncUserInner(
       let jobLocation: string | null = null;
       let descriptionSource: "page" | "email" = "email";
       let resolvedUrl = listing.url;
+      let closureFields: ReturnType<typeof missingJobFields> = {};
 
       if (listing.url) {
         const pageResult = await fetchJobPageContent(listing.url);
         if (pageResult) {
+          closureFields = missingJobFields(pageResult);
           jobLocation = pageResult.metadata?.location ?? null;
           // Always use finalUrl — captures the real job URL after following tracking redirects.
           resolvedUrl = pageResult.finalUrl;
@@ -325,6 +328,7 @@ async function _syncUserInner(
           location: jobLocation,
           preferenceAdjustment: preference.adjustment,
           preferenceReasons: preference.reasons,
+          ...closureFields,
         })
         .onConflictDoNothing()
         .returning();
@@ -333,7 +337,7 @@ async function _syncUserInner(
         emailImported++;
         synced++;
         reportProgress({ jobsImported: synced });
-        scorePostingBackground(newPosting.id, conn.userId);
+        if (!newPosting.closedAt) scorePostingBackground(newPosting.id, conn.userId);
       }
     }
 

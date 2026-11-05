@@ -338,14 +338,20 @@ export default function DashboardPage() {
           const data = query.state.data;
           if (!data) return false;
           const hasUnscored = data.some((p: any) => p.report?.fitScore == null);
-          return hasUnscored ? 4000 : false;
+          return hasUnscored ? 4000 : 15_000;
         },
       } as any,
     },
   );
-  const activeCountQ = useListPostings({ applied: false });
-  const appliedCountQ = useListPostings({ applied: true });
-  const deletedQ = useListDeletedPostings();
+  const activeCountQ = useListPostings({ applied: false }, {
+    query: { queryKey: getListPostingsQueryKey({ applied: false }), refetchInterval: 15_000 },
+  });
+  const appliedCountQ = useListPostings({ applied: true }, {
+    query: { queryKey: getListPostingsQueryKey({ applied: true }), refetchInterval: 15_000 },
+  });
+  const deletedQ = useListDeletedPostings({
+    query: { queryKey: getListDeletedPostingsQueryKey(), refetchInterval: 15_000 },
+  });
   const gmailStatusQ = useGetGmailStatus({
     query: {
       queryKey: getGetGmailStatusQueryKey(),

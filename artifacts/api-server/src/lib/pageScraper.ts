@@ -112,6 +112,13 @@ export async function fetchJobPageContent(url: string): Promise<PageResult | nul
 
     if (!res.ok) {
       logger.debug({ url: safeLogUrl(url), finalUrl: safeLogUrl(finalUrl), status: res.status }, "pageScraper: non-OK response");
+      await res.body?.cancel();
+      if (res.status === 404) {
+        return {
+          content: "", finalUrl, contentUsable: false, metadata: null,
+          availability: { status: "closed", checkedAt, reason: "http_404", confidence: 1, evidence: ["http_404"] },
+        };
+      }
       return pageFailure(finalUrl, checkedAt, res.status === 403 ? "http_403" : `http_${res.status}`);
     }
 

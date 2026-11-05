@@ -31,6 +31,7 @@ import { logger } from "../lib/logger";
 import { isHiddenByWorkday } from "../lib/workdayFilter";
 import { bayAreaFilterReason } from "../lib/bayAreaFilter";
 import { fetchJobPageContent } from "../lib/pageScraper";
+import { missingJobFields, scheduleJobLinkChecks } from "../lib/jobLinkHealth";
 import { buildDiscoveryCriteria, rankCandidate } from "../lib/onlineDiscovery";
 import multer from "multer";
 import { stringify } from "csv-stringify/sync";
@@ -185,16 +186,26 @@ router.get("/postings", requireAuth, async (req, res): Promise<void> => {
     conditions.push(isNull(jobPostingsTable.appliedAt));
   }
 
-  const postings = await db
+  let postings = await db
     .select()
     .from(jobPostingsTable)
     .where(and(...conditions))
     .orderBy(jobPostingsTable.createdAt);
 
+  // Repair older imports that recorded a 404 as "unverified" without closing.
+  const missingIds = postings.filter((p) => p.availabilityReason === "http_404").map((p) => p.id);
+  if (missingIds.length) {
+    await db.update(jobPostingsTable)
+      .set({ closedAt: new Date(), availabilityStatus: "closed", availabilityConfidence: 1, availabilityEvidence: ["http_404"] })
+      .where(and(eq(jobPostingsTable.userId, userId), inArray(jobPostingsTable.id, missingIds), isNull(jobPostingsTable.closedAt)));
+    postings = postings.filter((p) => p.availabilityReason !== "http_404");
+  }
+
   const onlineSources = await db
     .select({ provider: onlineDiscoverySourcesTable.provider, id: onlineDiscoverySourcesTable.id, name: onlineDiscoverySourcesTable.name })
     .from(onlineDiscoverySourcesTable)
     .where(eq(onlineDiscoverySourcesTable.userId, userId));
+  scheduleJobLinkChecks(postings);
   const sourceNames = new Map(
     onlineSources.flatMap((source) => [
       [source.provider, source.name] as const,
@@ -692,7 +703,14 @@ router.patch("/postings/:id/reopen", requireAuth, async (req, res): Promise<void
 
   const [posting] = await db
     .update(jobPostingsTable)
-    .set({ closedAt: null })
+    .set({
+      closedAt: null,
+      availabilityStatus: null,
+      availabilityCheckedAt: null,
+      availabilityReason: null,
+      availabilityConfidence: null,
+      availabilityEvidence: null,
+    })
     .where(and(
       eq(jobPostingsTable.id, params.data.id),
       eq(jobPostingsTable.userId, userId),
@@ -1016,7 +1034,7 @@ router.post("/postings/backfill-links", requireAuth, async (req, res): Promise<v
 
           await db
             .update(jobPostingsTable)
-            .set({ link: resolvedUrl })
+            .set({ link: resolvedUrl, ...missingJobFields(pageResult) })
             .where(and(eq(jobPostingsTable.id, posting.id), eq(jobPostingsTable.userId, userId)));
 
           logger.info({ postingId: posting.id, jobUrl, resolvedUrl }, "backfill-links: updated link from email");
@@ -1041,6 +1059,13 @@ router.post("/postings/backfill-links", requireAuth, async (req, res): Promise<v
       }
 
       const resolvedUrl = pageResult.finalUrl;
+      if (pageResult.availability.reason === "http_404") {
+        await db.update(jobPostingsTable)
+          .set({ link: resolvedUrl, ...missingJobFields(pageResult) })
+          .where(and(eq(jobPostingsTable.id, posting.id), eq(jobPostingsTable.userId, userId)));
+        updated++;
+        continue;
+      }
       if (resolvedUrl === trackingUrl) {
         // URL didn't change — resolution was blocked. Keep the original tracking URL
         // so the card remains clickable; the user can still open it manually.
@@ -1120,7 +1145,7 @@ router.post("/postings/:id/retry-link", requireAuth, async (req, res): Promise<v
 
     await db
       .update(jobPostingsTable)
-      .set({ link: resolvedUrl })
+      .set({ link: resolvedUrl, ...missingJobFields(pageResult) })
       .where(and(eq(jobPostingsTable.id, id), eq(jobPostingsTable.userId, userId)));
 
     logger.info({ postingId: id, jobUrl, resolvedUrl }, "retry-link: updated link from email");

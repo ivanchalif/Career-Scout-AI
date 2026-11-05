@@ -81,6 +81,12 @@ Search-backed sources share one provider quota; automatic recovery must coordina
 
 **How to apply:** Pace requests through the shared search connection, respect Retry-After, bound retries and queue waits, and record successful recovery separately from remaining failures. Never repair low yield by weakening user filters or making posting dates appear fresher.
 
+An actual HTTP 404 from a job link, including its validated redirect destination, means the job should be marked closed and excluded from the dashboard, not merely labeled unverified.
+
+**Why:** The user explicitly requested closing jobs whose links return HTTP 404. They should remain recoverable, rather than being permanently deleted or counted as negative role preferences.
+
+**How to apply:** Apply this across existing listings, email imports, manual jobs, and online discovery. Do not generalize this rule to access blocks, timeouts, rate limits, server failures, or uncertain page text. Explicit reopening must clear old availability evidence so a fresh check can succeed.
+
 The user's location rule allows ANY SF Bay Area role (on-site, hybrid, or remote), ANY fully remote role anywhere, and genuinely unknown locations. Known non-local locations require explicit remote eligibility even when the work-arrangement field is blank.
 
 **Why:** After correcting the initial overly strict filter, known non-local roles still appeared because blank work arrangements were treated as uncertainty. The user explicitly chose to require remote evidence for known non-local jobs.

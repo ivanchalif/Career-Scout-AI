@@ -19,6 +19,7 @@ import { filteredEmailsTable } from "@workspace/db";
 import { loadResponseHistory } from "../lib/responseHistory";
 import { evaluateResponses } from "../lib/responseLearning";
 import { fetchJobPageContent } from "../lib/pageScraper";
+import { missingJobFields } from "../lib/jobLinkHealth";
 import { logger } from "../lib/logger";
 import { syncUser } from "../lib/gmailScheduler";
 import { getGmailSyncProgress } from "../lib/gmailSyncState";
@@ -251,9 +252,11 @@ router.post("/gmail/reprocess", requireAuth, async (req: Request, res: Response)
 
       let fullDescription = listing.description;
       let resolvedUrl = listing.url;
+      let closureFields: ReturnType<typeof missingJobFields> = {};
       if (listing.url) {
         const pageResult = await fetchJobPageContent(listing.url);
         if (pageResult) {
+          closureFields = missingJobFields(pageResult);
           resolvedUrl = pageResult.finalUrl;
           if (pageResult.contentUsable && pageResult.content.length > fullDescription.length) {
             fullDescription = pageResult.content;
@@ -295,12 +298,13 @@ router.post("/gmail/reprocess", requireAuth, async (req: Request, res: Response)
           extractedSkills: [],
           preferenceAdjustment: preference.adjustment,
           preferenceReasons: preference.reasons,
+          ...closureFields,
         })
         .onConflictDoNothing()
         .returning();
 
       if (newPosting) {
-        scorePostingBackground(newPosting.id, userId);
+        if (!newPosting.closedAt) scorePostingBackground(newPosting.id, userId);
         imported++;
       }
     }
