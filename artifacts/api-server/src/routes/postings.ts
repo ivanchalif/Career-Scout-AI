@@ -31,7 +31,7 @@ import { logger } from "../lib/logger";
 import { isHiddenByWorkday } from "../lib/workdayFilter";
 import { bayAreaFilterReason } from "../lib/bayAreaFilter";
 import { fetchJobPageContent } from "../lib/pageScraper";
-import { missingJobFields, scheduleJobLinkChecks } from "../lib/jobLinkHealth";
+import { isConfirmedClosedAvailability, missingJobFields, scheduleJobLinkChecks } from "../lib/jobLinkHealth";
 import { buildDiscoveryCriteria, rankCandidate } from "../lib/onlineDiscovery";
 import multer from "multer";
 import { stringify } from "csv-stringify/sync";
@@ -192,13 +192,17 @@ router.get("/postings", requireAuth, async (req, res): Promise<void> => {
     .where(and(...conditions))
     .orderBy(jobPostingsTable.createdAt);
 
-  // Repair older imports that recorded a 404 as "unverified" without closing.
-  const missingIds = postings.filter((p) => p.availabilityReason === "http_404").map((p) => p.id);
+  // Reconcile prior page checks with dashboard lifecycle state, including
+  // older imports that stored closure evidence without setting closedAt.
+  const confirmedClosed = (p: typeof postings[number]) => isConfirmedClosedAvailability({
+    status: p.availabilityStatus, reason: p.availabilityReason, confidence: p.availabilityConfidence,
+  });
+  const missingIds = postings.filter(confirmedClosed).map((p) => p.id);
   if (missingIds.length) {
     await db.update(jobPostingsTable)
-      .set({ closedAt: new Date(), availabilityStatus: "closed", availabilityConfidence: 1, availabilityEvidence: ["http_404"] })
+      .set({ closedAt: new Date(), availabilityStatus: "closed" })
       .where(and(eq(jobPostingsTable.userId, userId), inArray(jobPostingsTable.id, missingIds), isNull(jobPostingsTable.closedAt)));
-    postings = postings.filter((p) => p.availabilityReason !== "http_404");
+    postings = postings.filter((p) => !confirmedClosed(p));
   }
 
   const onlineSources = await db
@@ -1059,7 +1063,7 @@ router.post("/postings/backfill-links", requireAuth, async (req, res): Promise<v
       }
 
       const resolvedUrl = pageResult.finalUrl;
-      if (pageResult.availability.reason === "http_404") {
+      if (isConfirmedClosedAvailability(pageResult.availability)) {
         await db.update(jobPostingsTable)
           .set({ link: resolvedUrl, ...missingJobFields(pageResult) })
           .where(and(eq(jobPostingsTable.id, posting.id), eq(jobPostingsTable.userId, userId)));

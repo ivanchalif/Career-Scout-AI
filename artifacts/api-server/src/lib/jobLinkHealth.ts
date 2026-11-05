@@ -3,16 +3,25 @@ import { db, jobPostingsTable } from "@workspace/db";
 import { fetchJobPageContent, type PageResult } from "./pageScraper";
 import { logger } from "./logger";
 
-/** Only an actual HTTP 404 is conclusive for this automatic closure rule. */
+export function isConfirmedClosedAvailability(availability: {
+  status?: string | null; reason?: string | null; confidence?: number | null;
+} | null | undefined): boolean {
+  if (availability?.reason === "http_404") return true;
+  return availability?.status === "closed"
+    && (availability.confidence ?? 0) >= 0.95
+    && /^(?:explicit_|jsonld_valid_through_expired$)/.test(availability.reason ?? "");
+}
+
+/** Preserve the scraper's high-confidence closure reason and evidence. */
 export function missingJobFields(page: PageResult | null) {
-  if (page?.availability.reason !== "http_404") return {};
+  if (!page || !isConfirmedClosedAvailability(page.availability)) return {};
   return {
     closedAt: page.availability.checkedAt,
     availabilityStatus: "closed",
     availabilityCheckedAt: page.availability.checkedAt,
-    availabilityReason: "http_404",
-    availabilityConfidence: 1,
-    availabilityEvidence: ["http_404"],
+    availabilityReason: page.availability.reason,
+    availabilityConfidence: page.availability.confidence,
+    availabilityEvidence: page.availability.evidence,
   };
 }
 

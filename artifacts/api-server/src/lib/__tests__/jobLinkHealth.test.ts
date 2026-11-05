@@ -32,6 +32,14 @@ beforeEach(() => {
 });
 
 describe("automatic missing-job closure", () => {
+  it.each(["explicit_job_closed", "explicit_job_unavailable", "explicit_posting_expired", "explicit_position_filled", "explicit_applications_closed", "jsonld_valid_through_expired"])("persists %s as recoverably closed", async (reason) => {
+    vi.mocked(fetchJobPageContent).mockResolvedValue(page(reason));
+    await checkJobLink(posting);
+    expect(set).toHaveBeenCalledWith(expect.objectContaining({
+      closedAt: checkedAt, availabilityStatus: "closed", availabilityReason: reason, availabilityEvidence: [reason],
+    }));
+    expect(set.mock.calls[0][0]).not.toHaveProperty("deletedAt");
+  });
   it("closes a missing job, recording evidence without deletion or negative feedback", async () => {
     await checkJobLink(posting);
     expect(set).toHaveBeenCalledWith(expect.objectContaining({ closedAt: checkedAt, availabilityStatus: "closed", availabilityReason: "http_404" }));

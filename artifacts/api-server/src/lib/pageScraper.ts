@@ -136,7 +136,7 @@ export async function fetchJobPageContent(url: string): Promise<PageResult | nul
     if (html === null) return pageFailure(finalUrl, checkedAt, "page_too_large");
     const text = htmlToText(html);
     const metadata = extractJobPostingMetadata(html);
-    const closedReason = detectExplicitClosedSignal(text, metadata);
+    const closedReason = detectExplicitClosedSignal(htmlToText(html, true), metadata);
 
     // Explicit expiry/closure evidence still applies to a short removed-job page.
     // Gates take precedence because they do not expose the listing itself.
@@ -409,15 +409,32 @@ export function extractJobPostingMetadata(html: string): JobPageMetadata | null 
 
 function detectExplicitClosedSignal(text: string, metadata: JobPageMetadata | null): string | null {
   if (metadata?.validThrough && metadata.validThrough.getTime() < Date.now()) return "jsonld_valid_through_expired";
-  const sample = text.slice(0, 4_000);
+  const subject = String.raw`(?:(?:this|the)\s+)?(?:job(?:\s+(?:posting|opening|listing|opportunity))?|posting|opening|position|role|vacancy|requisition)`;
   const signals: Array<[RegExp, string]> = [
-    [/\bthis (?:job|position|role|vacancy) (?:is )?no longer available\b/i, "explicit_job_unavailable"],
-    [/\bthis (?:job|position|role|vacancy) (?:is )?no longer accepting applications\b/i, "explicit_applications_closed"],
-    [/\bapplications for (?:this )?(?:job|position|role) are closed\b/i, "explicit_applications_closed"],
-    [/\b(?:this )?(?:job|position|role) (?:has been|was) filled\b/i, "explicit_position_filled"],
-    [/\bthis job posting has expired\b/i, "explicit_posting_expired"],
+    [new RegExp(String.raw`\b${subject}\s+(?:(?:is|was|has been)\s+)?(?:no longer|not currently)\s+(?:available|open|active|advertised)\b`, "i"), "explicit_job_unavailable"],
+    [new RegExp(String.raw`\b${subject}\s+(?:(?:is|was|has been)\s+)?(?:now\s+)?(?:closed|removed|withdrawn|cancelled|canceled)\b`, "i"), "explicit_job_closed"],
+    [new RegExp(String.raw`\b${subject}\s+(?:(?:is|was|has|has been)\s+)?expired\b`, "i"), "explicit_posting_expired"],
+    [new RegExp(String.raw`\b${subject}\s+(?:(?:is|was|has been)\s+)?filled\b`, "i"), "explicit_position_filled"],
+    [/\b(?:no longer|not)\s+accepting\s+(?:new\s+)?applications\b/i, "explicit_applications_closed"],
+    [/\bapplications\s+(?:for\s+(?:this|the)\s+(?:job|position|role)\s+)?(?:are|have been)\s+closed\b/i, "explicit_applications_closed"],
+    [/\b(?:application|applications)\s+(?:period|window|deadline)\s+(?:has\s+)?(?:closed|ended|passed|expired)\b/i, "explicit_applications_closed"],
+    [new RegExp(String.raw`\b${subject}\s+(?:you(?:'|’)re looking for|you are looking for|you requested)\s+(?:is\s+)?(?:no longer available|no longer open|closed|expired|filled)\b`, "i"), "explicit_job_unavailable"],
   ];
-  return signals.find(([pattern]) => pattern.test(sample))?.[1] ?? null;
+  // Scan visible content beyond the header, but keep assertions separate from
+  // instructions, hypothetical examples, and negated notices.
+  for (const sentence of text.slice(0, MAX_PAGE_CONTENT_CHARS).split(/[\n.!?]+/)) {
+    for (const [pattern, reason] of signals) {
+      const match = pattern.exec(sentence);
+      if (!match) continue;
+      const prefix = sentence.slice(0, match.index);
+      const suffix = sentence.slice(match.index + match[0].length);
+      if (/\b(?:if|when|whenever|unless|whether|example|e\.g|do not|don't|does not|doesn't|not saying)\b/i.test(prefix)) continue;
+      if (/^\s+(?:notifications?|messages?|alerts?|events?|errors?|templates?)\b/i.test(suffix)) continue;
+      if (reason === "explicit_applications_closed" && /^\s+(?:from|via|by|through)\b/i.test(suffix)) continue;
+      return reason;
+    }
+  }
+  return null;
 }
 
 /**
@@ -469,13 +486,15 @@ function detectErrorPage(text: string): string | null {
  * Converts HTML to readable plain text suitable for LLM consumption.
  * Strips scripts, styles, nav/header/footer chrome, then collapses markup.
  */
-function htmlToText(html: string): string {
+function htmlToText(html: string, includeHeaders = false): string {
   return html
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
     .replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, "")
     // Remove common non-content chrome sections
-    .replace(/<(nav|header|footer|aside|dialog|banner)[^>]*>[\s\S]*?<\/\1>/gi, "")
+    .replace(includeHeaders
+      ? /<(nav|footer|aside|dialog|banner)[^>]*>[\s\S]*?<\/\1>/gi
+      : /<(nav|header|footer|aside|dialog|banner)[^>]*>[\s\S]*?<\/\1>/gi, "")
     // Block-level elements → line breaks so paragraphs are preserved
     .replace(/<\/(p|div|li|h[1-6]|tr|section|article|blockquote|label)>/gi, "\n")
     .replace(/<br\s*\/?>/gi, "\n")

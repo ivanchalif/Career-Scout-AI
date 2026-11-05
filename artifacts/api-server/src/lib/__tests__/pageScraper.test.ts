@@ -23,6 +23,61 @@ afterEach(() => {
 });
 
 describe("job page extraction and availability", () => {
+  it.each([
+    ["Job closed", "explicit_job_closed"],
+    ["This job is closed", "explicit_job_closed"],
+    ["Job no longer available", "explicit_job_unavailable"],
+    ["The position is no longer open", "explicit_job_unavailable"],
+    ["Job expired", "explicit_posting_expired"],
+    ["Job posting expired", "explicit_posting_expired"],
+    ["This job posting has expired", "explicit_posting_expired"],
+    ["This job opening has been removed", "explicit_job_closed"],
+    ["The role has been filled", "explicit_position_filled"],
+    ["We are no longer accepting applications", "explicit_applications_closed"],
+    ["Applications for this position are closed", "explicit_applications_closed"],
+    ["The application window has ended", "explicit_applications_closed"],
+    ["The job you are looking for is no longer available", "explicit_job_unavailable"],
+  ])("recognizes landing-page closure: %s", async (notice, reason) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(htmlResponse(`<main><h1>${notice}</h1></main>`)));
+    expect((await fetchJobPageContent("https://jobs.example.com/job"))?.availability)
+      .toMatchObject({ status: "closed", reason });
+  });
+
+  it.each([
+    "Our office is closed on weekends.",
+    "If this job is closed, please look at our other positions.",
+    "When a job posting expired, the recruiter updated it.",
+    "This job is not closed.",
+    "Do not assume this job is closed.",
+    "Your session has expired. Sign in again.",
+    "Our job alerts expire after 30 days.",
+    "You will help customers with job posting expired notifications.",
+    "We are not accepting applications from recruitment agencies.",
+    "We are not accepting applications by email.",
+  ])("does not mistake generic or hypothetical notices for closure: %s", async (notice) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(htmlResponse(`<p>${notice}</p><p>Apply now.</p>${usableText}`)));
+    // The instructional notification example is quoted as a responsibility,
+    // not an assertion about the current job.
+    expect((await fetchJobPageContent("https://jobs.example.com/job"))?.availability.status).not.toBe("closed");
+  });
+
+  it("detects closure after long descriptions and follows tracking redirects", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 302, headers: { location: "https://jobs.example.com/expired" } }))
+      .mockResolvedValueOnce(htmlResponse(`<p>${"Description text. ".repeat(300)}</p><h2>This position has been filled</h2>`)));
+    const result = await fetchJobPageContent("https://jobs.example.com/tracking");
+    expect(result?.finalUrl).toBe("https://jobs.example.com/expired");
+    expect(result?.availability).toMatchObject({ status: "closed", reason: "explicit_position_filled" });
+  });
+
+  it("reads closure headings inside the landing-page header, but ignores script and footer examples", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(htmlResponse("<header><h1>This posting has expired</h1></header>"))
+      .mockResolvedValueOnce(htmlResponse(`<script>const example = "Job closed";</script><footer>Job expired</footer><p>Apply now.</p>${usableText}`)));
+    expect((await fetchJobPageContent("https://jobs.example.com/expired"))?.availability)
+      .toMatchObject({ status: "closed", reason: "explicit_posting_expired" });
+    expect((await fetchJobPageContent("https://jobs.example.com/open"))?.availability.status).toBe("open");
+  });
   it("treats actual HTTP 404, including redirect destinations, as confirmed closure", async () => {
     vi.stubGlobal("fetch", vi.fn()
       .mockResolvedValueOnce(htmlResponse("Not found", 404))

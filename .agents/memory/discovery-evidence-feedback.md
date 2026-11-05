@@ -87,6 +87,12 @@ An actual HTTP 404 from a job link, including its validated redirect destination
 
 **How to apply:** Apply this across existing listings, email imports, manual jobs, and online discovery. Do not generalize this rule to access blocks, timeouts, rate limits, server failures, or uncertain page text. Explicit reopening must clear old availability evidence so a fresh check can succeed.
 
+Clear landing-page statements that the job is closed, unavailable, expired, filled, or no longer accepting applications also trigger automatic recoverable closure, even on HTTP 200.
+
+**Why:** The user extended the automatic closure request beyond HTTP 404 to explicit job-closure language on the linked destination page.
+
+**How to apply:** Persist the specific evidence across import and background-check paths, and exclude closed listings from the dashboard. Treat hypothetical instructions, session expiry, office hours, and restrictions on application channels or agencies as non-closure.
+
 The user's location rule allows ANY SF Bay Area role (on-site, hybrid, or remote), ANY fully remote role anywhere, and genuinely unknown locations. Known non-local locations require explicit remote eligibility even when the work-arrangement field is blank.
 
 **Why:** After correcting the initial overly strict filter, known non-local roles still appeared because blank work arrangements were treated as uncertainty. The user explicitly chose to require remote evidence for known non-local jobs.
