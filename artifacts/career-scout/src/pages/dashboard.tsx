@@ -1556,7 +1556,7 @@ export default function DashboardPage() {
 
         {/* Gmail banner */}
         {gmailStatus?.connected && !gmailReconnectRequired ? (
-          <div className="flex flex-col bg-emerald-950/30 border border-emerald-800/30 rounded-xl px-5 pt-4 pb-3 mb-6 gap-3" data-testid="gmail-connected-banner">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between bg-emerald-950/30 border border-emerald-800/30 rounded-xl px-5 py-4 mb-6 gap-3" data-testid="gmail-connected-banner">
             {/* Title row */}
             <div className="flex items-start gap-3">
               <Mail className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
@@ -1568,8 +1568,8 @@ export default function DashboardPage() {
               </div>
             </div>
             {/* Actions + status */}
-            <div className="flex flex-col gap-1.5 border-t border-emerald-800/20 pt-2.5">
-              <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-1.5 border-t border-emerald-800/20 pt-2.5 sm:items-end sm:border-t-0 sm:pt-0 sm:ml-auto sm:shrink-0">
+              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                 <Button
                   variant="outline"
                   size="sm"
@@ -1594,7 +1594,7 @@ export default function DashboardPage() {
                   Disconnect
                 </Button>
               </div>
-              <p className="text-xs text-emerald-400/60">
+              <p className="text-xs text-emerald-400/60 sm:text-right">
                 {gmailStatus.lastSyncedAt
                   ? `Last synced ${new Date(gmailStatus.lastSyncedAt).toLocaleString()}`
                   : "Not yet synced — click Sync to import job emails"}
