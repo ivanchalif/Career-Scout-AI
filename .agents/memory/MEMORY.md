@@ -11,3 +11,4 @@
 - [Job score communication](job-score-communication.md) — explain search and fit as independent stages; low fit is not an error and should not use red styling.
 - [Semantic state meaning](semantic-state-meaning.md) — distinguish reversible hidden states and uncertain availability from concrete errors or removals.
 - [Safe interaction regressions](safe-interaction-regressions.md) — prefer isolated UI integration tests for decision controls; do not require shared logins or touch existing jobs.
+- [Dashboard density](dashboard-density.md) — minimize the header/control area's vertical space; keep secondary controls accessible and current errors/progress apparent.

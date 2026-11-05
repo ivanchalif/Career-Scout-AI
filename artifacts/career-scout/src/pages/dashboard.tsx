@@ -76,32 +76,6 @@ import {
   DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  loading,
-}: {
-  icon: React.ElementType;
-  label: string;
-  value: string | number;
-  loading?: boolean;
-}) {
-  return (
-    <div className="px-1 sm:px-5 py-4 first:sm:pl-0 min-w-0">
-      <div className="flex items-center gap-2 text-muted-foreground mb-1.5">
-        <Icon className="w-3.5 h-3.5" aria-hidden="true" />
-        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] truncate">{label}</span>
-      </div>
-      {loading ? (
-        <Skeleton className="h-8 w-16" />
-      ) : (
-        <p className="text-3xl font-semibold tracking-tight tabular-nums text-foreground">{value}</p>
-      )}
-    </div>
-  );
-}
-
 function formatAdded(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
   const now = new Date();
@@ -1065,96 +1039,68 @@ export default function DashboardPage() {
   return (
     <Layout>
       <div className="px-4 sm:px-6 py-8 max-w-5xl mx-auto min-w-0" data-testid="dashboard-page">
-        {/* Header */}
-        <div className="flex flex-wrap items-end justify-between gap-4 mb-8 pb-5 border-b border-border/60">
-          <div className="min-w-0">
-            <p className="page-eyebrow">Your opportunities</p>
-            <h1 className="page-title">Dashboard</h1>
-            <p className="page-purpose">Every opportunity you are tracking, ordered by how well it lines up with your profile and your choices.</p>
+        {/* Compact command bar: title, inline stats, utilities */}
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-3">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">Dashboard</h1>
+            <dl className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-muted-foreground tabular-nums" data-testid="dashboard-stats">
+              {[
+                { icon: BriefcaseBusiness, label: activeTab === "active" ? "Active postings" : activeTab === "applied" ? "Applied postings" : "Deleted postings", short: activeTab === "active" ? "active" : activeTab, value: tabStats.total },
+                { icon: TrendingUp, label: "Avg fit score", short: "avg fit", value: tabStats.avgFit != null ? `${Math.round(tabStats.avgFit)}` : "—" },
+                { icon: Star, label: "Strong matches (85+)", short: "strong", value: tabStats.strong },
+              ].map((stat) => (
+                <div key={stat.short} className="flex items-baseline gap-1" title={stat.label}>
+                  <dt className="sr-only">{stat.label}</dt>
+                  <stat.icon className="h-3 w-3 self-center" aria-hidden="true" />
+                  <dd className="text-sm font-semibold text-foreground">
+                    {(activeTab === "deleted" ? deletedQ.isLoading : postingsQ.isLoading) ? <Skeleton className="inline-block h-4 w-6 align-middle" /> : stat.value}
+                  </dd>
+                  <span aria-hidden="true">{stat.short}</span>
+                </div>
+              ))}
+            </dl>
           </div>
-          <div className="flex flex-wrap items-center gap-2 min-w-0">
-            {/* Utility buttons — icon-only on small screens, full label on sm+ */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onSweepDuplicates}
-              aria-label={sweepingDuplicates ? "Scanning duplicate jobs" : "Clean up duplicate jobs"}
-              disabled={sweepingDuplicates}
-              className="gap-2 text-muted-foreground"
-              data-testid="dedup-sweep-button"
-              title="Find and remove active jobs that match ones you already deleted or applied to"
-            >
-              {sweepingDuplicates ? (
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Layers className="w-3.5 h-3.5" />
-              )}
-              <span className="hidden sm:inline">{sweepingDuplicates ? "Scanning..." : "Clean up"}</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onBackfillLinks}
-              aria-label={backfillingLinks ? "Finding job links" : "Find job links"}
-              disabled={backfillingLinks}
-              className="gap-2 text-muted-foreground"
-              data-testid="backfill-links-button"
-              title="Re-fetch original emails to extract job description links for existing postings"
-            >
-              {backfillingLinks ? (
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Link2 className="w-3.5 h-3.5" />
-              )}
-              <span className="hidden sm:inline">{backfillingLinks ? "Finding..." : "Find links"}</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onReanalyzeAll}
-              aria-label={reanalyzing ? "Re-analyzing all jobs" : "Re-analyze all jobs"}
-              disabled={reanalyzing}
-              className="gap-2 text-muted-foreground"
-              data-testid="reanalyze-button"
-              title="Re-run AI analysis on all jobs to refresh skill matching"
-            >
-              <Sparkles className={`w-3.5 h-3.5 ${reanalyzing ? "animate-pulse" : ""}`} />
-              <span className="hidden sm:inline">{reanalyzing ? "Analyzing..." : "Re-analyze"}</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onExportCsv}
-              aria-label={exportingCsv ? "Exporting jobs as CSV" : "Export jobs as CSV"}
-              disabled={exportingCsv}
-              className="gap-2 text-muted-foreground"
-              data-testid="export-csv-button"
-              title="Download all your active job postings as a CSV file"
-            >
-              {exportingCsv ? (
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Download className="w-3.5 h-3.5" />
-              )}
-              <span className="hidden sm:inline">{exportingCsv ? "Exporting..." : "Export CSV"}</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => importFileRef.current?.click()}
-              aria-label={importingCsv ? "Importing jobs from CSV" : "Import jobs from CSV"}
-              disabled={importingCsv}
-              className="gap-2 text-muted-foreground"
-              data-testid="import-csv-button"
-              title="Import jobs from a CSV file"
-            >
-              {importingCsv ? (
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Upload className="w-3.5 h-3.5" />
-              )}
-              <span className="hidden sm:inline">{importingCsv ? "Importing..." : "Import CSV"}</span>
-            </Button>
+          <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1.5 px-2.5 text-muted-foreground"
+                  aria-busy={sweepingDuplicates || backfillingLinks || reanalyzing || exportingCsv || importingCsv}
+                  data-testid="dashboard-tools-button"
+                >
+                  {sweepingDuplicates || backfillingLinks || reanalyzing || exportingCsv || importingCsv
+                    ? <RefreshCw className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+                    : <MoreHorizontal className="w-3.5 h-3.5" aria-hidden="true" />}
+                  Tools
+                  <ChevronDown className="w-3 h-3" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuItem onSelect={onSweepDuplicates} disabled={sweepingDuplicates} className="items-start gap-2" data-testid="dedup-sweep-button">
+                  {sweepingDuplicates ? <RefreshCw className="mt-0.5 w-3.5 h-3.5 animate-spin" /> : <Layers className="mt-0.5 w-3.5 h-3.5" />}
+                  <span><span className="block">{sweepingDuplicates ? "Scanning..." : "Clean up duplicates"}</span><span className="block text-[11px] text-muted-foreground">Remove active jobs matching deleted or applied ones</span></span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={onBackfillLinks} disabled={backfillingLinks} className="items-start gap-2" data-testid="backfill-links-button">
+                  {backfillingLinks ? <RefreshCw className="mt-0.5 w-3.5 h-3.5 animate-spin" /> : <Link2 className="mt-0.5 w-3.5 h-3.5" />}
+                  <span><span className="block">{backfillingLinks ? "Finding..." : "Find job links"}</span><span className="block text-[11px] text-muted-foreground">Re-read original emails for listing links</span></span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={onReanalyzeAll} disabled={reanalyzing} className="items-start gap-2" data-testid="reanalyze-button">
+                  <Sparkles className={`mt-0.5 w-3.5 h-3.5 ${reanalyzing ? "animate-pulse" : ""}`} />
+                  <span><span className="block">{reanalyzing ? "Analyzing..." : "Re-analyze all"}</span><span className="block text-[11px] text-muted-foreground">Refresh AI skill matching</span></span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={onExportCsv} disabled={exportingCsv} className="gap-2" data-testid="export-csv-button">
+                  {exportingCsv ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                  {exportingCsv ? "Exporting..." : "Export CSV"}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => importFileRef.current?.click()} disabled={importingCsv} className="gap-2" data-testid="import-csv-button">
+                  {importingCsv ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                  {importingCsv ? "Importing..." : "Import CSV"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <input
               ref={importFileRef}
               type="file"
@@ -1167,8 +1113,10 @@ export default function DashboardPage() {
             />
             <Button
               onClick={() => setShowAddModal(true)}
-              className="bg-indigo-600 hover:bg-indigo-500 gap-2"
+              size="sm"
+              className="h-8 bg-indigo-600 hover:bg-indigo-500 gap-1.5"
               data-testid="add-job-button"
+              aria-label="Add job"
             >
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Add job</span>
@@ -1176,16 +1124,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <details className="mb-4 text-xs text-muted-foreground" data-testid="response-learning-explanation">
-          <summary className="cursor-pointer hover:text-foreground">How your choices improve results</summary>
-          <p className="mt-2 max-w-3xl leading-relaxed">
-            Applications and “More like this” favor similar jobs. Dismissal reasons reduce matching mismatches;
-            repeated, specific feedback can filter future email and online results. Workday feedback applies only
-            to known Workday links. Applied, dismissed, closed, and duplicate listings are not imported again.
-            Dismissing without a reason does not mean you dislike that type of role. Undo reverses the signal for
-            future imports. Recommended sorting combines AI fit with your choices; the AI fit score itself is unchanged.
-          </p>
-        </details>
         {(gmailSyncing || onlineProcessing) && (
           <div
             className="mb-4 flex flex-col gap-2 rounded-xl border border-indigo-800/40 bg-indigo-950/25 px-4 py-3"
@@ -1210,43 +1148,122 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Profile-matched online discovery */}
-        <div className="flex flex-col border-y border-border/70 py-4 mb-6 gap-3" data-testid="online-discovery-panel">
-          <div className="flex items-start gap-3">
-            <SearchCode className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" aria-hidden="true" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-foreground">Discover US & Canada jobs online</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {discoveryStatus?.criteria.roleTitles.length || discoveryStatus?.criteria.skills.length
-                  ? `Matching ${[...discoveryStatus.criteria.roleTitles, ...discoveryStatus.criteria.skills].slice(0, 4).join(", ")}${(discoveryStatus.criteria.roleTitles.length + discoveryStatus.criteria.skills.length) > 4 ? "…" : ""}`
-                : "Add experience or skills to your profile to start matching in the US and Canada."}
-              </p>
+        {/* Sources strip: online discovery (left) + Gmail (right on desktop) */}
+        <div className="mb-3 rounded-lg border border-border/70 bg-card/40" data-testid="online-discovery-panel">
+          <div className="flex flex-col gap-2 px-3 py-2 xl:flex-row xl:flex-wrap xl:items-center xl:justify-between">
+            <div className="flex min-w-0 items-center gap-2">
+              <SearchCode className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <div className="min-w-0 flex-1 text-xs">
+                <span className="font-medium text-foreground">Online</span>
+                <span className="text-muted-foreground">
+                  {" · "}{discoverySources.filter((source) => !source.isSuppressed).length} sources
+                  {discoveryStatus?.lastRunAt ? ` · ${formatAdded(discoveryStatus.lastRunAt)} · ${discoveryStatus.lastImported} added` : ""}
+                </span>
+                {discoverySources.some((source) => source.health?.color === "red") && (
+                  <span className="ml-1.5 text-red-300" data-testid="discovery-source-health-alert">
+                    · Needs review: {discoverySources.filter((source) => source.health?.color === "red").length}
+                  </span>
+                )}
+              </div>
+              <Button
+                size="sm"
+                onClick={onDiscoverOnline}
+                disabled={onlineProcessing}
+                className="h-7 shrink-0 gap-1.5 px-2 text-xs"
+                data-testid="discover-online-button"
+              >
+                <SearchCode className={`w-3.5 h-3.5 ${onlineProcessing ? "animate-pulse" : ""}`} />
+                {onlineProcessing ? "Searching…" : "Discover"}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setOnlineDiscoveryExpanded((expanded) => !expanded)}
+                className="h-7 shrink-0 gap-1 px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label={onlineDiscoveryExpanded ? "Collapse online job discovery" : "Expand online job discovery"}
+                aria-expanded={onlineDiscoveryExpanded}
+                aria-controls="online-discovery-details"
+                data-testid="toggle-online-discovery-panel"
+              >
+                <span className="hidden sm:inline">Settings</span>
+                {onlineDiscoveryExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </Button>
             </div>
-            <Button
-              size="sm"
-              onClick={onDiscoverOnline}
-              disabled={onlineProcessing}
-              className="gap-1.5"
-              data-testid="discover-online-button"
-            >
-              <SearchCode className={`w-3.5 h-3.5 ${onlineProcessing ? "animate-pulse" : ""}`} />
-              {onlineProcessing ? "Searching…" : "Discover now"}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => setOnlineDiscoveryExpanded((expanded) => !expanded)}
-              className="h-8 w-8 text-muted-foreground hover:bg-muted hover:text-foreground"
-              aria-label={onlineDiscoveryExpanded ? "Collapse online job discovery" : "Expand online job discovery"}
-              aria-expanded={onlineDiscoveryExpanded}
-              data-testid="toggle-online-discovery-panel"
-            >
-              {onlineDiscoveryExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </Button>
+            {gmailStatus?.connected && !gmailReconnectRequired ? (
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 border-t border-border/60 pt-2 xl:justify-end xl:border-t-0 xl:border-l xl:pl-3 xl:pt-0" data-testid="gmail-connected-banner">
+                <Mail className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
+                <div className="min-w-0 flex-1 text-xs xl:flex-none xl:text-right">
+                  <span className="font-medium text-emerald-300">Gmail</span>
+                  {gmailStatus.email && <span className="ml-1 text-emerald-400/70 break-all">{gmailStatus.email}</span>}
+                  <span className="block text-[11px] text-emerald-400/60">
+                    {gmailStatus.lastSyncedAt
+                      ? `Last synced ${new Date(gmailStatus.lastSyncedAt).toLocaleString()}`
+                      : "Not yet synced — click Sync to import job emails"}
+                  </span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onSyncGmail}
+                  disabled={gmailSyncing}
+                  aria-busy={gmailSyncing}
+                  className="h-7 gap-1.5 px-2 text-xs text-emerald-400 border-emerald-700 hover:bg-emerald-950/50"
+                  data-testid="gmail-sync-button"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${gmailSyncing ? "animate-spin" : ""}`} />
+                  {gmailSyncing ? "Syncing..." : "Sync"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={onDisconnectGmail}
+                  disabled={disconnectMutation.isPending}
+                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                  aria-label="Disconnect Gmail"
+                  title="Disconnect Gmail"
+                  data-testid="gmail-disconnect-button"
+                >
+                  <Unplug className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            ) : (
+              <div
+                className={`flex min-w-0 items-center gap-2 border-t pt-2 xl:justify-end xl:border-t-0 xl:border-l xl:pl-3 xl:pt-0 ${gmailReconnectRequired ? "border-amber-800/50" : "border-border/60"}`}
+                data-testid="gmail-connect-banner"
+                role={gmailReconnectRequired ? "alert" : undefined}
+              >
+                <Mail className={`h-4 w-4 shrink-0 ${gmailReconnectRequired ? "text-amber-400" : "text-indigo-400"}`} aria-hidden="true" />
+                <p className={`min-w-0 flex-1 text-xs xl:flex-none xl:text-right ${gmailReconnectRequired ? "text-amber-300" : "text-indigo-300"}`} title={gmailReconnectRequired
+                  ? "Reconnect your Gmail account to resume importing jobs. Your existing jobs are safe."
+                  : "Automatically import job emails and score them against your profile"}>
+                  {gmailReconnectRequired ? "Gmail access expired. Your jobs are safe." : "Import job emails automatically"}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 shrink-0 gap-1.5 px-2 text-xs text-indigo-400 border-indigo-700 hover:bg-indigo-950/50"
+                  data-testid="gmail-connect-button"
+                  onClick={handleConnectGmail}
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  {gmailReconnectRequired ? "Reconnect Gmail" : "Connect Gmail"}
+                </Button>
+              </div>
+            )}
           </div>
+          {discoveryStatus?.lastError && !onlineDiscoveryExpanded && (
+            <p className="border-t border-border/60 px-3 py-1.5 text-xs text-destructive" role="alert" data-testid="discovery-error-collapsed">
+              {discoveryStatus.lastError}
+            </p>
+          )}
           {onlineDiscoveryExpanded && (
-            <>
+            <div id="online-discovery-details" className="flex flex-col gap-3 border-t border-border/60 px-3 pb-3 pt-1">
+              <p className="pt-2 text-xs text-muted-foreground">
+                {discoveryStatus?.criteria.roleTitles.length || discoveryStatus?.criteria.skills.length
+                  ? `Discovering US & Canada jobs matching ${[...discoveryStatus.criteria.roleTitles, ...discoveryStatus.criteria.skills].slice(0, 4).join(", ")}${(discoveryStatus.criteria.roleTitles.length + discoveryStatus.criteria.skills.length) > 4 ? "…" : ""}`
+                  : "Add experience or skills to your profile to start matching in the US and Canada."}
+              </p>
               <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2.5">
                 <label className="text-xs text-muted-foreground">Auto-discover</label>
                 <select
@@ -1550,99 +1567,8 @@ export default function DashboardPage() {
                 </div>
               )}
               {discoveryStatus?.lastError && <p className="text-xs text-destructive">{discoveryStatus.lastError}</p>}
-            </>
+            </div>
           )}
-        </div>
-
-        {/* Gmail banner */}
-        {gmailStatus?.connected && !gmailReconnectRequired ? (
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between bg-emerald-950/30 border border-emerald-800/30 rounded-xl px-5 py-4 mb-6 gap-3" data-testid="gmail-connected-banner">
-            {/* Title row */}
-            <div className="flex items-start gap-3">
-              <Mail className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-emerald-300">Gmail connected</p>
-                {gmailStatus.email && (
-                  <p className="text-xs text-emerald-400/70 break-all mt-0.5">{gmailStatus.email}</p>
-                )}
-              </div>
-            </div>
-            {/* Actions + status */}
-            <div className="flex flex-col gap-1.5 border-t border-emerald-800/20 pt-2.5 sm:items-end sm:border-t-0 sm:pt-0 sm:ml-auto sm:shrink-0">
-              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onSyncGmail}
-                  disabled={gmailSyncing}
-                  aria-busy={gmailSyncing}
-                  className="text-emerald-400 border-emerald-700 hover:bg-emerald-950/50 gap-1.5"
-                  data-testid="gmail-sync-button"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${gmailSyncing ? "animate-spin" : ""}`} />
-                  {gmailSyncing ? "Syncing..." : "Sync now"}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={onDisconnectGmail}
-                  disabled={disconnectMutation.isPending}
-                  className="text-muted-foreground hover:text-destructive gap-1.5"
-                  data-testid="gmail-disconnect-button"
-                >
-                  <Unplug className="w-3.5 h-3.5" />
-                  Disconnect
-                </Button>
-              </div>
-              <p className="text-xs text-emerald-400/60 sm:text-right">
-                {gmailStatus.lastSyncedAt
-                  ? `Last synced ${new Date(gmailStatus.lastSyncedAt).toLocaleString()}`
-                  : "Not yet synced — click Sync to import job emails"}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-center gap-3 bg-indigo-950/40 border border-indigo-800/40 rounded-xl px-5 py-3.5 mb-6" data-testid="gmail-connect-banner">
-            <Mail className="w-5 h-5 text-indigo-400 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-indigo-300">{gmailReconnectRequired ? "Gmail access has expired" : "Connect Gmail to auto-import jobs"}</p>
-              <p className="text-xs text-indigo-400/70 mt-0.5">{gmailReconnectRequired
-                ? "Reconnect your Gmail account to resume importing jobs. Your existing jobs are safe."
-                : "Automatically import job emails and score them against your profile"}</p>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-indigo-400 border-indigo-700 hover:bg-indigo-950/50 gap-1.5"
-              data-testid="gmail-connect-button"
-              onClick={handleConnectGmail}
-            >
-              <Mail className="w-3.5 h-3.5" />
-              {gmailReconnectRequired ? "Reconnect Gmail" : "Connect Gmail"}
-            </Button>
-          </div>
-        )}
-
-        {/* Stats */}
-        <div className="stat-strip mb-8" data-testid="dashboard-stats">
-          <StatCard
-            icon={BriefcaseBusiness}
-            label={activeTab === "active" ? "Active postings" : activeTab === "applied" ? "Applied postings" : "Deleted postings"}
-            value={tabStats.total}
-            loading={activeTab === "deleted" ? deletedQ.isLoading : postingsQ.isLoading}
-          />
-          <StatCard
-            icon={TrendingUp}
-            label="Avg fit score"
-            value={tabStats.avgFit != null ? `${Math.round(tabStats.avgFit)}` : "—"}
-            loading={activeTab === "deleted" ? deletedQ.isLoading : postingsQ.isLoading}
-          />
-          <StatCard
-            icon={Star}
-            label="Strong matches (85+)"
-            value={tabStats.strong}
-            loading={activeTab === "deleted" ? deletedQ.isLoading : postingsQ.isLoading}
-          />
         </div>
 
         {/* Auto-sweep banner */}
@@ -1668,19 +1594,41 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {companyFilterQ.data?.bayAreaNonRemoteOnly !== false && !companyFilterQ.isLoading && !companyFilterQ.isError && (
-          <p className="text-xs text-muted-foreground mb-3" data-testid="bay-area-filter-notice">
-            Allowing all SF Bay Area roles, explicitly remote jobs anywhere, and unknown locations. Non-local jobs without confirmed remote eligibility stay in{" "}
-            <Link href="/filtered" className="underline underline-offset-2">Filtered</Link>.
-          </p>
-        )}
-        {companyFilterQ.data?.excludeWorkday !== false && !companyFilterQ.isLoading && !companyFilterQ.isError && (
-          <p className="text-xs text-muted-foreground mb-3" data-testid="workday-filter-notice">
-            Workday ATS jobs are hidden.{" "}
-            <Link href="/filtered" className="underline underline-offset-2">Review them in Filtered</Link>
-            {" "}or turn off “Hide Workday ATS” in Filters to show them again.
-          </p>
-        )}
+        {/* Collapsed notes: filter notices + ranking explanation */}
+        <details className="group mb-3 text-xs text-muted-foreground" data-testid="dashboard-notes">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-sm w-fit hover:text-foreground">
+            <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-180" aria-hidden="true" />
+            <span>
+              {[
+                companyFilterQ.data?.bayAreaNonRemoteOnly !== false && !companyFilterQ.isLoading && !companyFilterQ.isError ? "Bay Area + remote only" : null,
+                companyFilterQ.data?.excludeWorkday !== false && !companyFilterQ.isLoading && !companyFilterQ.isError ? "Workday hidden" : null,
+                "How ranking works",
+              ].filter(Boolean).join(" · ")}
+            </span>
+          </summary>
+          <div className="mt-2 max-w-3xl space-y-2 border-l border-border/70 pl-3 leading-relaxed">
+            {companyFilterQ.data?.bayAreaNonRemoteOnly !== false && !companyFilterQ.isLoading && !companyFilterQ.isError && (
+              <p data-testid="bay-area-filter-notice">
+                Allowing all SF Bay Area roles, explicitly remote jobs anywhere, and unknown locations. Non-local jobs without confirmed remote eligibility stay in{" "}
+                <Link href="/filtered" className="underline underline-offset-2">Filtered</Link>.
+              </p>
+            )}
+            {companyFilterQ.data?.excludeWorkday !== false && !companyFilterQ.isLoading && !companyFilterQ.isError && (
+              <p data-testid="workday-filter-notice">
+                Workday ATS jobs are hidden.{" "}
+                <Link href="/filtered" className="underline underline-offset-2">Review them in Filtered</Link>
+                {" "}or turn off “Hide Workday ATS” in Filters to show them again.
+              </p>
+            )}
+            <p data-testid="response-learning-explanation">
+              Applications and “More like this” favor similar jobs. Dismissal reasons reduce matching mismatches;
+              repeated, specific feedback can filter future email and online results. Workday feedback applies only
+              to known Workday links. Applied, dismissed, closed, and duplicate listings are not imported again.
+              Dismissing without a reason does not mean you dislike that type of role. Undo reverses the signal for
+              future imports. Recommended sorting combines AI fit with your choices; the AI fit score itself is unchanged.
+            </p>
+          </div>
+        </details>
 
         {/* View tabs + Filters — single row */}
         <div className="flex items-center border-b border-border mb-5">
