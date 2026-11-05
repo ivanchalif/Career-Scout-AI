@@ -21,6 +21,7 @@ import { fetchGoogleSearchResults, isGoogleSearchUrl } from "./sources/googleSea
 import { fetchHiringCafeJobs, isHiringCafeUrl } from "./sources/hiringCafe";
 import { expandSearchListings } from "./sources/expandListings";
 import { jobLinkKind } from "./sources/jobLinks";
+import { withSourceRecovery } from "./sources/sourceRecovery";
 import { buildSourceHealth, countsAsAdded, sourceIdForProvider } from "./sourceHealth";
 import { DEFAULT_EMAIL_FILTER_CRITERIA, matchesEmailFilterCriteria, type EmailFilterCriteria } from "./gmailClient";
 import { loadResponseHistory } from "./responseHistory";
@@ -183,7 +184,7 @@ export function buildFocusedSearchQueries(
   return selected;
 }
 
-async function fetchConfiguredSource(
+export async function fetchConfiguredSource(
   source: typeof onlineDiscoverySourcesTable.$inferSelect,
   criteria: DiscoveryCriteria,
   progress: DiscoveryProgress,
@@ -191,29 +192,38 @@ async function fetchConfiguredSource(
   freshness: string,
   report: DiscoveryReport,
   warnings: string[],
+  recoveryNotes: string[] = [],
 ): Promise<OnlineJobCandidate[]> {
+  function recovered(message: string) {
+    if (recoveryNotes.length < 5 && !recoveryNotes.includes(message)) recoveryNotes.push(message);
+  }
+  const listing = (url: string, provider: string) =>
+    withSourceRecovery(() => fetchCustomFeed(url, provider, recovered), recovered);
   const signature = JSON.stringify([source.url, criteria, freshness]);
   const prior = progress.cursors[String(source.id)];
   const run = prior?.signature === signature ? prior.run : 0;
   async function search(queries: string[], provider: string) {
     const broaderQueries = queries.map(query => buildBroaderSearchQuery(query, criteria.roleTitles[0] ?? criteria.skills[0] ?? ""));
-    const result = await searchBeyondKnown(queries, provider, run, freshness, knownUrls, fetchGoogleSearchResults, broaderQueries);
+    const result = await searchBeyondKnown(queries, provider, run, freshness, knownUrls,
+      (url, searchProvider, options) => fetchGoogleSearchResults(url, searchProvider, {
+        ...options, onRecovery: recovered, onRetry: () => { report.searchRequests++; },
+      }), broaderQueries);
     report.searchRequests += result.requests;
     if (result.errors.length) {
       if (!result.candidates.length) throw new Error(result.errors.join("; "));
       warnings.push(`${source.name}: ${result.errors.join("; ")}`);
     }
     progress.cursors[String(source.id)] = { signature, run: run + 1 };
-    return expandSearchListings(result.candidates, fetchCustomFeed, message => warnings.push(`${source.name}: ${message}`));
+    return expandSearchListings(result.candidates, listing, message => warnings.push(`${source.name}: ${message}`));
   }
   if (source.kind === "builtin" && source.provider === "arbeitnow") {
     const page = run % 3 + 1;
-    const first = await fetchArbeitnowJobs(page);
+    const first = await withSourceRecovery(() => fetchArbeitnowJobs(page), recovered);
     const unseen = first.filter(candidate => !knownUrls.has(canonicalizeJobUrl(candidate.url))).length;
     progress.cursors[String(source.id)] = { signature, run: run + 1 };
     if (unseen >= 4) return first;
     try {
-      return [...first, ...await fetchArbeitnowJobs(page % 3 + 1)];
+      return [...first, ...await withSourceRecovery(() => fetchArbeitnowJobs(page % 3 + 1), recovered)];
     } catch (error) {
       warnings.push(`${source.name}: ${error instanceof Error ? error.message : "Next feed page failed"}`);
       return first;
@@ -229,7 +239,7 @@ async function fetchConfiguredSource(
   }
   if (source.provider === "hiringcafe" || isHiringCafeUrl(source.url)) {
     try {
-      return await fetchHiringCafeJobs(source.url, `hiringcafe:${source.id}`);
+      return await withSourceRecovery(() => fetchHiringCafeJobs(source.url, `hiringcafe:${source.id}`), recovered);
     } catch (error) {
       const fallbackQueries = buildFocusedSearchQueries(
         "hiringcafe.com/job",
@@ -241,10 +251,12 @@ async function fetchConfiguredSource(
         { sourceId: source.id, error },
         "HiringCafe direct request failed; falling back to Brave",
       );
-      return search(fallbackQueries, `hiringcafe:${source.id}`);
+      const jobs = await search(fallbackQueries, `hiringcafe:${source.id}`);
+      if (jobs.length) recovered("HiringCafe direct access was unavailable; automatically used public search results. Source-page-specific filters cannot be verified by this fallback.");
+      return jobs;
     }
   }
-  return expandSearchListings(await fetchCustomFeed(source.url, `custom:${source.id}`), fetchCustomFeed, message => warnings.push(`${source.name}: ${message}`));
+  return expandSearchListings(await listing(source.url, `custom:${source.id}`), listing, message => warnings.push(`${source.name}: ${message}`));
 }
 
 export type DiscoveryCriteria = {
@@ -508,7 +520,7 @@ export async function runOnlineDiscovery(userId: string) {
     ]);
     const progress: DiscoveryProgress = progressRows[0]?.state ?? { cursors: {}, rejected: {} };
     const sourceRuns = new Map(activeSources.map(source => [source.id, {
-      at: new Date().toISOString(), addedPostingIds: [] as number[], error: null as string | null,
+      at: new Date().toISOString(), addedPostingIds: [] as number[], error: null as string | null, recoveryNotes: [] as string[],
     }]));
     function recordSourceRuns() {
       progress.sourceRuns ??= {};
@@ -530,7 +542,7 @@ export async function runOnlineDiscovery(userId: string) {
     for (const url of Object.keys(progress.rejected)) knownUrls.add(url);
     const searchWarnings: string[] = [];
     const sourceFetches = await Promise.allSettled(activeSources.map((source) =>
-      fetchConfiguredSource(source, criteria, progress, knownUrls, profile?.onlineDiscoveryFreshnessWindow ?? "any_time", report, searchWarnings)));
+      fetchConfiguredSource(source, criteria, progress, knownUrls, profile?.onlineDiscoveryFreshnessWindow ?? "any_time", report, searchWarnings, sourceRuns.get(source.id)!.recoveryNotes)));
     const sourceErrors = sourceFetches.flatMap((result, index) => {
       if (result.status === "fulfilled") return [];
       return [`${activeSources[index]?.name ?? "Unknown source"}: ${result.reason instanceof Error ? result.reason.message : "request failed"}`];

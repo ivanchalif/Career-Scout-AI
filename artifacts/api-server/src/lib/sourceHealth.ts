@@ -92,6 +92,7 @@ export function buildSourceHealth(
   }
   if (!dated.length) reasons.push("Posting dates are unknown; import time is not used as the posting date.");
   if (!responses) reasons.push("No applied or dismissed responses to recent additions yet.");
+  for (const note of last?.recoveryNotes ?? []) reasons.push(`Latest search recovery: ${note}`);
   reasons.push("Health uses a rolling 30-day window. Counts exclude current dashboard filters and credit only the original importing source, not duplicate sightings.");
   return { color, label, reasons, ...metrics };
 }

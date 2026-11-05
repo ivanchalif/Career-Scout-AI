@@ -1,5 +1,6 @@
 import { htmlToPlainText, type OnlineJobCandidate } from "./arbeitnow";
 import { validatePublicFeedUrl } from "./customFeed";
+import { SourceRequestError } from "./sourceRecovery";
 
 const MAX_RESULTS = 40;
 
@@ -67,7 +68,7 @@ export function parseHiringCafePage(raw: string, provider: string): OnlineJobCan
       || stringList(processed.workplace_countries)[0]
       || null;
     const workplaceType = text(processed.workplace_type);
-    const dateText = text(hit.date_fetched) || text(hit.date_posted);
+    const dateText = text(hit.date_posted);
     const postedAt = dateText && !Number.isNaN(new Date(dateText).getTime()) ? new Date(dateText) : null;
 
     return [{
@@ -107,7 +108,7 @@ export async function fetchHiringCafeJobs(rawUrl: string, provider: string): Pro
       response = undefined;
     }
     if (!response) throw new Error("HiringCafe source followed too many redirects.");
-    if (!response.ok) throw new Error(`HiringCafe request failed (${response.status}).`);
+    if (!response.ok) throw new SourceRequestError("HiringCafe request failed", response.status, response.headers.get("retry-after"));
     return parseHiringCafePage(await response.text(), provider);
   } finally {
     clearTimeout(timeout);

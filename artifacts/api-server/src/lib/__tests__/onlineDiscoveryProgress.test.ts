@@ -161,6 +161,18 @@ describe("persisted discovery progress and accounting", () => {
       addedPostingIds: [], error: "Provider unavailable",
     });
   });
+  it("preserves successful automatic-recovery details with the completed source run", async () => {
+    state.search.mockImplementation(async (_url: string, _provider: string, options?: { onRecovery?: (message: string) => void; onRetry?: () => void }) => {
+      options?.onRetry?.();
+      options?.onRecovery?.("Recovered after retry.");
+      return [candidate("new")];
+    });
+    const result = await runOnlineDiscovery("isolated-user");
+    expect(result.report?.searchRequests).toBeGreaterThan(1);
+    expect(state.progress.sourceRuns["1"].at(-1)).toMatchObject({
+      error: null, recoveryNotes: ["Recovered after retry."],
+    });
+  });
 
   it("does not import a posting that redirects to a company job board", async () => {
     state.profile.titleExcludeKeywords = [];

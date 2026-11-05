@@ -24,6 +24,7 @@ export type DiscoveryProgress = {
     at: string;
     addedPostingIds: number[];
     error: string | null;
+    recoveryNotes?: string[];
   }>>;
 };
 

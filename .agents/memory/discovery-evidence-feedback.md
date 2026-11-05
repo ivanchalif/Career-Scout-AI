@@ -75,6 +75,12 @@ Source health measures usable additions, authentic posting recency, and applied/
 
 **How to apply:** Credit only the original importing source, not duplicate sightings. Preserve unknown posting dates and untracked historical per-search counts as unknown rather than substituting import dates or zero. Keep the health explanation visible so technical retrieval success is not confused with useful results.
 
+Search-backed sources share one provider quota; automatic recovery must coordinate across sources rather than retry each source independently.
+
+**Why:** Parallel discovery searches produced HTTP 429 for an otherwise working Lever source. Additional per-source concurrency or retries would increase the same shared rate pressure.
+
+**How to apply:** Pace requests through the shared search connection, respect Retry-After, bound retries and queue waits, and record successful recovery separately from remaining failures. Never repair low yield by weakening user filters or making posting dates appear fresher.
+
 The user's location rule allows ANY SF Bay Area role (on-site, hybrid, or remote), ANY fully remote role anywhere, and genuinely unknown locations. Known non-local locations require explicit remote eligibility even when the work-arrangement field is blank.
 
 **Why:** After correcting the initial overly strict filter, known non-local roles still appeared because blank work arrangements were treated as uncertainty. The user explicitly chose to require remote evidence for known non-local jobs.

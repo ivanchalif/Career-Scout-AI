@@ -61,6 +61,11 @@ describe("source health from actual eligible additions", () => {
       { "1": [{ at: now.toISOString(), addedPostingIds: [1], error: "403" }] }, now);
     expect(stats).toMatchObject({ color: "yellow", label: "Paused", totalAdded: 1, latestSearchAdded: 1 });
   });
+  it("explains automatic recovery without treating it as evidence of job usefulness", () => {
+    const stats = health([job(1)], { "1": [{ at: now.toISOString(), addedPostingIds: [1], error: null, recoveryNotes: ["Recovered a temporary source failure."] }] });
+    expect(stats.color).toBe("yellow");
+    expect(stats.reasons).toContain("Latest search recovery: Recovered a temporary source failure.");
+  });
   it("distinguishes search failures from insufficient yield history", () => {
     expect(health([], { "1": [{ at: now.toISOString(), addedPostingIds: [], error: "Source request failed" }] }))
       .toMatchObject({ color: "red", label: "Needs attention", latestSearchAdded: 0 });

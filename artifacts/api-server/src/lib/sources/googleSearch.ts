@@ -1,6 +1,7 @@
 import { ReplitConnectors } from "@replit/connectors-sdk";
 import { htmlToPlainText, type OnlineJobCandidate } from "./arbeitnow";
 import { validatePublicFeedUrl } from "./customFeed";
+import { pacedSearchRequest } from "./sourceRecovery";
 
 const MAX_RESULTS = 20;
 
@@ -165,7 +166,7 @@ export function parseBraveSearchResults(
 
 export async function fetchGoogleSearchResults(
   rawUrl: string, provider: string,
-  options: { offset?: number; freshness?: "pw" | "pm" } = {},
+  options: { offset?: number; freshness?: "pw" | "pm"; onRecovery?: (message: string) => void; onRetry?: () => void } = {},
 ): Promise<OnlineJobCandidate[]> {
   const searchUrl = validateGoogleSearchUrl(rawUrl);
   const query = searchUrl.searchParams.get("q") ?? "";
@@ -183,9 +184,8 @@ export async function fetchGoogleSearchResults(
     ...(options.freshness ? { freshness: options.freshness } : {}),
   });
   const connectors = new ReplitConnectors();
-  const response = await connectors.proxy("brave", `/res/v1/web/search?${params.toString()}`, {
+  const response = await pacedSearchRequest(() => connectors.proxy("brave", `/res/v1/web/search?${params.toString()}`, {
     method: "GET",
-  });
-  if (!response.ok) throw new Error(`Web search request failed (${response.status}).`);
+  }), options);
   return parseBraveSearchResults(await response.json() as BraveSearchResponse, rawUrl, provider);
 }

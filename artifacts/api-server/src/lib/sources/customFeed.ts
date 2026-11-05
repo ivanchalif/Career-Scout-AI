@@ -2,6 +2,7 @@ import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { htmlToPlainText, type OnlineJobCandidate } from "./arbeitnow";
 import { parseHtmlListings } from "./htmlListings";
+import { SourceRequestError } from "./sourceRecovery";
 
 const MAX_DESCRIPTION_CHARS = 12_000;
 
@@ -181,10 +182,11 @@ async function assertPublicResolvedHost(url: URL): Promise<void> {
   }
 }
 
-export async function fetchCustomFeed(url: string, provider: string): Promise<OnlineJobCandidate[]> {
+export async function fetchCustomFeed(url: string, provider: string, onRecovery?: (message: string) => void): Promise<OnlineJobCandidate[]> {
   let parsedUrl = validatePublicFeedUrl(url);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
+  let formatRecovered = false;
   try {
     let response: Response | undefined;
     for (let redirects = 0; redirects <= 3; redirects += 1) {
@@ -199,6 +201,14 @@ export async function fetchCustomFeed(url: string, provider: string): Promise<On
           "User-Agent": "CareerScout/1.0",
         },
       });
+      if (response.status === 406 && parsedUrl.hostname.replace(/^www\./, "") !== "workatastartup.com") {
+        await response.body?.cancel();
+        response = await fetch(parsedUrl, {
+          signal: controller.signal, redirect: "manual",
+          headers: { Accept: "text/html, application/xhtml+xml", "User-Agent": "CareerScout/1.0" },
+        });
+        formatRecovered = response.ok;
+      }
       if (response.status < 300 || response.status >= 400) break;
       const location = response.headers.get("location");
       if (!location) break;
@@ -206,7 +216,7 @@ export async function fetchCustomFeed(url: string, provider: string): Promise<On
       response = undefined;
     }
     if (!response) throw new Error("Source followed too many redirects.");
-    if (!response.ok) throw new Error(`Source request failed (${response.status}).`);
+    if (!response.ok) throw new SourceRequestError("Source request failed", response.status, response.headers.get("retry-after"));
     const contentType = response.headers.get("content-type") ?? "";
     const maxBytes = 2_000_000;
     if (Number(response.headers.get("content-length")) > maxBytes) throw new Error("Source response exceeded the 2 MB limit.");
@@ -230,7 +240,9 @@ export async function fetchCustomFeed(url: string, provider: string): Promise<On
       raw = await response.text();
       if (Buffer.byteLength(raw) > maxBytes) throw new Error("Source response exceeded the 2 MB limit.");
     }
-    return parseCustomFeed(raw, contentType, provider, parsedUrl.href);
+    const candidates = parseCustomFeed(raw, contentType, provider, parsedUrl.href);
+    if (formatRecovered) onRecovery?.("Automatically recovered the source by requesting its supported HTML format after HTTP 406.");
+    return candidates;
   } finally {
     clearTimeout(timeout);
   }
