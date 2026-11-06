@@ -87,6 +87,56 @@ describe("Gmail pipeline progress", () => {
     vi.mocked(runDedupSweep).mockResolvedValue(0);
   });
 
+  it("repairs mailbox state for completed alerts without extracting or importing again", async () => {
+    vi.mocked(fetchJobEmails).mockResolvedValue([email("seen")]);
+    const result = await syncUser(conn);
+    expect(result.synced).toBe(0);
+    expect(extractJobListings).not.toHaveBeenCalled();
+    expect(markEmailAsRead).toHaveBeenCalledWith(conn.accessToken, conn.refreshToken, "seen");
+    expect(saved.filter(row => row.table === gmailSeenKeysTable).map(row => row.values.gmailKey))
+      .toEqual(["seen:mailbox_pending", "seen:mailbox_done"]);
+  });
+
+  it("does not acknowledge a failed label update and retries it on the next sync", async () => {
+    vi.mocked(fetchJobEmails).mockResolvedValue([email("seen")]);
+    vi.mocked(markEmailAsRead).mockRejectedValueOnce(new Error("label update failed"));
+    await expect(syncUser(conn)).rejects.toThrow("label update failed");
+    expect(saved.some(row => row.values.gmailKey === "seen:mailbox_done")).toBe(false);
+    await syncUser(conn);
+    expect(markEmailAsRead).toHaveBeenCalledTimes(2);
+    expect(extractJobListings).not.toHaveBeenCalled();
+    expect(saved.some(row => row.values.gmailKey === "seen:mailbox_done")).toBe(true);
+  });
+
+  it("retries durable pending updates even when Gmail search returns no message", async () => {
+    vi.mocked(db.select).mockImplementation(() => ({
+      from: (table: unknown) => ({
+        where: async () => table === gmailSeenKeysTable
+          ? [{ gmailKey: "old:complete" }, { gmailKey: "old:mailbox_pending" }] : [],
+      }),
+    }) as unknown as ReturnType<typeof db.select>);
+    await syncUser(conn);
+    expect(markEmailAsRead).toHaveBeenCalledWith(conn.accessToken, conn.refreshToken, "old");
+    expect(extractJobListings).not.toHaveBeenCalled();
+  });
+
+  it("does not rearchive acknowledged mail or archive blocked/application-response messages", async () => {
+    vi.mocked(db.select).mockImplementation(() => ({
+      from: (table: unknown) => ({
+        where: async () => table === gmailSeenKeysTable ? [
+          { gmailKey: "done:complete" }, { gmailKey: "done:mailbox_done" },
+          { gmailKey: "blocked:blocked" }, { gmailKey: "reply:appresponse" },
+        ] : [],
+      }),
+    }) as unknown as ReturnType<typeof db.select>);
+    vi.mocked(fetchJobEmails).mockResolvedValue([email("done"), email("blocked"), email("reply")]);
+    await syncUser(conn);
+    expect(markEmailAsRead).not.toHaveBeenCalled();
+    expect(extractJobListings).not.toHaveBeenCalled();
+    expect(vi.mocked(fetchJobEmails).mock.calls[0][3]?.skipMessageIds)
+      .toEqual(new Set(["blocked", "reply", "done"]));
+  });
+
   it("audits repeated learned role mismatches instead of silently importing them", async () => {
     vi.mocked(loadResponseHistory).mockResolvedValue([
       { kind: "not_my_role", title: "Product Manager", company: "One", location: null, link: null },
@@ -207,7 +257,7 @@ describe("Gmail pipeline progress", () => {
     expect(getGmailSyncProgress(conn.userId)).toEqual({
       phase: "finalizing", emailsProcessed: 7, emailsTotal: 7, jobsImported: 2,
     });
-    expect(vi.mocked(markEmailAsRead).mock.calls.map((args) => args[2])).toEqual(["digest", "no-listings", "skipped"]);
+    expect(vi.mocked(markEmailAsRead).mock.calls.map((args) => args[2])).toEqual(["seen", "digest", "no-listings", "skipped"]);
     expect(estimateEmailCount).not.toHaveBeenCalled();
     expect(fetchJobEmails).toHaveBeenCalledTimes(1);
     expect(scorePostingBackground).toHaveBeenCalledTimes(2);

@@ -13,6 +13,42 @@ import { estimateEmailCount, fetchJobEmails, markEmailAsRead } from "../gmailCli
 describe("Gmail client authorization expiry (no real mail)", () => {
   beforeEach(() => vi.resetAllMocks());
 
+  it("marks only the processed message read and archives it without trashing it", async () => {
+    messages.modify.mockResolvedValueOnce({});
+    await markEmailAsRead("mock-access", "mock-refresh", "processed");
+    expect(messages.modify).toHaveBeenCalledWith({
+      userId: "me", id: "processed", requestBody: { removeLabelIds: ["UNREAD", "INBOX"] },
+    });
+  });
+  it("reports insufficient permissions rather than silently succeeding", async () => {
+    messages.modify.mockRejectedValueOnce({ response: { status: 403 } });
+    await expect(markEmailAsRead("mock-access", "mock-refresh", "processed")).rejects.toThrow("Reconnect Gmail");
+  });
+  it("reports temporary label-update failures so they can retry", async () => {
+    messages.modify.mockRejectedValueOnce(new Error("network failure"));
+    await expect(markEmailAsRead("mock-access", "mock-refresh", "processed")).rejects.toThrow("retry Sync now");
+  });
+  it("treats an already-deleted message as no longer needing mailbox updates", async () => {
+    messages.modify.mockRejectedValueOnce({ code: 404 });
+    await expect(markEmailAsRead("mock-access", "mock-refresh", "deleted")).resolves.toBeUndefined();
+  });
+  it("repairs completed read-inbox mail but leaves new already-read mail alone", async () => {
+    messages.list.mockResolvedValueOnce({ data: { messages: [{ id: "completed" }, { id: "already-read" }] } });
+    messages.get.mockResolvedValue({ data: { labelIds: ["INBOX"], payload: {} } });
+    const result = await fetchJobEmails("mock-access", "mock-refresh", undefined, { completedMessageIds: new Set(["completed"]) });
+    expect(result.map(email => email.messageId)).toEqual(["completed"]);
+    expect(messages.list.mock.calls[0][0].q).toContain("{is:unread in:inbox}");
+  });
+  it("looks beyond intentionally skipped messages on the first page", async () => {
+    messages.list.mockResolvedValueOnce({ data: { messages: [{ id: "blocked" }], nextPageToken: "next" } })
+      .mockResolvedValueOnce({ data: { messages: [{ id: "new" }] } });
+    messages.get.mockResolvedValue({ data: { labelIds: ["UNREAD", "INBOX"], payload: {} } });
+    const result = await fetchJobEmails("mock-access", "mock-refresh", undefined, { skipMessageIds: new Set(["blocked"]) });
+    expect(result.map(email => email.messageId)).toEqual(["new"]);
+    expect(messages.get).toHaveBeenCalledTimes(1);
+    expect(messages.list.mock.calls[1][0].pageToken).toBe("next");
+  });
+
   it("propagates expiry from the preliminary estimate", async () => {
     messages.list.mockRejectedValueOnce(new Error("invalid_grant"));
     await expect(estimateEmailCount("mock-access", "mock-refresh")).rejects.toThrow("invalid_grant");
@@ -49,8 +85,8 @@ describe("Gmail client authorization expiry (no real mail)", () => {
       .rejects.toThrow("invalid_grant");
   });
 
-  it("preserves the existing read-only permission fallback", async () => {
+  it("no longer reports success when a read-only token cannot modify the mailbox", async () => {
     messages.modify.mockRejectedValueOnce(new Error("insufficient permissions"));
-    await expect(markEmailAsRead("mock-access", "mock-refresh", "message")).resolves.toBeUndefined();
+    await expect(markEmailAsRead("mock-access", "mock-refresh", "message")).rejects.toThrow("Reconnect Gmail");
   });
 });

@@ -1177,6 +1177,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GmailAuthorizationError"
+        "502":
+          description: Jobs are safe but Gmail label updates failed and will retry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /dashboard/summary:
     get:

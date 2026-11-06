@@ -1,7 +1,7 @@
 import { createHmac } from "crypto";
 import { OAuth2Client } from "google-auth-library";
 import { gmail_v1, google } from "googleapis";
-import { isGmailAuthorizationExpired } from "./gmailAuthError";
+import { GmailMailboxUpdateError, isGmailAuthorizationExpired } from "./gmailAuthError";
 
 const GMAIL_SCOPES = [
   "https://www.googleapis.com/auth/gmail.modify",
@@ -174,12 +174,18 @@ export async function markEmailAsRead(
     await gmail.users.messages.modify({
       userId: "me",
       id: messageId,
-      requestBody: { removeLabelIds: ["UNREAD"] },
+      // Archive the individual processed alert, never trash/delete its thread.
+      requestBody: { removeLabelIds: ["UNREAD", "INBOX"] },
     });
   } catch (err) {
     if (isGmailAuthorizationExpired(err)) throw err;
-    // Silently ignore — may fail for tokens that only have gmail.readonly scope
-    // until the user reconnects with the updated permissions
+    const failure = err as { code?: number; message?: string; response?: { status?: number; data?: { error?: { errors?: { reason?: string }[] } } } };
+    // A message deleted directly in Gmail has no labels left to acknowledge.
+    if (failure.code === 404 || failure.response?.status === 404) return;
+    const rateLimited = failure.response?.data?.error?.errors?.some(({ reason }) => /rateLimit|quota/i.test(reason ?? ""));
+    const permissionDenied = !rateLimited && (failure.code === 403 || failure.response?.status === 403
+      || /insufficient.*(?:permission|scope)/i.test(failure.message ?? ""));
+    throw new GmailMailboxUpdateError(permissionDenied);
   }
 }
 
@@ -235,6 +241,7 @@ export async function fetchJobEmails(
   accessToken: string,
   refreshToken: string,
   criteria?: EmailFilterCriteria,
+  options: { skipMessageIds?: ReadonlySet<string>; completedMessageIds?: ReadonlySet<string> } = {},
 ): Promise<JobEmail[]> {
   const client = createOAuth2Client();
   client.setCredentials({
@@ -243,40 +250,49 @@ export async function fetchJobEmails(
   });
 
   const effectiveCriteria = criteria ?? DEFAULT_EMAIL_FILTER_CRITERIA;
-  const query = buildGmailQuery(effectiveCriteria);
+  // Include read-but-still-in-Inbox alerts only for already completed messages
+  // whose mailbox update needs repair. Do not import new, already-read mail.
+  const query = buildGmailQuery(effectiveCriteria).replace(/^is:unread\b/, "{is:unread in:inbox}");
 
   const gmail = google.gmail({ version: "v1", auth: client });
-  const listRes = await gmail.users.messages.list({
-    userId: "me",
-    q: query,
-    maxResults: 50,
-  });
-
-  const messages = listRes.data.messages ?? [];
   const results: JobEmail[] = [];
+  const fetchedIds = new Set<string>();
+  let pageToken: string | undefined;
+  // A bounded scan prevents already-seen or intentionally untouched messages
+  // in the first Gmail page from permanently starving later alerts.
+  for (let page = 0; page < 10 && results.length < 50; page++) {
+    const listRes = await gmail.users.messages.list({
+      userId: "me", q: query, maxResults: 50, pageToken,
+    });
+    for (const msg of listRes.data.messages ?? []) {
+      if (!msg.id || options.skipMessageIds?.has(msg.id) || fetchedIds.has(msg.id)) continue;
+      fetchedIds.add(msg.id);
+      try {
+        const detail = await gmail.users.messages.get({
+          userId: "me",
+          id: msg.id,
+          format: "full",
+        });
 
-  for (const msg of messages) {
-    if (!msg.id) continue;
-    try {
-      const detail = await gmail.users.messages.get({
-        userId: "me",
-        id: msg.id,
-        format: "full",
-      });
+        const headers = detail.data.payload?.headers ?? [];
+        const subject =
+          headers.find((h) => h.name?.toLowerCase() === "subject")?.value ??
+          "(no subject)";
+        const sender =
+          headers.find((h) => h.name?.toLowerCase() === "from")?.value ?? "";
+        const body = extractBody(detail.data.payload);
 
-      const headers = detail.data.payload?.headers ?? [];
-      const subject =
-        headers.find((h) => h.name?.toLowerCase() === "subject")?.value ??
-        "(no subject)";
-      const sender =
-        headers.find((h) => h.name?.toLowerCase() === "from")?.value ?? "";
-      const body = extractBody(detail.data.payload);
-
-      results.push({ messageId: msg.id, subject, sender, body });
-    } catch (err) {
-      if (isGmailAuthorizationExpired(err)) throw err;
-      // Skip individual message failures, but never hide expired authorization.
+        if (detail.data.labelIds && !detail.data.labelIds.includes("UNREAD")
+          && !options.completedMessageIds?.has(msg.id)) continue;
+        results.push({ messageId: msg.id, subject, sender, body });
+        if (results.length >= 50) break;
+      } catch (err) {
+        if (isGmailAuthorizationExpired(err)) throw err;
+        // Skip individual message failures, but never hide expired authorization.
+      }
     }
+    pageToken = listRes.data.nextPageToken ?? undefined;
+    if (!pageToken) break;
   }
 
   return results;

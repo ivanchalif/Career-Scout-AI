@@ -1,7 +1,7 @@
 import { eq, and, isNotNull } from "drizzle-orm";
 import { db, gmailConnectionsTable, jobPostingsTable, userProfilesTable, gmailSeenKeysTable, filteredEmailsTable, emailSyncLogTable, syncEventsTable } from "@workspace/db";
 import type { EmailSyncOutcome } from "@workspace/db";
-import { fetchJobEmails, markEmailAsRead, estimateEmailCount, DEFAULT_EMAIL_FILTER_CRITERIA } from "./gmailClient";
+import { fetchJobEmails, estimateEmailCount, DEFAULT_EMAIL_FILTER_CRITERIA } from "./gmailClient";
 import { extractJobListings } from "./scoringService";
 import { scorePostingBackground, sweepUnscoredPostings } from "./scoringService";
 import { isFuzzyDuplicate } from "./dedup";
@@ -12,7 +12,8 @@ import { loadResponseHistory } from "./responseHistory";
 import { evaluateResponses } from "./responseLearning";
 import { GmailAuthorizationExpiredError, isGmailAuthorizationExpired } from "./gmailAuthError";
 import { isGmailSyncRunning, runGmailSync, type ReportGmailSyncProgress, type SyncUserResult } from "./gmailSyncState";
-import { completedGmailMessages } from "./gmailCompletion";
+import { completedGmailMessages, successfulGmailMessages, acknowledgedGmailMessages, pendingGmailMailboxMessages } from "./gmailCompletion";
+import { finalizeGmailMailboxMessage } from "./gmailMailboxCompletion";
 import { saveJobIdentitySource } from "./jobIdentitySources";
 import type { JobIdentityEvidence } from "@workspace/db";
 export type { SyncUserResult } from "./gmailSyncState";
@@ -139,14 +140,32 @@ async function _syncUserInner(
   const [userProfile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, conn.userId));
   const filterCriteria = userProfile?.emailFilterSettings ?? DEFAULT_EMAIL_FILTER_CRITERIA;
 
-  const emails = await fetchJobEmails(conn.accessToken, conn.refreshToken, filterCriteria);
-
   const seenKeys = await db
     .select({ gmailKey: gmailSeenKeysTable.gmailKey })
     .from(gmailSeenKeysTable)
     .where(eq(gmailSeenKeysTable.userId, conn.userId));
 
   const processedBaseIds = completedGmailMessages(seenKeys);
+  const successfulIds = successfulGmailMessages(seenKeys);
+  const acknowledgedIds = acknowledgedGmailMessages(seenKeys);
+  // Retry failed label updates independently of extraction, even if the email
+  // is no longer unread/in Inbox or outside the usual 30-day search window.
+  for (const id of pendingGmailMailboxMessages(seenKeys).slice(0, 50)) {
+    await finalizeGmailMailboxMessage(conn, id);
+    acknowledgedIds.add(id);
+  }
+  const skipMessageIds = new Set([...processedBaseIds].filter((id) => !successfulIds.has(id)));
+  for (const id of acknowledgedIds) skipMessageIds.add(id);
+  const emails = await fetchJobEmails(conn.accessToken, conn.refreshToken, filterCriteria, {
+    skipMessageIds, completedMessageIds: successfulIds,
+  });
+  // Repair legacy completed alerts still unread or in Inbox. No extraction or
+  // historical posting changes, and never archive blocked/application replies.
+  for (const id of new Set(emails.filter((email) => successfulIds.has(email.messageId)
+    && !acknowledgedIds.has(email.messageId)).map((email) => email.messageId))) {
+    await finalizeGmailMailboxMessage(conn, id);
+    acknowledgedIds.add(id);
+  }
   // Also deduplicate within the fetched batch itself (Gmail API can return the
   // same message ID twice when a message matches multiple query conditions).
   const seenInBatch = new Set<string>();
@@ -376,8 +395,8 @@ async function _syncUserInner(
       await db.insert(gmailSeenKeysTable)
         .values({ userId: conn.userId, gmailKey: `${email.messageId}:complete` })
         .onConflictDoNothing();
-      await markEmailAsRead(conn.accessToken, conn.refreshToken, email.messageId);
-      logger.debug({ messageId: email.messageId }, "gmailScheduler: marked email as read");
+      await finalizeGmailMailboxMessage(conn, email.messageId);
+      logger.debug({ messageId: email.messageId }, "gmailScheduler: processed alert marked read and archived");
     } else {
       logger.warn({ messageId: email.messageId }, "gmailScheduler: extraction errored — leaving email unread for retry");
     }

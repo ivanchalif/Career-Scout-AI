@@ -15,3 +15,9 @@ The original code always called `markEmailAsRead` after processing each email, e
 - `gmail.ts` manual sync route: same pattern
 - `/api/gmail/reprocess` endpoint: handles its own mark-as-read after successful import
 - If you add a new email-processing path, always guard `markEmailAsRead` with `!hadError`
+
+Mailbox acknowledgment is separate from successful job processing. Retry a failed read/archive update even when extraction is already complete, and never silently treat a Gmail modification error as success.
+
+**Why:** Completed alerts were skipped on subsequent syncs after label updates failed, leaving them unread or in Inbox indefinitely.
+
+**How to apply:** Preserve a durable pending mailbox action until Google acknowledges it. Only successfully processed job alerts may be marked read and archived; leave incomplete extraction, blocked unrelated messages, and application responses untouched. Do not blanket-archive historical mail or override a message deliberately returned to Inbox after acknowledgment.

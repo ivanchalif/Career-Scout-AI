@@ -758,13 +758,20 @@ export default function DashboardPage() {
         onError: async (error) => {
           setGmailProcessing(false);
           const expired = error.data?.error === "gmail_token_expired";
-          if (expired) setGmailReconnectRequired(true);
-          await qc.invalidateQueries({ queryKey: getGetGmailStatusQueryKey() });
+          const message = error.data?.error ?? error.message;
+          const reconnect = expired || (error.status === 502 && /Reconnect Gmail/.test(message));
+          if (reconnect) setGmailReconnectRequired(true);
+          // A label update can fail after jobs were safely imported.
+          await Promise.all([
+            qc.invalidateQueries({ queryKey: getGetGmailStatusQueryKey() }),
+            qc.invalidateQueries({ queryKey: getListPostingsQueryKey() }),
+            qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }),
+          ]);
           toast({
-            title: expired ? "Reconnect Gmail" : "Sync failed",
+            title: reconnect ? "Reconnect Gmail" : "Sync incomplete",
             description: expired
               ? "Gmail access has expired. Use Reconnect Gmail below to resume importing jobs."
-              : "Could not sync Gmail. Please try again.",
+              : message,
             variant: "destructive",
           });
         },

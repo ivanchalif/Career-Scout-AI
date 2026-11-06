@@ -1,5 +1,7 @@
-import { Router, type IRouter, type Request, type Response } from "express";
-import { completedGmailMessages } from "../lib/gmailCompletion";
+import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
+import { completedGmailMessages, successfulGmailMessages, acknowledgedGmailMessages } from "../lib/gmailCompletion";
+import { finalizeGmailMailboxMessage } from "../lib/gmailMailboxCompletion";
+import { GmailMailboxUpdateError } from "../lib/gmailAuthError";
 import { eq } from "drizzle-orm";
 import { db, gmailConnectionsTable, jobPostingsTable, gmailSeenKeysTable, userProfilesTable, syncEventsTable, emailSyncLogTable, type EmailSyncOutcome } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -10,7 +12,6 @@ import {
   revokeTokens,
   fetchJobEmails,
   fetchSingleEmail,
-  markEmailAsRead,
   signState,
   verifyState,
 } from "../lib/gmailClient";
@@ -210,12 +211,18 @@ router.post("/gmail/reprocess", requireAuth, async (req: Request, res: Response)
     .from(gmailSeenKeysTable)
     .where(eq(gmailSeenKeysTable.userId, userId));
   const processedBaseIds = completedGmailMessages(seenKeys);
+  const successfulIds = successfulGmailMessages(seenKeys);
+  const acknowledgedIds = acknowledgedGmailMessages(seenKeys);
 
   const results: Array<{ messageId: string; status: string; imported: number }> = [];
   const responseHistory = await loadResponseHistory(userId);
 
   for (const messageId of messageIds.slice(0, 20)) {
     if (processedBaseIds.has(messageId)) {
+      if (successfulIds.has(messageId) && !acknowledgedIds.has(messageId)) {
+        await finalizeGmailMailboxMessage(conn, messageId);
+        acknowledgedIds.add(messageId);
+      }
       results.push({ messageId, status: "already_processed", imported: 0 });
       continue;
     }
@@ -233,7 +240,7 @@ router.post("/gmail/reprocess", requireAuth, async (req: Request, res: Response)
     }
     if (listings.length === 0) {
       await db.insert(gmailSeenKeysTable).values({ userId, gmailKey: `${messageId}:complete` }).onConflictDoNothing();
-      await markEmailAsRead(conn.accessToken, conn.refreshToken, messageId);
+      await finalizeGmailMailboxMessage(conn, messageId);
       results.push({ messageId, status: "no_listings", imported: 0 });
       continue;
     }
@@ -311,7 +318,7 @@ router.post("/gmail/reprocess", requireAuth, async (req: Request, res: Response)
     }
 
     await db.insert(gmailSeenKeysTable).values({ userId, gmailKey: `${messageId}:complete` }).onConflictDoNothing();
-    await markEmailAsRead(conn.accessToken, conn.refreshToken, messageId);
+    await finalizeGmailMailboxMessage(conn, messageId);
     results.push({ messageId, status: imported > 0 ? "imported" : "all_skipped", imported });
   }
 
@@ -325,5 +332,13 @@ function extractSender(from: string): string {
   const domainMatch = from.match(/@([^>@\s]+)/);
   return domainMatch?.[1] ?? from.slice(0, 100);
 }
+
+router.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
+  if (err instanceof GmailMailboxUpdateError) {
+    res.status(502).json({ error: err.message });
+    return;
+  }
+  next(err);
+});
 
 export default router;
