@@ -1,6 +1,8 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { logger } from "./logger";
+import { extractJobIdentity } from "./jobIdentity";
+import type { JobIdentityEvidence } from "@workspace/db";
 
 const PAGE_FETCH_TIMEOUT_MS = 10_000;
 const MAX_PAGE_CONTENT_CHARS = 10_000;
@@ -35,10 +37,11 @@ export interface AvailabilityCheck {
 export interface PageResult {
   content: string;
   finalUrl: string;
-  /** False when the page was an error/gate/short page — callers should not use content for description but should still use finalUrl for the link. */
+  /** False on error/gate/short pages. Only promote finalUrl to a stored link when jobIdentity is verified. */
   contentUsable: boolean;
   availability: AvailabilityCheck;
   metadata: JobPageMetadata | null;
+  jobIdentity?: JobIdentityEvidence;
 }
 
 /**
@@ -46,11 +49,33 @@ export interface PageResult {
  * Fetch failures and unreadable pages return an unverified result. Null remains
  * in the signature for compatibility with existing callers.
  *
- * `finalUrl` is the URL after following all redirects — useful when the input
- * is a click-tracking URL (e.g. Jobgether, LinkedIn) so callers can store the
- * clean destination URL instead of the opaque tracking link.
+ * `finalUrl` is the checked destination after redirects. `jobIdentity` determines
+ * whether it can safely replace the original link for identity matching.
  */
 export async function fetchJobPageContent(url: string): Promise<PageResult | null> {
+  const context: { html?: string; redirectChain: string[] } = { redirectChain: [] };
+  const result = await fetchPage(url, context);
+  if (!result) return null;
+  const identity = extractJobIdentity({
+    inputUrl: safeDisplayUrl(url), finalUrl: result.finalUrl,
+    redirectChain: context.redirectChain, observedAt: result.availability.checkedAt,
+    html: context.html, usable: result.contentUsable,
+    failureReason: result.contentUsable ? undefined : result.availability.reason,
+  });
+  if (identity.status === "verified" && identity.originalUrl) {
+    try {
+      await validatePublicPageUrl(identity.originalUrl);
+    } catch {
+      identity.status = "uncertain";
+      identity.reason = "unsafe_original_posting";
+      delete identity.originalUrl;
+      identity.signals = [];
+    }
+  }
+  return { ...result, jobIdentity: identity };
+}
+
+async function fetchPage(url: string, context: { html?: string; redirectChain: string[] }): Promise<PageResult | null> {
   let controller: AbortController | undefined;
   let tid: ReturnType<typeof setTimeout> | undefined;
   const checkedAt = new Date();
@@ -73,6 +98,7 @@ export async function fetchJobPageContent(url: string): Promise<PageResult | nul
       // Redirects are never followed by fetch itself; each destination is
       // validated and DNS-checked before it becomes the next request URL.
       currentUrl = parsedUrl.toString();
+      context.redirectChain.push(currentUrl);
       res = await fetch(parsedUrl, {
         signal: controller.signal,
         headers: {
@@ -134,6 +160,7 @@ export async function fetchJobPageContent(url: string): Promise<PageResult | nul
     }
     const html = await readBoundedHtml(res);
     if (html === null) return pageFailure(finalUrl, checkedAt, "page_too_large");
+    context.html = html;
     const text = htmlToText(html);
     const metadata = extractJobPostingMetadata(html);
     const closedReason = detectExplicitClosedSignal(htmlToText(html, true), metadata);

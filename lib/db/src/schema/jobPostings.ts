@@ -2,12 +2,25 @@ import { pgTable, text, integer, timestamp, serial, unique, jsonb, real, index }
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
+export type JobIdentityEvidence = {
+  version: 1;
+  status: "verified" | "uncertain";
+  reason: string;
+  observedAt: string;
+  inputUrl: string;
+  finalUrl: string;
+  redirectChain: string[];
+  originalUrl?: string;
+  signals: string[];
+};
+
 export const jobPostingsTable = pgTable("job_postings", {
   id: serial("id").primaryKey(),
   userId: text("user_id").notNull(),
   title: text("title").notNull(),
   company: text("company").notNull(),
   link: text("link"),
+  jobIdentity: jsonb("job_identity").$type<JobIdentityEvidence>(),
   fullDescription: text("full_description").notNull(),
   extractedSkills: text("extracted_skills").array().notNull().default([]),
   requiredSkills: text("required_skills").array().notNull().default([]),

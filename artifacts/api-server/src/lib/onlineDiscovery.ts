@@ -10,6 +10,7 @@ import {
   jobPostingFeedbackTable,
   type DiscoveryProgress,
   type DiscoveryReport,
+  type JobIdentityEvidence,
 } from "@workspace/db";
 import { canonicalizeJobUrl, isFuzzyDuplicate, normalizeFuzzy } from "./dedup";
 import { logger } from "./logger";
@@ -27,6 +28,7 @@ import { DEFAULT_EMAIL_FILTER_CRITERIA, matchesEmailFilterCriteria, type EmailFi
 import { loadResponseHistory } from "./responseHistory";
 import { evaluateResponses, type ResponseExample } from "./responseLearning";
 import { searchBeyondKnown, pruneRejected, buildBroaderSearchQuery } from "./discoverySearch";
+import { saveJobIdentitySource } from "./jobIdentitySources";
 
 const SOURCE = "online";
 const MAX_CANDIDATES_PER_RUN = 12;
@@ -483,19 +485,10 @@ export function toDiscoveryStatus(profile: typeof userProfilesTable.$inferSelect
   };
 }
 
-async function attachSource(userId: string, postingId: number, candidate: OnlineJobCandidate): Promise<void> {
-  const canonicalUrl = canonicalizeJobUrl(candidate.url);
-  await db.insert(jobPostingSourcesTable).values({
-    userId,
-    jobPostingId: postingId,
-    provider: candidate.provider,
-    sourceJobId: candidate.sourceJobId,
-    url: candidate.url,
-    canonicalUrl,
-    isPrimary: false,
-  }).onConflictDoUpdate({
-    target: [jobPostingSourcesTable.userId, jobPostingSourcesTable.canonicalUrl],
-    set: { lastSeenAt: new Date(), url: candidate.url, sourceJobId: candidate.sourceJobId },
+async function attachSource(userId: string, postingId: number, candidate: OnlineJobCandidate, jobIdentity?: JobIdentityEvidence): Promise<void> {
+  await saveJobIdentitySource({
+    userId, postingId, provider: candidate.provider, sourceJobId: candidate.sourceJobId,
+    url: jobIdentity?.inputUrl || candidate.url, jobIdentity,
   });
 }
 
@@ -626,6 +619,7 @@ export async function runOnlineDiscovery(userId: string) {
       availability: AvailabilityCheck;
       metadata: JobPageMetadata | null;
       canonicalUrl: string;
+      jobIdentity?: JobIdentityEvidence;
     }> = [];
     const availabilityChecks: Array<{
       provider: string;
@@ -691,7 +685,7 @@ export async function runOnlineDiscovery(userId: string) {
       const screenedCandidate: OnlineJobCandidate = pageResult
         ? {
             ...candidate,
-            url: pageResult.finalUrl,
+            url: pageResult.jobIdentity?.status === "verified" ? pageResult.finalUrl : candidate.url,
             description: pageResult.contentUsable ? pageResult.content : candidate.description,
             title: metadata?.title ?? candidate.title,
             company: metadata?.company ?? candidate.company,
@@ -737,7 +731,7 @@ export async function runOnlineDiscovery(userId: string) {
         ?? postingByUrl.get(canonicalUrl)
         ?? (candidate.sourceJobId ? sourceById.get(`${candidate.provider}:${candidate.sourceJobId}`) : undefined);
       if (redirectedExistingId) {
-        await attachSource(userId, redirectedExistingId, screenedCandidate);
+        await attachSource(userId, redirectedExistingId, screenedCandidate, pageResult?.jobIdentity);
         duplicates++;
         matchedExisting++;
         report.alreadySaved++;
@@ -782,13 +776,13 @@ export async function runOnlineDiscovery(userId: string) {
         );
         continue;
       }
-      screenedShortlist.push({ candidate: screenedCandidate, score, availability, metadata, canonicalUrl });
+      screenedShortlist.push({ candidate: screenedCandidate, score, availability, metadata, canonicalUrl, jobIdentity: pageResult?.jobIdentity });
     }
 
     report.deferred += candidates.length - visited;
     screenedShortlist.sort((a, b) => b.score - a.score
       || compareCandidateRecency(a.candidate, b.candidate));
-    for (const { candidate: screenedCandidate, availability, metadata, canonicalUrl } of screenedShortlist) {
+    for (const { candidate: screenedCandidate, availability, metadata, canonicalUrl, jobIdentity } of screenedShortlist) {
       const preference = evaluateResponses(screenedCandidate, feedbackRows);
       if (imported >= MAX_CANDIDATES_PER_RUN) { report.deferred++; continue; }
 
@@ -798,11 +792,11 @@ export async function runOnlineDiscovery(userId: string) {
           ? sourceById.get(`${screenedCandidate.provider}:${screenedCandidate.sourceJobId}`)
           : undefined);
       if (!existingId) {
-        const fuzzy = await isFuzzyDuplicate(userId, screenedCandidate.title, screenedCandidate.company, { link: canonicalUrl });
+        const fuzzy = await isFuzzyDuplicate(userId, screenedCandidate.title, screenedCandidate.company, { link: canonicalUrl, jobIdentity });
         existingId = fuzzy.matchedId;
       }
       if (existingId) {
-        await attachSource(userId, existingId, screenedCandidate);
+        await attachSource(userId, existingId, screenedCandidate, jobIdentity);
         duplicates++;
         matchedExisting++;
         report.alreadySaved++;
@@ -817,6 +811,7 @@ export async function runOnlineDiscovery(userId: string) {
               title: screenedCandidate.title,
               company: screenedCandidate.company,
               link: screenedCandidate.url,
+              jobIdentity,
               fullDescription: screenedCandidate.description || `${screenedCandidate.title} at ${screenedCandidate.company}`,
               extractedSkills: screenedCandidate.tags,
               source: screenedCandidate.provider,
@@ -844,6 +839,7 @@ export async function runOnlineDiscovery(userId: string) {
               provider: screenedCandidate.provider,
               sourceJobId: screenedCandidate.sourceJobId,
               url: screenedCandidate.url,
+              jobIdentity,
             canonicalUrl,
             isPrimary: true,
           }).onConflictDoNothing().returning({ id: jobPostingSourcesTable.id });
@@ -861,8 +857,11 @@ export async function runOnlineDiscovery(userId: string) {
         duplicates++;
         matchedExisting++;
         report.alreadySaved++;
+        await attachSource(userId, winner.jobPostingId, screenedCandidate, jobIdentity);
         continue;
       }
+      if (jobIdentity?.inputUrl && canonicalizeJobUrl(jobIdentity.inputUrl) !== canonicalUrl)
+        await attachSource(userId, posting.id, screenedCandidate, jobIdentity);
       scorePostingBackground(posting.id, userId);
       sourceByUrl.set(canonicalUrl, posting.id);
       if (screenedCandidate.sourceJobId) sourceById.set(`${screenedCandidate.provider}:${screenedCandidate.sourceJobId}`, posting.id);

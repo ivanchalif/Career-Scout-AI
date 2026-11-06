@@ -13,6 +13,8 @@ export function jobLinkKind(raw: string): JobLinkKind {
     return /\/jobs\/\d+/.test(path) || /^\d+$/.test(url.searchParams.get("gh_jid") ?? "") ||
       path === "/embed/job_app" && /^\d+$/.test(url.searchParams.get("token") ?? "") ? "job" : "listing";
   }
+  if (host === "jobs.ashbyhq.com") return /^\/[^/]+\/[^/]+(?:\/application)?$/.test(path) ? "job" : "listing";
+  if (host.endsWith(".myworkdayjobs.com")) return /\/job\/.+_[^/_]+$/.test(path) ? "job" : "listing";
   if (host === "workatastartup.com") return /^\/jobs\/\d+(?:\/[^/]+)?$/.test(path) ? "job" : "listing";
   if (host === "linkedin.com") return /^\/jobs\/view\/[^/]+$/.test(path) ? "job" : "listing";
   if (host === "jobright.ai") return /^\/jobs\/info\/[^/]+$/.test(path) ? "job" : "listing";

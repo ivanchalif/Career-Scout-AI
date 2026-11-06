@@ -1,4 +1,5 @@
-import { boolean, integer, pgTable, serial, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { boolean, integer, jsonb, pgTable, serial, text, timestamp, unique } from "drizzle-orm/pg-core";
+import type { JobIdentityEvidence } from "./jobPostings";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -15,6 +16,7 @@ export const jobPostingSourcesTable = pgTable("job_posting_sources", {
   sourceJobId: text("source_job_id"),
   url: text("url").notNull(),
   canonicalUrl: text("canonical_url").notNull(),
+  jobIdentity: jsonb("job_identity").$type<JobIdentityEvidence>(),
   isPrimary: boolean("is_primary").notNull().default(false),
   firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),

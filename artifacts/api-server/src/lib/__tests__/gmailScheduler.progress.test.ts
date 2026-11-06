@@ -17,6 +17,7 @@ vi.mock("../scoringService", () => ({
 }));
 vi.mock("../dedup", () => ({ isFuzzyDuplicate: vi.fn(), runDedupSweep: vi.fn() }));
 vi.mock("../pageScraper", () => ({ fetchJobPageContent: vi.fn() }));
+vi.mock("../jobIdentitySources", () => ({ saveJobIdentitySource: vi.fn() }));
 vi.mock("../responseHistory", () => ({ loadResponseHistory: vi.fn() }));
 vi.mock("../logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
 
@@ -29,6 +30,7 @@ import { syncUser } from "../gmailScheduler";
 import { getGmailSyncProgress, isGmailSyncRunning } from "../gmailSyncState";
 import { GmailAuthorizationExpiredError } from "../gmailAuthError";
 import { loadResponseHistory } from "../responseHistory";
+import { saveJobIdentitySource } from "../jobIdentitySources";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -99,6 +101,51 @@ describe("Gmail pipeline progress", () => {
     expect(saved.some((entry) => entry.values.reason === "learned_preference"
       && entry.values.listingTitle === "Product Manager")).toBe(true);
     expect(markEmailAsRead).toHaveBeenCalled();
+  });
+
+  it.each([false, true])("passes verified identity through import and retains source when duplicate=%s", async (duplicate) => {
+    const url = "https://lensa.com/jobs/partner-copy";
+    const jobIdentity = {
+      version: 1 as const, status: "verified" as const, reason: "verified_original_posting",
+      observedAt: new Date().toISOString(), inputUrl: url, finalUrl: url,
+      redirectChain: [url], originalUrl: "https://boards.greenhouse.io/acme/jobs/91001",
+      signals: ["jsonld_jobposting_url"],
+    };
+    vi.mocked(fetchJobEmails).mockResolvedValue([email("identity-import")]);
+    vi.mocked(extractJobListings).mockResolvedValue({ listings: [{ ...listing("Product Manager"), url }], hadError: false });
+    vi.mocked(fetchJobPageContent).mockResolvedValue({
+      finalUrl: url, content: "Useful page description", contentUsable: true, metadata: null, jobIdentity,
+      availability: { status: "unverified", reason: "no_active_listing_evidence", checkedAt: new Date(), confidence: 0, evidence: [] },
+    });
+    vi.mocked(isFuzzyDuplicate).mockResolvedValue(duplicate ? { isDuplicate: true, matchedId: 51 } : { isDuplicate: false });
+    await syncUser(conn);
+    expect(isFuzzyDuplicate).toHaveBeenCalledWith(conn.userId, "Product Manager", "Example", { link: url, jobIdentity });
+    expect(saveJobIdentitySource).toHaveBeenCalledWith(expect.objectContaining({
+      userId: conn.userId, provider: "gmail", url, jobIdentity,
+      ...(duplicate ? { postingId: 51 } : {}),
+    }));
+    const postings = saved.filter((entry) => entry.table === jobPostingsTable);
+    if (duplicate) expect(postings).toHaveLength(0);
+    else expect(postings[0].values).toMatchObject({ jobIdentity });
+  });
+
+  it("does not use an ambiguous redirect destination as automatic listing proof", async () => {
+    const url = "https://lensa.com/jobs/ambiguous-copy";
+    vi.mocked(fetchJobEmails).mockResolvedValue([email("ambiguous-identity")]);
+    vi.mocked(extractJobListings).mockResolvedValue({ listings: [{ ...listing("Product Manager"), url }], hadError: false });
+    vi.mocked(fetchJobPageContent).mockResolvedValue({
+      finalUrl: "https://boards.greenhouse.io/acme/jobs/91001", content: "Readable job description", contentUsable: true, metadata: null,
+      availability: { status: "unverified", reason: "no_active_listing_evidence", checkedAt: new Date(), confidence: 0, evidence: [] },
+      jobIdentity: {
+        version: 1, status: "uncertain", reason: "conflicting_original_postings", observedAt: new Date().toISOString(),
+        inputUrl: url, finalUrl: "https://boards.greenhouse.io/acme/jobs/91001",
+        redirectChain: [url, "https://boards.greenhouse.io/acme/jobs/91001"], signals: [],
+      },
+    });
+    await syncUser(conn);
+    expect(isFuzzyDuplicate).toHaveBeenCalledWith(conn.userId, "Product Manager", "Example",
+      expect.objectContaining({ link: url, jobIdentity: expect.objectContaining({ status: "uncertain" }) }));
+    expect(saved.find((entry) => entry.table === jobPostingsTable)?.values.link).toBe(url);
   });
 
   it("persists positive learning separately from the AI fit score on imported Gmail jobs", async () => {

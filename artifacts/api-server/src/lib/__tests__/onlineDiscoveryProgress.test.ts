@@ -5,6 +5,8 @@ const state = vi.hoisted(() => ({
   profile: {} as any,
   page: vi.fn(),
   search: vi.fn(),
+  dedup: vi.fn(),
+  writes: [] as Array<{ table: string; value: any }>,
 }));
 vi.mock("@workspace/db", () => {
   const table = (name: string) => ({ name, userId: {}, createdAt: {}, id: {}, link: {}, canonicalUrl: {} });
@@ -48,8 +50,14 @@ vi.mock("@workspace/db", () => {
       transaction: async (callback: any) => callback({
         insert: (t: any) => ({
           values: (value: any) => ({
-            returning: async () => [{ ...value, id: 100 }],
-            onConflictDoNothing: () => ({ returning: async () => [{ id: 101 }] }),
+            returning: async () => {
+              state.writes.push({ table: t.name, value });
+              return [{ ...value, id: 100 }];
+            },
+            onConflictDoNothing: () => ({ returning: async () => {
+              state.writes.push({ table: t.name, value });
+              return [{ id: 101 }];
+            } }),
           }),
         }),
       }),
@@ -61,14 +69,19 @@ vi.mock("../sources/googleSearch", () => ({
   isGoogleSearchUrl: () => true,
 }));
 vi.mock("../pageScraper", () => ({ fetchJobPageContent: (...args: any[]) => state.page(...args) }));
+vi.mock("../jobIdentitySources", () => ({ saveJobIdentitySource: vi.fn() }));
 vi.mock("../responseHistory", () => ({ loadResponseHistory: async () => [] }));
 vi.mock("../scoringService", () => ({ scorePostingBackground: vi.fn() }));
 vi.mock("../dedup", async importOriginal => ({
   ...await importOriginal<typeof import("../dedup")>(),
-  isFuzzyDuplicate: async () => ({ isDuplicate: false }),
+  isFuzzyDuplicate: (...args: any[]) => state.dedup(...args),
 }));
 
 import { runOnlineDiscovery } from "../onlineDiscovery";
+import { saveJobIdentitySource } from "../jobIdentitySources";
+import { compareJobs } from "../duplicatePolicy";
+import { extractJobIdentity } from "../jobIdentity";
+import { readFileSync } from "node:fs";
 
 function candidate(id: string) {
   return {
@@ -80,6 +93,9 @@ function candidate(id: string) {
 
 describe("persisted discovery progress and accounting", () => {
   beforeEach(() => {
+    state.writes = [];
+    state.dedup.mockReset().mockResolvedValue({ isDuplicate: false });
+    vi.mocked(saveJobIdentitySource).mockReset();
     state.progress = null;
     state.profile = {
       onlineDiscoverySourcesInitialized: true,
@@ -145,6 +161,39 @@ describe("persisted discovery progress and accounting", () => {
     expect(result.imported).toBe(1);
     expect(state.progress.lastReport.imported).toBe(1);
     expect(state.progress.sourceRuns["1"].at(-1).addedPostingIds).toEqual([100]);
+  });
+
+  it("persists cross-site provenance, suppresses the same requisition, and imports a distinct requisition", async () => {
+    state.profile.titleExcludeKeywords = [];
+    state.profile.companyFilterSettings = { mode: "off", companies: [], bayAreaNonRemoteOnly: false };
+    state.search.mockResolvedValue([candidate("lensa"), candidate("aggregator"), candidate("other-requisition")]);
+    state.page.mockImplementation(async (url: string) => {
+      const name = url.split("/").at(-1);
+      const html = readFileSync(new URL(`./fixtures/identity-${name}.html`, import.meta.url), "utf8");
+      return {
+        finalUrl: url, content: "Product responsibilities and qualifications in Toronto, Canada", contentUsable: true,
+        metadata: { title: "Product Manager", company: "Acme", location: "Toronto, Canada", fieldEvidence: {} },
+        availability: { status: "open", checkedAt: new Date(), reason: "test", confidence: 1, evidence: [] },
+        jobIdentity: extractJobIdentity({ inputUrl: url, finalUrl: url, redirectChain: [url], observedAt: new Date(), html, usable: true }),
+      };
+    });
+    state.dedup.mockImplementation(async (_userId: string, title: string, company: string, options: any) => {
+      const match = state.writes.filter((entry) => entry.table === "postings")
+        .find((entry) => compareJobs({ title, company, ...options }, entry.value).kind === "duplicate");
+      return match ? { isDuplicate: true, matchedId: 100 } : { isDuplicate: false };
+    });
+    const result = await runOnlineDiscovery("isolated-user");
+    expect(result.imported).toBe(2);
+    expect(result.report?.alreadySaved).toBe(1);
+    const postings = state.writes.filter((entry) => entry.table === "postings").map((entry) => entry.value);
+    expect(postings).toHaveLength(2);
+    expect(postings[0].jobIdentity).toMatchObject({ status: "verified", originalUrl: expect.stringContaining("/91001") });
+    expect(postings[1].jobIdentity).toMatchObject({ status: "verified", originalUrl: expect.stringContaining("/91002") });
+    expect(state.writes.filter((entry) => entry.table === "postingSources").every((entry) => entry.value.jobIdentity.status === "verified")).toBe(true);
+    expect(saveJobIdentitySource).toHaveBeenCalledWith(expect.objectContaining({
+      userId: "isolated-user", postingId: 100, url: candidate("aggregator").url,
+      jobIdentity: expect.objectContaining({ status: "verified" }),
+    }));
   });
 
   it("does not credit additions that the user's location filter hides", async () => {

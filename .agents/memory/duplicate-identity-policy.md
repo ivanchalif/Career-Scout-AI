@@ -26,3 +26,9 @@ Hide confirmed copies of applied/dismissed jobs through reversible visibility fi
 **Why:** The user explicitly approved fixing duplicate-filtering gaps “without changing history.” Secondary auto-deletions also make undoing the original action incomplete.
 
 **How to apply:** Keep the applied/dismissed records and their copies intact. Expose hidden copies and their evidence in Filtered; pair-specific exceptions or undoing the anchor action restore visibility. Only an explicit cleanup selection may change additional records.
+
+Aggregator metadata identifiers are not automatically employer requisitions. Treat a bare JSON-LD identifier as uncertain unless its issuer and employer scope are established.
+
+**Why:** Aggregators can assign their own IDs, and unrelated employers can reuse the same requisition number. A matching identifier value alone would silently discard distinct openings.
+
+**How to apply:** Prefer checked individual-posting redirects, recognized employer-scoped ATS URLs, or original-posting metadata tied to an explicit hiring-organization website. Conflicting metadata and blocked pages must not promote a redirect destination into verified identity. Keep provider provenance and prior verified evidence without rewriting lifecycle history.

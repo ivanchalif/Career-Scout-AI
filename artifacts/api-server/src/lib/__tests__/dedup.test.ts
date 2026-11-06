@@ -33,6 +33,20 @@ const posting = (id: number, overrides = {}) => ({
 beforeEach(() => { vi.clearAllMocks(); state.postings = []; state.exceptions = []; state.fields = {}; state.conditions = []; state.affected = null; });
 
 describe("identity-based imports and cleanup", () => {
+  it("matches persisted cross-site identity while preserving the pair exception for saved jobs", async () => {
+    const jobIdentity = {
+      version: 1 as const, status: "verified" as const, reason: "verified_original_posting", observedAt: new Date().toISOString(),
+      inputUrl: "https://lensa.com/jobs/copy-a", finalUrl: "https://lensa.com/jobs/copy-a",
+      redirectChain: ["https://lensa.com/jobs/copy-a"], originalUrl: "https://jobs.lever.co/acme/req-1", signals: ["jsonld_jobposting_url"],
+    };
+    state.postings = [posting(1, { link: "https://lensa.com/jobs/copy-a", jobIdentity, appliedAt: new Date() })];
+    expect(await isFuzzyDuplicate("owner", "Unrelated title wording", "Acme", { link: "https://partner.com/jobs/copy-b", jobIdentity }))
+      .toMatchObject({ isDuplicate: true, matchedId: 1, wasApplied: true });
+    state.exceptions = [{ postingIdLow: 1, postingIdHigh: 2 }];
+    expect(await isFuzzyDuplicate("owner", "Product Manager", "Acme", { excludeId: 2, link: "https://partner.com/jobs/copy-b", jobIdentity }))
+      .toEqual({ isDuplicate: false });
+    expect(db.update).not.toHaveBeenCalled();
+  });
   it("does not block same-title jobs without listing identity", async () => {
     state.postings = [posting(1)];
     expect(await isFuzzyDuplicate("owner", "Product Manager", "Acme Inc")).toEqual({ isDuplicate: false });

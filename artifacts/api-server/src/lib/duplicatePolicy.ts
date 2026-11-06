@@ -1,8 +1,10 @@
 import { jobLinkKind } from "./sources/jobLinks";
+import type { JobIdentityEvidence } from "@workspace/db";
 
 export type DuplicateCandidate = {
   id?: number; title: string; company: string; link?: string | null;
   location?: string | null; fullDescription?: string | null;
+  jobIdentity?: JobIdentityEvidence | null;
 };
 export type DuplicateDecision = { kind: "distinct" | "review" | "duplicate"; evidence: string[] };
 
@@ -64,6 +66,8 @@ export function individualJobUrl(raw?: string | null): string | null {
     if (!canonical) return null;
     const url = new URL(canonical);
     if (!["https:", "http:"].includes(url.protocol) || url.username || url.password) return null;
+    if (/\/(?:login|signin|sign-in|signup|sign-up|auth|oauth|search|apply)(?:\/|$)/i.test(url.pathname)
+      && !atsIdentityForApply(url)) return null;
     if (jobLinkKind(canonical) === "listing") return null;
     if (jobLinkKind(canonical) === "job") return canonical;
     if (/\b(?:search|category|department|team|board|all-jobs)\b/i.test(url.pathname)) return null;
@@ -73,6 +77,10 @@ export function individualJobUrl(raw?: string | null): string | null {
   } catch { return null; }
 }
 
+function atsIdentityForApply(url: URL): boolean {
+  return /^jobs(?:\.eu)?\.lever\.co$/.test(url.hostname) && /^\/[^/]+\/[^/]+\/apply\/?$/.test(url.pathname);
+}
+
 /** Indexable proof of identity, shared by import, dashboard and review paths. */
 export function jobIdentityKeys(posting: DuplicateCandidate): string[] {
   const url = individualJobUrl(posting.link);
@@ -80,7 +88,15 @@ export function jobIdentityKeys(posting: DuplicateCandidate): string[] {
   return [
     ...(url ? [`url:${url}`] : []),
     ...(ats ? [`ats:${ats.scope}:${ats.id}`] : []),
+    ...verifiedIdentityKeys(posting.jobIdentity),
   ];
+}
+
+function verifiedIdentityKeys(evidence?: JobIdentityEvidence | null): string[] {
+  if (evidence?.version !== 1 || evidence.status !== "verified") return [];
+  const url = individualJobUrl(evidence.originalUrl);
+  const ats = atsIdentity(url);
+  return [...(url ? [`url:${url}`] : []), ...(ats ? [`ats:${ats.scope}:${ats.id}`] : [])];
 }
 
 /** ATS IDs include employer scope; provider-wide job IDs include provider scope. */
@@ -94,13 +110,13 @@ export function atsIdentity(raw?: string | null): { scope: string; id: string } 
       return { scope: "linkedin", id: parts[2] };
     if (host === "jobright.ai" && /^\/jobs\/info\/[^/]+$/.test(url.pathname))
       return { scope: "jobright", id: parts[2] };
-    if (/^jobs(?:\.eu)?\.lever\.co$/.test(host) && parts[0] && parts[1] && !["search", "apply"].includes(parts[1]))
+    if (/^jobs(?:\.eu)?\.lever\.co$/.test(host) && jobLinkKind(url.href) === "job" && parts[0] && parts[1] && !["search", "apply"].includes(parts[1]))
       return { scope: `lever:${parts[0].toLowerCase()}`, id: parts[1] };
     if (/^(?:boards|job-boards)(?:\.eu)?\.greenhouse\.io$/.test(host) && parts[0] !== "embed") {
       const id = url.pathname.match(/\/jobs\/(\d+)/)?.[1] ?? url.searchParams.get("gh_jid");
       if (parts[0] && id) return { scope: `greenhouse:${parts[0].toLowerCase()}`, id };
     }
-    if (host === "jobs.ashbyhq.com" && parts[0] && parts[1])
+    if (host === "jobs.ashbyhq.com" && jobLinkKind(url.href) === "job" && parts[0] && parts[1])
       return { scope: `ashby:${parts[0].toLowerCase()}`, id: parts[1] };
     if (host.endsWith(".myworkdayjobs.com")) {
       const id = url.pathname.match(/_([^/_]+)\/?$/)?.[1];
@@ -122,6 +138,16 @@ function level(title: string): string {
 
 export function compareJobs(a: DuplicateCandidate, b: DuplicateCandidate): DuplicateDecision {
   const distinct: DuplicateDecision = { kind: "distinct", evidence: [] };
+  if (a.jobIdentity?.status === "verified" || b.jobIdentity?.status === "verified") {
+    const bKeys = new Set(jobIdentityKeys(b));
+    if (jobIdentityKeys(a).some((key) => bKeys.has(key)))
+      return { kind: "duplicate", evidence: ["Same verified original posting or employer-scoped ATS requisition", ...[
+        a.jobIdentity, b.jobIdentity,
+      ].filter((item) => item?.status === "verified").flatMap((item) => item!.signals)] };
+    const aOriginal = atsIdentity(a.jobIdentity?.status === "verified" ? a.jobIdentity.originalUrl : a.link);
+    const bOriginal = atsIdentity(b.jobIdentity?.status === "verified" ? b.jobIdentity.originalUrl : b.link);
+    if (aOriginal && bOriginal && aOriginal.scope === bOriginal.scope && aOriginal.id !== bOriginal.id) return distinct;
+  }
   const aUrl = individualJobUrl(a.link), bUrl = individualJobUrl(b.link);
   if (aUrl && aUrl === bUrl) return { kind: "duplicate", evidence: ["Same individual-job URL after removing tracking parameters"] };
   const aId = atsIdentity(a.link), bId = atsIdentity(b.link);

@@ -13,6 +13,8 @@ import { evaluateResponses } from "./responseLearning";
 import { GmailAuthorizationExpiredError, isGmailAuthorizationExpired } from "./gmailAuthError";
 import { isGmailSyncRunning, runGmailSync, type ReportGmailSyncProgress, type SyncUserResult } from "./gmailSyncState";
 import { completedGmailMessages } from "./gmailCompletion";
+import { saveJobIdentitySource } from "./jobIdentitySources";
+import type { JobIdentityEvidence } from "@workspace/db";
 export type { SyncUserResult } from "./gmailSyncState";
 
 /** Extracts the display name from a raw "From" header value. */
@@ -213,15 +215,18 @@ async function _syncUserInner(
       let jobLocation: string | null = null;
       let descriptionSource: "page" | "email" = "email";
       let resolvedUrl = listing.url;
+      let jobIdentity: JobIdentityEvidence | undefined;
       let closureFields: ReturnType<typeof missingJobFields> = {};
 
       if (listing.url) {
         const pageResult = await fetchJobPageContent(listing.url);
         if (pageResult) {
+          jobIdentity = pageResult.jobIdentity;
           closureFields = missingJobFields(pageResult);
           jobLocation = pageResult.metadata?.location ?? null;
-          // Always use finalUrl — captures the real job URL after following tracking redirects.
-          resolvedUrl = pageResult.finalUrl;
+          // A readable page can still have contradictory identity metadata.
+          // Do not turn its redirect destination into automatic duplicate proof.
+          resolvedUrl = pageResult.jobIdentity?.status === "verified" ? pageResult.finalUrl : listing.url;
           if (pageResult.contentUsable) {
             description = pageResult.content;
             descriptionSource = "page";
@@ -269,8 +274,11 @@ async function _syncUserInner(
       const title = listing.title || email.subject.slice(0, 200) || "Job Opportunity";
       const company = listing.company || extractSender(email.sender);
 
-      const { isDuplicate, matchedTitle, matchedCompany, wasDeleted, wasApplied } = await isFuzzyDuplicate(conn.userId, title, company, { link: resolvedUrl });
+      const { isDuplicate, matchedId, matchedTitle, matchedCompany, wasDeleted, wasApplied } = await isFuzzyDuplicate(conn.userId, title, company, { link: resolvedUrl, jobIdentity });
       if (isDuplicate) {
+        if (matchedId && listing.url) await saveJobIdentitySource({
+          userId: conn.userId, postingId: matchedId, provider: "gmail", url: listing.url, jobIdentity,
+        });
         logger.info(
           { userId: conn.userId, title, company, matchedTitle, matchedCompany, wasDeleted, wasApplied },
           wasDeleted
@@ -317,6 +325,7 @@ async function _syncUserInner(
           company,
           fullDescription: description.slice(0, 10_000),
           link: resolvedUrl ?? null,
+          jobIdentity,
           source: "gmail",
           senderName: parseSenderName(email.sender),
           gmailMessageId: gmailKey,
@@ -330,6 +339,9 @@ async function _syncUserInner(
         .returning();
 
       if (newPosting) {
+        if (listing.url) await saveJobIdentitySource({
+          userId: conn.userId, postingId: newPosting.id, provider: "gmail", url: listing.url, jobIdentity,
+        });
         emailImported++;
         synced++;
         reportProgress({ jobsImported: synced });
