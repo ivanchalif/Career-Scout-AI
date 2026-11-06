@@ -139,7 +139,7 @@ paths:
       tags: [postings]
       summary: List job postings
       description: Returns job postings for the current user, with optional filtering
-      parameters:
+      parameters: &postingListParameters
         - name: search
           in: query
           schema:
@@ -214,6 +214,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DuplicatePostingConflict"
+
+  /postings/page:
+    get:
+      operationId: getPostingPage
+      tags: [postings]
+      summary: Get one page of jobs with the filtered total
+      parameters: *postingListParameters
+      responses:
+        "200":
+          description: Posting page and total matching the same visibility filters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostingPage"
 
   /postings/deleted:
     get:
@@ -1590,6 +1604,18 @@ components:
         undoToken: { type: string, minLength: 1 }
       required: [undoToken]
         
+    PostingPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PostingWithReport"
+        total:
+          type: integer
+          minimum: 0
+      required: [items, total]
+
     PostingFilterReason:
       type: object
       properties:

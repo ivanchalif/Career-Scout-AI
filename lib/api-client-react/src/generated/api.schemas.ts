@@ -381,6 +381,12 @@ export interface DismissalUndoInput {
   undoToken: string;
 }
 
+export interface PostingPage {
+  items: PostingWithReport[];
+  /** @minimum 0 */
+  total: number;
+}
+
 export interface DuplicatePostingConflict {
   error: string;
   existingPostingId: number;
@@ -888,6 +894,53 @@ export type ListPostingsSort =
   (typeof ListPostingsSort)[keyof typeof ListPostingsSort];
 
 export const ListPostingsSort = {
+  recommended: "recommended",
+  "date-desc": "date-desc",
+  "date-asc": "date-asc",
+  "score-desc": "score-desc",
+  "score-asc": "score-asc",
+  "title-asc": "title-asc",
+  "title-desc": "title-desc",
+  "company-asc": "company-asc",
+  "company-desc": "company-desc",
+} as const;
+
+export type GetPostingPageParams = {
+  /**
+   * Search term to filter by title or company
+   */
+  search?: string;
+  /**
+   * @minimum 1
+   * @maximum 100
+   */
+  limit?: number;
+  /**
+   * @minimum 0
+   */
+  offset?: number;
+  sort?: GetPostingPageSort;
+  archived?: boolean;
+  compact?: boolean;
+  /**
+   * Minimum fit score filter
+   */
+  minFitScore?: number;
+  /**
+   * Filter by source (manual, gmail)
+   */
+  source?: string;
+  applied?: boolean;
+  /**
+   * Filter by applied status
+   */
+  hidden?: boolean;
+};
+
+export type GetPostingPageSort =
+  (typeof GetPostingPageSort)[keyof typeof GetPostingPageSort];
+
+export const GetPostingPageSort = {
   recommended: "recommended",
   "date-desc": "date-desc",
   "date-asc": "date-asc",

@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import {
   useGetDashboardSummary,
-  useListPostings,
+  useGetPostingPage,
   useCreatePosting,
   useDeletePosting,
   useMarkApplied,
@@ -46,6 +46,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { JobPagination } from "@/components/job-pagination";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -326,7 +327,7 @@ export default function DashboardPage() {
   }
 
   const dashboardQ = useGetDashboardSummary();
-  const postingsQ = useListPostings(
+  const pageQuery = useGetPostingPage(
     {
       search: search || undefined,
       minFitScore,
@@ -340,8 +341,10 @@ export default function DashboardPage() {
     {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       query: {
+        // Keep existing posting mutation invalidations refreshing this page too.
+        queryKey: [...getListPostingsQueryKey(), "page", { activeTab, search, minFitScore, page, sortKey }],
         refetchInterval: (query: any) => {
-          const data = query.state.data;
+          const data = query.state.data?.items;
           if (!data || document.visibilityState === "hidden") return false;
           const hasUnscored = data.some((p: any) => p.report?.fitScore == null);
           return hasUnscored ? 5000 : 30_000;
@@ -349,6 +352,11 @@ export default function DashboardPage() {
       } as any,
     },
   );
+  const postingsQ = { ...pageQuery, data: pageQuery.data?.items };
+  const totalPages = Math.ceil((pageQuery.data?.total ?? 0) / 25);
+  useEffect(() => {
+    if (pageQuery.data) setPage((current) => Math.min(current, Math.max(0, totalPages - 1)));
+  }, [pageQuery.data, totalPages]);
   const deletedQ = postingsQ;
   const gmailStatusQ = useGetGmailStatus({
     query: {
@@ -2413,15 +2421,7 @@ export default function DashboardPage() {
             })}
           </div>
         )}
-        <nav className="flex items-center justify-center gap-3 py-4" aria-label="Job pages">
-          <Button variant="outline" size="sm" disabled={page === 0 || postingsQ.isFetching} onClick={() => setPage((p) => p - 1)}>
-            Previous
-          </Button>
-          <span className="text-xs text-muted-foreground">Page {page + 1}</span>
-          <Button variant="outline" size="sm" disabled={(postingsQ.data?.length ?? 0) < 25 || postingsQ.isFetching} onClick={() => setPage((p) => p + 1)}>
-            Next
-          </Button>
-        </nav>
+        <JobPagination page={page} totalPages={totalPages} loading={postingsQ.isFetching} onPageChange={setPage} />
       </div>
 
       <Dialog open={cleanupPreview !== null} onOpenChange={(open) => { if (!open && !sweepingDuplicates) setCleanupPreview(null); }}>

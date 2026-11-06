@@ -35,6 +35,7 @@ import type {
   FilteredEmail,
   GetDuplicateReviews200Item,
   GetFilterStatsParams,
+  GetPostingPageParams,
   GmailAuthorizationError,
   GmailCallbackParams,
   GmailStatus,
@@ -62,6 +63,7 @@ import type {
   PostingDismissalInput,
   PostingFeedback,
   PostingFeedbackInput,
+  PostingPage,
   PostingWithReport,
   RecordNotDuplicateBody,
   ReopenPosting200,
@@ -675,6 +677,100 @@ export const useCreatePosting = <
 > => {
   return useMutation(getCreatePostingMutationOptions(options));
 };
+
+/**
+ * @summary Get one page of jobs with the filtered total
+ */
+export const getGetPostingPageUrl = (params?: GetPostingPageParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/postings/page?${stringifiedParams}`
+    : `/api/postings/page`;
+};
+
+export const getPostingPage = async (
+  params?: GetPostingPageParams,
+  options?: RequestInit,
+): Promise<PostingPage> => {
+  return customFetch<PostingPage>(getGetPostingPageUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPostingPageQueryKey = (params?: GetPostingPageParams) => {
+  return [`/api/postings/page`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetPostingPageQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPostingPage>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetPostingPageParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPostingPage>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPostingPageQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getPostingPage>>> = ({
+    signal,
+  }) => getPostingPage(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPostingPage>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPostingPageQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPostingPage>>
+>;
+export type GetPostingPageQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get one page of jobs with the filtered total
+ */
+
+export function useGetPostingPage<
+  TData = Awaited<ReturnType<typeof getPostingPage>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetPostingPageParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPostingPage>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPostingPageQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary List deleted job postings

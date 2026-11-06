@@ -341,6 +341,199 @@ export const CreatePostingBody = zod.object({
 });
 
 /**
+ * @summary Get one page of jobs with the filtered total
+ */
+export const getPostingPageQueryLimitMax = 100;
+
+export const getPostingPageQueryOffsetMin = 0;
+
+export const GetPostingPageQueryParams = zod.object({
+  search: zod.coerce
+    .string()
+    .optional()
+    .describe("Search term to filter by title or company"),
+  limit: zod.coerce.number().min(1).max(getPostingPageQueryLimitMax).optional(),
+  offset: zod.coerce.number().min(getPostingPageQueryOffsetMin).optional(),
+  sort: zod
+    .enum([
+      "recommended",
+      "date-desc",
+      "date-asc",
+      "score-desc",
+      "score-asc",
+      "title-asc",
+      "title-desc",
+      "company-asc",
+      "company-desc",
+    ])
+    .optional(),
+  archived: zod.coerce.boolean().optional(),
+  compact: zod.coerce.boolean().optional(),
+  minFitScore: zod.coerce
+    .number()
+    .optional()
+    .describe("Minimum fit score filter"),
+  source: zod.coerce
+    .string()
+    .optional()
+    .describe("Filter by source (manual, gmail)"),
+  applied: zod.coerce.boolean().optional(),
+  hidden: zod.coerce.boolean().optional().describe("Filter by applied status"),
+});
+
+export const getPostingPageResponseItemsItemOnlineMatchScoreMin = 0;
+export const getPostingPageResponseItemsItemOnlineMatchScoreMax = 100;
+
+export const getPostingPageResponseTotalMin = 0;
+
+export const GetPostingPageResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      posting: zod.object({
+        id: zod.number(),
+        userId: zod.string(),
+        title: zod.string(),
+        company: zod.string(),
+        link: zod.string().nullish(),
+        fullDescription: zod.string(),
+        extractedSkills: zod.array(zod.string()),
+        salaryMin: zod.number().nullish(),
+        salaryMax: zod.number().nullish(),
+        source: zod.string(),
+        sourcePostedAt: zod.coerce.date().nullish(),
+        availabilityStatus: zod
+          .union([
+            zod.literal("open"),
+            zod.literal("closed"),
+            zod.literal("unverified"),
+            zod.literal(null),
+          ])
+          .nullish(),
+        availabilityCheckedAt: zod.coerce.date().nullish(),
+        availabilityReason: zod.string().nullish(),
+        availabilityConfidence: zod.number().nullish(),
+        availabilityEvidence: zod.array(zod.string()).nullish(),
+        fieldEvidence: zod
+          .record(
+            zod.string(),
+            zod.object({
+              source: zod.string().optional(),
+              confidence: zod.number().optional(),
+            }),
+          )
+          .nullish(),
+        gmailMessageId: zod.string().nullish(),
+        senderName: zod.string().nullish(),
+        appliedAt: zod.coerce.date().nullish(),
+        location: zod.string().nullish(),
+        remoteType: zod.string().nullish(),
+        deletedAt: zod.coerce.date().nullish(),
+        deletedBy: zod.string().nullish(),
+        dismissalUndoToken: zod.string().nullish(),
+        preferenceAdjustment: zod
+          .number()
+          .optional()
+          .describe(
+            "Bounded response-based ranking adjustment, separate from the AI fit score",
+          ),
+        preferenceReasons: zod.array(zod.string()).optional(),
+        closedAt: zod.coerce.date().nullish(),
+        createdAt: zod.coerce.date(),
+      }),
+      report: zod.union([
+        zod.object({
+          id: zod.number(),
+          jobPostingId: zod.number(),
+          userId: zod.string(),
+          fitScore: zod.number().nullish(),
+          reasoning: zod.string().nullish(),
+          compensationGap: zod.number().nullish(),
+          matchedSkills: zod.array(zod.string()),
+          missingSkills: zod.array(zod.string()),
+          createdAt: zod.coerce.date(),
+          updatedAt: zod.coerce.date(),
+        }),
+        zod.null(),
+      ]),
+      scoreStatus: zod
+        .enum(["pending", "current", "needs_reanalysis"])
+        .describe(
+          "Pending without a fit report, or needing reanalysis after the profile was updated.",
+        ),
+      analysisState: zod
+        .enum(["queued", "running", "failed", "completed"])
+        .optional(),
+      feedback: zod
+        .union([
+          zod.object({
+            kind: zod.enum([
+              "not_my_role",
+              "wrong_location",
+              "already_closed",
+              "workday",
+              "duplicate",
+              "wrong_domain",
+              "too_junior",
+              "more_like_this",
+            ]),
+            createdAt: zod.coerce.date(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      sourceName: zod
+        .string()
+        .nullish()
+        .describe("Display name of the configured online discovery source"),
+      onlineMatchScore: zod
+        .number()
+        .min(getPostingPageResponseItemsItemOnlineMatchScoreMin)
+        .max(getPostingPageResponseItemsItemOnlineMatchScoreMax)
+        .nullish()
+        .describe("Profile match score used by online discovery"),
+      filterReason: zod
+        .object({
+          byDuplicate: zod.boolean().optional(),
+          duplicateMatches: zod
+            .array(
+              zod.object({
+                id: zod.number(),
+                title: zod.string(),
+                company: zod.string(),
+                status: zod.enum(["applied", "dismissed"]),
+              }),
+            )
+            .optional(),
+          byLocation: zod.boolean().optional(),
+          locationReason: zod.string().nullish(),
+          byAts: zod
+            .boolean()
+            .optional()
+            .describe("Hidden because the application URL uses Workday."),
+          byCompany: zod.boolean(),
+          companyReason: zod.string().nullable(),
+          byTitle: zod.boolean(),
+          titleReasons: zod.array(zod.string()),
+        })
+        .optional(),
+      sources: zod
+        .array(
+          zod.object({
+            provider: zod.string(),
+            url: zod.string().url(),
+            sourceJobId: zod.string().nullish(),
+            isPrimary: zod.boolean(),
+            firstSeenAt: zod.coerce.date(),
+            lastSeenAt: zod.coerce.date(),
+          }),
+        )
+        .optional(),
+    }),
+  ),
+  total: zod.number().min(getPostingPageResponseTotalMin),
+});
+
+/**
  * @summary List deleted job postings
  */
 export const listDeletedPostingsResponseOnlineMatchScoreMin = 0;

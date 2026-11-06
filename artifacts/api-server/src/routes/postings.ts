@@ -17,6 +17,7 @@ import {
   ListPostingsQueryParams,
   GetPostingResponse,
   ListPostingsResponse,
+  GetPostingPageResponse,
   AnalyzePostingResponse,
   SetPostingFeedbackParams,
   SetPostingFeedbackBody,
@@ -37,7 +38,7 @@ import multer from "multer";
 import { stringify } from "csv-stringify/sync";
 import { parse } from "csv-parse/sync";
 import { z } from "zod";
-import { listPostingPage } from "../lib/postingList";
+import { getPostingPage, listPostingPage } from "../lib/postingList";
 
 const router: IRouter = Router();
 const ONLINE_POSTING_SOURCE_PATTERN = /^(?:arbeitnow|brave|google|hiringcafe|custom)(?::\d+)?$/;
@@ -140,7 +141,7 @@ export async function getPostingWithReport(postingId: number, userId: string) {
   };
 }
 
-router.get("/postings", requireAuth, async (req, res): Promise<void> => {
+router.get(["/postings", "/postings/page"], requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId;
   const queryParsed = ListPostingsQueryParams.safeParse({
     ...req.query,
@@ -154,7 +155,13 @@ router.get("/postings", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(ListPostingsResponse.parse(await listPostingPage(userId, queryParsed.data)));
+  if (req.path === "/postings/page") {
+    res.json(GetPostingPageResponse.parse(await getPostingPage(userId, {
+      ...queryParsed.data, limit: queryParsed.data.limit ?? 25,
+    })));
+  } else {
+    res.json(ListPostingsResponse.parse(await listPostingPage(userId, queryParsed.data)));
+  }
 });
 
 router.post("/postings", requireAuth, async (req, res): Promise<void> => {

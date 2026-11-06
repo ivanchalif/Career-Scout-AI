@@ -90,6 +90,12 @@ class DismissalFixture {
     }
     if (method === "GET") {
       switch (path) {
+        case "/api/postings/page": {
+          const items = searchParams?.get("archived") === "true"
+            ? (this.item.posting.deletedAt ? [this.item] : [])
+            : (this.item.posting.deletedAt ? [] : [this.item]);
+          return json({ items, total: items.length });
+        }
         case "/api/postings": return json(searchParams?.get("archived") === "true"
           ? (this.item.posting.deletedAt ? [this.item] : [])
           : (this.item.posting.deletedAt ? [] : [this.item]));

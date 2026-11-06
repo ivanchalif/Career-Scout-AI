@@ -15,7 +15,7 @@ export type PostingListOptions = {
  * Complex location policy stays shared in JS to preserve unknown-location rules.
  * Search, lifecycle, minimum score and ordering are handled by PostgreSQL.
  */
-export async function listPostingPage(userId: string, options: PostingListOptions) {
+export async function getPostingPage(userId: string, options: PostingListOptions) {
   const [profile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, userId));
   const duplicates: Awaited<ReturnType<typeof loadHistoricalDuplicateMatches>> =
     options.archived ? new Map() : await loadHistoricalDuplicateMatches(userId);
@@ -66,7 +66,7 @@ export async function listPostingPage(userId: string, options: PostingListOption
     })));
   }
   const ids = eligible.slice(options.offset ?? 0, options.limit ? (options.offset ?? 0) + options.limit : undefined).map((posting) => posting.id);
-  if (!ids.length) return [];
+  if (!ids.length) return { items: [], total: eligible.length };
   const rows = await db.select({ posting: p, report: r, feedback: { kind: f.kind, createdAt: f.createdAt }, scoring: { status: j.status, attempts: j.attempts } })
     .from(p).leftJoin(r, and(eq(r.jobPostingId, p.id), eq(r.userId, userId)))
     .leftJoin(f, and(eq(f.jobPostingId, p.id), eq(f.userId, userId)))
@@ -74,7 +74,7 @@ export async function listPostingPage(userId: string, options: PostingListOption
     .where(and(eq(p.userId, userId), inArray(p.id, ids)));
   const sources = await db.select().from(onlineDiscoverySourcesTable).where(eq(onlineDiscoverySourcesTable.userId, userId));
   const byId = new Map(rows.map((row) => [row.posting.id, row]));
-  return ids.flatMap((id) => {
+  const items = ids.flatMap((id) => {
     const row = byId.get(id);
     if (!row) return [];
     const { posting, report, feedback, scoring } = row;
@@ -95,4 +95,10 @@ export async function listPostingPage(userId: string, options: PostingListOption
       ...(options.hidden ? { filterReason: filterReason(posting) } : {}),
     }];
   });
+  return { items, total: eligible.length };
+}
+
+/** Preserve the array contract used by other existing posting lists. */
+export async function listPostingPage(userId: string, options: PostingListOptions) {
+  return (await getPostingPage(userId, options)).items;
 }

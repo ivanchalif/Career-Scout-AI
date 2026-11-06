@@ -30,7 +30,7 @@ vi.mock("@workspace/db", async (importOriginal) => {
     update: vi.fn(() => { throw new Error("Read-only duplicate filtering must not mutate history"); }),
   } };
 });
-import { listPostingPage } from "../postingList";
+import { getPostingPage, listPostingPage } from "../postingList";
 
 const posting = (id: number, overrides = {}) => ({
   id, title: "Product Manager", company: "Example", link: "https://jobright.ai/jobs/info/abc",
@@ -42,6 +42,16 @@ beforeEach(() => {
   state.exceptions = new Set();
 });
 describe("paginated dashboard duplicate filtering", () => {
+  it("returns an accurate total after filters and before page slicing", async () => {
+    state.exceptions.add("1:2");
+    const result = await getPostingPage("owner", { applied: false, limit: 1, offset: 1 });
+    expect(result.total).toBe(2);
+    expect(result.items.map(item => item.posting.id)).toEqual([3]);
+  });
+  it("retains the filtered total when the requested page is empty", async () => {
+    const result = await getPostingPage("owner", { applied: false, limit: 25, offset: 25 });
+    expect(result).toEqual({ total: 1, items: [] });
+  });
   it("removes confirmed historical copies before pagination", async () => {
     const result = await listPostingPage("owner", { applied: false, limit: 1, offset: 0 });
     expect(result.map(item => item.posting.id)).toEqual([3]);
