@@ -1,7 +1,7 @@
 import { useId, useState } from "react";
 import { ChevronDown, Info } from "lucide-react";
 
-export type ScoreStatus = "pending" | "current" | "needs_reanalysis";
+export type ScoreStatus = "pending" | "current" | "needs_reanalysis" | "failed";
 
 export function fitTier(score: number) {
   if (score >= 80) return { label: "Strong fit", color: "hsl(var(--success))", cls: "bg-success/12 text-success border-success/30" };
@@ -10,7 +10,7 @@ export function fitTier(score: number) {
 }
 
 export function resolveStatus(score: number | null, status?: string | null): ScoreStatus {
-  if (status === "pending" || status === "current" || status === "needs_reanalysis") return status;
+  if (status === "pending" || status === "current" || status === "needs_reanalysis" || status === "failed") return status;
   return score == null ? "pending" : "current";
 }
 
@@ -18,6 +18,7 @@ const statusText: Record<ScoreStatus, string> = {
   pending: "Pending analysis",
   current: "Up to date",
   needs_reanalysis: "Needs re-analysis",
+  failed: "Analysis failed — retry",
 };
 
 export function FitScoreBadge({ score, status }: { score: number | null; status?: string | null }) {
@@ -27,9 +28,9 @@ export function FitScoreBadge({ score, status }: { score: number | null; status?
       <span
         className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-border bg-muted text-muted-foreground animate-pulse"
         data-testid="score-ring-pending"
-        title="Profile fit score: analysis pending"
+        title={statusText[s]}
       >
-        Profile fit · pending
+        Profile fit · {s === "failed" ? "retry needed" : "pending"}
       </span>
     );
   }
@@ -52,7 +53,7 @@ export function FitScoreBadge({ score, status }: { score: number | null; status?
 
 export function ScoreStatusPill({ score, status }: { score: number | null; status?: string | null }) {
   const s = resolveStatus(score, status);
-  const cls = s === "needs_reanalysis"
+  const cls = s === "failed" ? "text-warning border-warning/30 bg-warning/10" : s === "needs_reanalysis"
     ? "text-warning border-warning/30 bg-warning/10"
     : s === "pending"
       ? "text-muted-foreground border-border bg-muted/40 animate-pulse"

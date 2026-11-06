@@ -142,11 +142,32 @@ export const UpsertProfileResponse = zod.object({
  * Returns job postings for the current user, with optional filtering
  * @summary List job postings
  */
+export const listPostingsQueryLimitMax = 100;
+
+export const listPostingsQueryOffsetMin = 0;
+
 export const ListPostingsQueryParams = zod.object({
   search: zod.coerce
     .string()
     .optional()
     .describe("Search term to filter by title or company"),
+  limit: zod.coerce.number().min(1).max(listPostingsQueryLimitMax).optional(),
+  offset: zod.coerce.number().min(listPostingsQueryOffsetMin).optional(),
+  sort: zod
+    .enum([
+      "recommended",
+      "date-desc",
+      "date-asc",
+      "score-desc",
+      "score-asc",
+      "title-asc",
+      "title-desc",
+      "company-asc",
+      "company-desc",
+    ])
+    .optional(),
+  archived: zod.coerce.boolean().optional(),
+  compact: zod.coerce.boolean().optional(),
   minFitScore: zod.coerce
     .number()
     .optional()
@@ -234,6 +255,9 @@ export const ListPostingsResponseItem = zod.object({
     .describe(
       "Pending without a fit report, or needing reanalysis after the profile was updated.",
     ),
+  analysisState: zod
+    .enum(["queued", "running", "failed", "completed"])
+    .optional(),
   feedback: zod
     .union([
       zod.object({
@@ -383,6 +407,9 @@ export const ListDeletedPostingsResponseItem = zod.object({
     .describe(
       "Pending without a fit report, or needing reanalysis after the profile was updated.",
     ),
+  analysisState: zod
+    .enum(["queued", "running", "failed", "completed"])
+    .optional(),
   feedback: zod
     .union([
       zod.object({
@@ -524,6 +551,9 @@ export const GetPostingResponse = zod.object({
     .describe(
       "Pending without a fit report, or needing reanalysis after the profile was updated.",
     ),
+  analysisState: zod
+    .enum(["queued", "running", "failed", "completed"])
+    .optional(),
   feedback: zod
     .union([
       zod.object({
@@ -798,6 +828,9 @@ export const UndoPostingDismissalResponse = zod.object({
     .describe(
       "Pending without a fit report, or needing reanalysis after the profile was updated.",
     ),
+  analysisState: zod
+    .enum(["queued", "running", "failed", "completed"])
+    .optional(),
   feedback: zod
     .union([
       zod.object({
@@ -909,6 +942,37 @@ export const ImportPostingsCsvResponse = zod.object({
   invalid: zod
     .number()
     .describe("Number of rows skipped due to missing required fields"),
+});
+
+/**
+ * @summary Preview confirmed copies eligible for cleanup
+ */
+export const PreviewDuplicateCleanupResponse = zod.object({
+  ids: zod.array(zod.number()),
+  total: zod.number(),
+  jobs: zod.array(
+    zod.object({
+      id: zod.number(),
+      title: zod.string(),
+      company: zod.string(),
+    }),
+  ),
+});
+
+/**
+ * @summary Move selected, still-confirmed copies to Deleted
+ */
+
+export const cleanupDuplicatePostingsBodySelectedIdsMax = 200;
+
+export const CleanupDuplicatePostingsBody = zod.object({
+  selectedIds: zod
+    .array(zod.number().min(1))
+    .max(cleanupDuplicatePostingsBodySelectedIdsMax),
+});
+
+export const CleanupDuplicatePostingsResponse = zod.object({
+  removed: zod.number(),
 });
 
 /**
@@ -1589,6 +1653,8 @@ export const getDashboardSummaryResponseTopMatchesItemOnlineMatchScoreMax = 100;
 
 export const GetDashboardSummaryResponse = zod.object({
   totalPostings: zod.number(),
+  appliedPostings: zod.number().optional(),
+  archivedPostings: zod.number().optional(),
   avgFitScore: zod.number().nullable(),
   topMatches: zod.array(
     zod.object({
@@ -1663,6 +1729,9 @@ export const GetDashboardSummaryResponse = zod.object({
         .describe(
           "Pending without a fit report, or needing reanalysis after the profile was updated.",
         ),
+      analysisState: zod
+        .enum(["queued", "running", "failed", "completed"])
+        .optional(),
       feedback: zod
         .union([
           zod.object({

@@ -1,5 +1,6 @@
 import { ImapFlow } from "imapflow";
 import { logger } from "./logger";
+import { validateMailboxTarget } from "./mailboxCredentials";
 import type { JobEmail, EmailFilterCriteria } from "./gmailClient";
 import { DEFAULT_EMAIL_FILTER_CRITERIA, matchesEmailFilterCriteria } from "./gmailClient";
 
@@ -22,12 +23,13 @@ function createImapClient(creds: ImapCredentials): ImapFlow {
     },
     logger: false,
     tls: {
-      rejectUnauthorized: false,
+      rejectUnauthorized: true,
     },
   });
 }
 
 export async function testImapConnection(creds: ImapCredentials): Promise<void> {
+  await validateMailboxTarget(creds.host, creds.port, creds.tls);
   const client = createImapClient(creds);
   try {
     await client.connect();
@@ -92,6 +94,7 @@ function stripHtml(html: string): string {
 }
 
 export async function fetchImapJobEmails(creds: ImapCredentials, criteria?: EmailFilterCriteria): Promise<JobEmail[]> {
+  await validateMailboxTarget(creds.host, creds.port, creds.tls);
   const effectiveCriteria = criteria ?? DEFAULT_EMAIL_FILTER_CRITERIA;
   const client = createImapClient(creds);
   const results: JobEmail[] = [];

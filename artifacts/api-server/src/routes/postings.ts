@@ -26,19 +26,18 @@ import {
 import { requireAuth } from "../middlewares/requireAuth";
 import { scorePosting, scorePostingBackground, extractJobListings } from "../lib/scoringService";
 import { fetchSingleEmail } from "../lib/gmailClient";
-import { isFuzzyDuplicate, sweepDuplicatesOf, runDedupSweep, loadDuplicateExceptions } from "../lib/dedup";
+import { isFuzzyDuplicate, sweepDuplicatesOf, runDedupSweep, loadDuplicateExceptions, previewConfirmedDuplicates } from "../lib/dedup";
 import { compareJobs, pairKey } from "../lib/duplicatePolicy";
 import { jobDuplicateExceptionsTable } from "@workspace/db";
 import { logger } from "../lib/logger";
-import { isHiddenByWorkday } from "../lib/workdayFilter";
-import { bayAreaFilterReason } from "../lib/bayAreaFilter";
 import { fetchJobPageContent } from "../lib/pageScraper";
-import { isConfirmedClosedAvailability, missingJobFields, scheduleJobLinkChecks } from "../lib/jobLinkHealth";
+import { isConfirmedClosedAvailability, missingJobFields } from "../lib/jobLinkHealth";
 import { buildDiscoveryCriteria, rankCandidate } from "../lib/onlineDiscovery";
 import multer from "multer";
 import { stringify } from "csv-stringify/sync";
 import { parse } from "csv-parse/sync";
 import { z } from "zod";
+import { listPostingPage } from "../lib/postingList";
 
 const router: IRouter = Router();
 const ONLINE_POSTING_SOURCE_PATTERN = /^(?:arbeitnow|brave|google|hiringcafe|custom)(?::\d+)?$/;
@@ -110,7 +109,7 @@ export async function getPostingWithReport(postingId: number, userId: string) {
 
   const [profile] = await db
     .select({
-      updatedAt: userProfilesTable.updatedAt,
+      updatedAt: userProfilesTable.scoringUpdatedAt,
       experienceHistory: userProfilesTable.experienceHistory,
       skills: userProfilesTable.skills,
       locationPreferences: userProfilesTable.locationPreferences,
@@ -147,168 +146,15 @@ router.get("/postings", requireAuth, async (req, res): Promise<void> => {
     ...req.query,
     applied: req.query.applied === "true" ? true : req.query.applied === "false" ? false : req.query.applied,
     hidden: req.query.hidden === "true" ? true : req.query.hidden === "false" ? false : req.query.hidden,
+    archived: req.query.archived === "true" ? true : req.query.archived === "false" ? false : req.query.archived,
+    compact: req.query.compact === "true" ? true : req.query.compact === "false" ? false : req.query.compact,
   });
   if (!queryParsed.success) {
     res.status(400).json({ error: queryParsed.error.message });
     return;
   }
 
-  const { search, minFitScore, source, applied, hidden } = queryParsed.data;
-
-  const [userProfile] = await db
-    .select({
-      updatedAt: userProfilesTable.updatedAt,
-      companyFilterSettings: userProfilesTable.companyFilterSettings,
-      titleExcludeKeywords: userProfilesTable.titleExcludeKeywords,
-      experienceHistory: userProfilesTable.experienceHistory,
-      skills: userProfilesTable.skills,
-      locationPreferences: userProfilesTable.locationPreferences,
-      remotePreferences: userProfilesTable.remotePreferences,
-      emailFilterSettings: userProfilesTable.emailFilterSettings,
-    })
-    .from(userProfilesTable)
-    .where(eq(userProfilesTable.userId, userId));
-
-  const companyFilter = userProfile?.companyFilterSettings ?? { mode: "off" as const, companies: [] };
-  const titleExcludeKeywords: string[] = userProfile?.titleExcludeKeywords ?? [];
-
-  const conditions: ReturnType<typeof eq>[] = [
-    eq(jobPostingsTable.userId, userId),
-    isNull(jobPostingsTable.deletedAt),
-    isNull(jobPostingsTable.closedAt),
-  ];
-
-  if (source) {
-    conditions.push(eq(jobPostingsTable.source, source));
-  }
-
-  if (applied === true) {
-    conditions.push(isNotNull(jobPostingsTable.appliedAt));
-  } else if (applied === false) {
-    conditions.push(isNull(jobPostingsTable.appliedAt));
-  }
-
-  let postings = await db
-    .select()
-    .from(jobPostingsTable)
-    .where(and(...conditions))
-    .orderBy(jobPostingsTable.createdAt);
-
-  // Reconcile prior page checks with dashboard lifecycle state, including
-  // older imports that stored closure evidence without setting closedAt.
-  const confirmedClosed = (p: typeof postings[number]) => isConfirmedClosedAvailability({
-    status: p.availabilityStatus, reason: p.availabilityReason, confidence: p.availabilityConfidence,
-  });
-  const missingIds = postings.filter(confirmedClosed).map((p) => p.id);
-  if (missingIds.length) {
-    await db.update(jobPostingsTable)
-      .set({ closedAt: new Date(), availabilityStatus: "closed" })
-      .where(and(eq(jobPostingsTable.userId, userId), inArray(jobPostingsTable.id, missingIds), isNull(jobPostingsTable.closedAt)));
-    postings = postings.filter((p) => !confirmedClosed(p));
-  }
-
-  const onlineSources = await db
-    .select({ provider: onlineDiscoverySourcesTable.provider, id: onlineDiscoverySourcesTable.id, name: onlineDiscoverySourcesTable.name })
-    .from(onlineDiscoverySourcesTable)
-    .where(eq(onlineDiscoverySourcesTable.userId, userId));
-  scheduleJobLinkChecks(postings);
-  const sourceNames = new Map(
-    onlineSources.flatMap((source) => [
-      [source.provider, source.name] as const,
-      [`${source.provider}:${source.id}`, source.name] as const,
-    ]),
-  );
-
-  type FilterReason = {
-    byLocation: boolean;
-    locationReason: string | null;
-    byAts: boolean;
-    byCompany: boolean;
-    companyReason: string | null;
-    byTitle: boolean;
-    titleReasons: string[];
-  };
-
-  const getFilterReason = (p: typeof postings[number]): FilterReason | null => {
-    let byCompany = false;
-    let companyReason: string | null = null;
-
-    if (companyFilter.mode !== "off" && (companyFilter as { mode: string; companies: string[] }).companies.length > 0) {
-      const company = p.company.toLowerCase();
-      const companies = (companyFilter as { mode: string; companies: string[] }).companies;
-      const matched = companies.find((c: string) => {
-        const entry = c.toLowerCase();
-        return company.includes(entry) || entry.includes(company);
-      });
-      if (companyFilter.mode === "include" && !matched) {
-        byCompany = true;
-        companyReason = "Not in allowlist";
-      } else if (companyFilter.mode === "exclude" && matched) {
-        byCompany = true;
-        companyReason = `Excluded: "${matched}"`;
-      }
-    }
-
-    const title = p.title.toLowerCase();
-    const titleReasons: string[] = titleExcludeKeywords.length > 0
-      ? titleExcludeKeywords.filter((kw: string) => title.includes(kw.toLowerCase()))
-      : [];
-    const byTitle = titleReasons.length > 0;
-
-    const byAts = isHiddenByWorkday(p, companyFilter);
-    const locationReason = bayAreaFilterReason(p, companyFilter);
-    const byLocation = locationReason !== null;
-    if (!byCompany && !byTitle && !byAts && !byLocation) return null;
-    return { byCompany, companyReason, byTitle, titleReasons, byAts, byLocation, locationReason };
-  };
-
-  const filtered = postings.filter((p) => {
-    if (hidden) {
-      if (!getFilterReason(p)) return false;
-    } else {
-      if (search) {
-        const q = search.toLowerCase();
-        if (!p.title.toLowerCase().includes(q) && !p.company.toLowerCase().includes(q)) return false;
-      }
-      if (getFilterReason(p)) return false;
-    }
-    return true;
-  });
-
-  const results = await Promise.all(
-    filtered.map(async (posting) => {
-      const [report] = await db
-        .select()
-        .from(matchReportsTable)
-        .where(and(eq(matchReportsTable.jobPostingId, posting.id), eq(matchReportsTable.userId, userId)));
-      const [feedback] = await db
-        .select({ kind: jobPostingFeedbackTable.kind, createdAt: jobPostingFeedbackTable.createdAt })
-        .from(jobPostingFeedbackTable)
-        .where(and(eq(jobPostingFeedbackTable.jobPostingId, posting.id), eq(jobPostingFeedbackTable.userId, userId)));
-      const filterReason = hidden ? (getFilterReason(posting) ?? undefined) : undefined;
-      return {
-        posting,
-        report: report ?? null,
-        scoreStatus: getScoreStatus(report, userProfile?.updatedAt),
-        feedback: feedback ?? null,
-        sourceName: sourceNames.get(posting.source) ?? null,
-        onlineMatchScore: getOnlineMatchScore(posting, userProfile),
-        ...(filterReason !== undefined ? { filterReason } : {}),
-      };
-    }),
-  );
-
-  const scoreFiltered = minFitScore != null
-    ? results.filter((r) => r.report?.fitScore != null && r.report.fitScore >= (minFitScore as number))
-    : results;
-
-  const sorted = scoreFiltered.sort((a, b) => {
-    const sa = a.report?.fitScore ?? -1;
-    const sb = b.report?.fitScore ?? -1;
-    return sb - sa;
-  });
-
-  res.json(ListPostingsResponse.parse(sorted));
+  res.json(ListPostingsResponse.parse(await listPostingPage(userId, queryParsed.data)));
 });
 
 router.post("/postings", requireAuth, async (req, res): Promise<void> => {
@@ -335,64 +181,7 @@ router.post("/postings", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.get("/postings/deleted", requireAuth, async (req, res): Promise<void> => {
-  const userId = req.userId;
-
-  const postings = await db
-    .select()
-    .from(jobPostingsTable)
-    .where(and(
-      eq(jobPostingsTable.userId, userId),
-      or(isNotNull(jobPostingsTable.deletedAt), isNotNull(jobPostingsTable.closedAt)),
-    ))
-    .orderBy(jobPostingsTable.deletedAt);
-
-  const [profile] = await db
-    .select({
-      updatedAt: userProfilesTable.updatedAt,
-      experienceHistory: userProfilesTable.experienceHistory,
-      skills: userProfilesTable.skills,
-      locationPreferences: userProfilesTable.locationPreferences,
-      remotePreferences: userProfilesTable.remotePreferences,
-      titleExcludeKeywords: userProfilesTable.titleExcludeKeywords,
-      companyFilterSettings: userProfilesTable.companyFilterSettings,
-      emailFilterSettings: userProfilesTable.emailFilterSettings,
-    })
-    .from(userProfilesTable)
-    .where(eq(userProfilesTable.userId, userId));
-
-  const onlineSources = await db
-    .select({ provider: onlineDiscoverySourcesTable.provider, id: onlineDiscoverySourcesTable.id, name: onlineDiscoverySourcesTable.name })
-    .from(onlineDiscoverySourcesTable)
-    .where(eq(onlineDiscoverySourcesTable.userId, userId));
-  const sourceNames = new Map(
-    onlineSources.flatMap((source) => [
-      [source.provider, source.name] as const,
-      [`${source.provider}:${source.id}`, source.name] as const,
-    ]),
-  );
-
-  const results = await Promise.all(
-    postings.map(async (posting) => {
-      const [report] = await db
-        .select()
-        .from(matchReportsTable)
-        .where(and(eq(matchReportsTable.jobPostingId, posting.id), eq(matchReportsTable.userId, userId)));
-      const [feedback] = await db
-        .select({ kind: jobPostingFeedbackTable.kind, createdAt: jobPostingFeedbackTable.createdAt })
-        .from(jobPostingFeedbackTable)
-        .where(and(eq(jobPostingFeedbackTable.jobPostingId, posting.id), eq(jobPostingFeedbackTable.userId, userId)));
-      return {
-        posting,
-        report: report ?? null,
-        scoreStatus: getScoreStatus(report, profile?.updatedAt),
-        feedback: feedback ?? null,
-        sourceName: sourceNames.get(posting.source) ?? null,
-        onlineMatchScore: getOnlineMatchScore(posting, profile),
-      };
-    }),
-  );
-
-  res.json(ListPostingsResponse.parse(results));
+  res.json(ListPostingsResponse.parse(await listPostingPage(req.userId, { archived: true })));
 });
 
 // Evidence-based review only. Text resemblance alone cannot hide a job.
@@ -888,13 +677,25 @@ router.patch("/postings/:id/applied", requireAuth, async (req, res): Promise<voi
 router.post("/postings/rescore-all", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId;
   const { rescoreAllPostings } = await import("../lib/scoringService");
-  rescoreAllPostings(userId, { forceParse: true }).catch(() => {});
+  await rescoreAllPostings(userId, { forceParse: true });
   res.json({ queued: true });
+});
+
+router.get("/postings/dedup-preview", requireAuth, async (req, res): Promise<void> => {
+  const eligibleIds = await previewConfirmedDuplicates(req.userId);
+  const ids = eligibleIds.slice(0, 200);
+  const jobs = ids.length ? await db.select({ id: jobPostingsTable.id, title: jobPostingsTable.title, company: jobPostingsTable.company })
+    .from(jobPostingsTable).where(and(eq(jobPostingsTable.userId, req.userId), inArray(jobPostingsTable.id, ids))) : [];
+  res.json({ ids, total: eligibleIds.length, jobs });
 });
 
 router.post("/postings/dedup-sweep", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId;
-  const removed = await runDedupSweep(userId);
+  const selected = req.body?.selectedIds;
+  if (!Array.isArray(selected) || selected.length > 200 || !selected.every((id) => Number.isSafeInteger(id) && id > 0)) {
+    res.status(400).json({ error: "Preview and select jobs before cleanup" }); return;
+  }
+  const removed = await runDedupSweep(userId, selected);
   if (removed > 0) {
     logger.info({ userId, removed }, "dedup-sweep: removed duplicate postings");
   }

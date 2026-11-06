@@ -184,7 +184,7 @@ export default function PostingDetailPage({ id }: { id: number }) {
           <div className="flex flex-col md:flex-row md:items-start gap-6">
             {/* Score ring */}
             <div className="shrink-0">
-              <ScoreRingLarge score={score} status={data.scoreStatus} />
+              <ScoreRingLarge score={score} status={data.analysisState === "failed" && score == null ? "failed" : data.scoreStatus} />
             </div>
 
             {/* Job info */}

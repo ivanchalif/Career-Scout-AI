@@ -28,7 +28,6 @@ import {
   useUpdateOnlineDiscoverySource,
   useDeleteOnlineDiscoverySource,
   getGetTitleExcludeSettingsQueryKey,
-  useListDeletedPostings,
   useRestorePosting,
   useReopenPosting,
   getListPostingsQueryKey,
@@ -67,6 +66,7 @@ import { SourceHealth } from "@/components/source-health";
 import { PostingDecisionControls } from "@/components/posting-decision-controls";
 import { PreferenceBadge } from "@/components/preference-badge";
 import { FitScoreBadge, fitTier } from "@/components/fit-score";
+import { QueryError } from "@/components/query-error";
 import { usePostingDecision, reasonLabel } from "@/hooks/use-posting-decision";
 import { DismissReasonItems } from "@/components/dismiss-reason-items";
 import { AppliedPreferenceDialog } from "@/components/applied-preference-dialog";
@@ -133,14 +133,19 @@ export default function DashboardPage() {
   const [search, setSearch] = useState("");
   const [minFitScore, setMinFitScore] = useState<number | undefined>(undefined);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [cleanupPreview, setCleanupPreview] = useState<{
+    ids: number[]; total: number; jobs: Array<{ id: number; title: string; company: string }>;
+  } | null>(null);
 
   const [showFilters, setShowFilters] = useState(false);
   const [activeTab, setActiveTab] = useState<DashboardView>("active");
+  const [page, setPage] = useState(0);
   const sortScope = userId ?? "signed-out";
   const storedSorts = useMemo(() => readDashboardSorts(localStorage, sortScope), [sortScope]);
   const [sortOverrides, setSortOverrides] = useState<Record<string, DashboardSorts>>({});
   const viewSorts = sortOverrides[sortScope] ?? storedSorts;
   const sortKey = viewSorts[activeTab];
+  useEffect(() => { setPage(0); }, [activeTab, search, minFitScore, sortKey]);
   const setSortKey = useCallback((key: string) => {
     saveDashboardSort(localStorage, sortScope, activeTab, key);
     setSortOverrides(previous => ({
@@ -326,28 +331,25 @@ export default function DashboardPage() {
       search: search || undefined,
       minFitScore,
       applied: activeTab === "applied" ? true : activeTab === "active" ? false : undefined,
+      archived: activeTab === "deleted" || undefined,
+      limit: 25,
+      offset: page * 25,
+      sort: sortKey as "recommended" | "date-desc" | "date-asc" | "score-desc" | "score-asc" | "title-asc" | "title-desc" | "company-asc" | "company-desc",
+      compact: true,
     },
     {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       query: {
         refetchInterval: (query: any) => {
           const data = query.state.data;
-          if (!data) return false;
+          if (!data || document.visibilityState === "hidden") return false;
           const hasUnscored = data.some((p: any) => p.report?.fitScore == null);
-          return hasUnscored ? 4000 : 15_000;
+          return hasUnscored ? 5000 : 30_000;
         },
       } as any,
     },
   );
-  const activeCountQ = useListPostings({ applied: false }, {
-    query: { queryKey: getListPostingsQueryKey({ applied: false }), refetchInterval: 15_000 },
-  });
-  const appliedCountQ = useListPostings({ applied: true }, {
-    query: { queryKey: getListPostingsQueryKey({ applied: true }), refetchInterval: 15_000 },
-  });
-  const deletedQ = useListDeletedPostings({
-    query: { queryKey: getListDeletedPostingsQueryKey(), refetchInterval: 15_000 },
-  });
+  const deletedQ = postingsQ;
   const gmailStatusQ = useGetGmailStatus({
     query: {
       queryKey: getGetGmailStatusQueryKey(),
@@ -572,10 +574,10 @@ export default function DashboardPage() {
 
   const tabStats = useMemo(() => {
     const items: Array<{ report?: { fitScore?: number | null } | null }> =
-      activeTab === "deleted"
-        ? (deletedQ.data ?? [])
-        : (postingsQ.data ?? []);
-    const total = items.length;
+      postingsQ.data ?? [];
+    const total = activeTab === "active" ? summary?.totalPostings ?? items.length
+      : activeTab === "applied" ? summary?.appliedPostings ?? items.length
+      : summary?.archivedPostings ?? items.length;
     const scored = items.filter((item) => item.report?.fitScore != null);
     const avgFit =
       scored.length > 0
@@ -583,14 +585,13 @@ export default function DashboardPage() {
         : null;
     const strong = scored.filter((item) => (item.report?.fitScore ?? 0) >= 85).length;
     return { total, avgFit, strong };
-  }, [activeTab, postingsQ.data, deletedQ.data]);
+  }, [activeTab, postingsQ.data, summary]);
 
   const allPostingsById = useMemo(() => {
     const map = new Map<number, { posting: { id: number; title: string; company: string }; report: { fitScore?: number | null } | null }>();
-    for (const item of (activeCountQ.data ?? [])) map.set(item.posting.id, item);
-    for (const item of (appliedCountQ.data ?? [])) map.set(item.posting.id, item);
+    for (const item of (postingsQ.data ?? [])) map.set(item.posting.id, item);
     return map;
-  }, [activeCountQ.data, appliedCountQ.data]);
+  }, [postingsQ.data]);
 
   useEffect(() => {
     if (!rawPostings.length) {
@@ -745,20 +746,6 @@ export default function DashboardPage() {
               ? `Imported ${data.synced} new job${data.synced === 1 ? "" : "s"} from Gmail.`
               : "No new jobs added from Gmail.",
           });
-          getToken().then((token) => {
-            fetch("/api/postings/dedup-sweep", {
-              method: "POST",
-              headers: token ? { Authorization: `Bearer ${token}` } : {},
-            })
-              .then((res) => {
-                if (res.ok) {
-                  qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
-                  qc.invalidateQueries({ queryKey: getListDeletedPostingsQueryKey() });
-                  qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
-                }
-              })
-              .catch(() => {});
-          }).catch(() => {});
         },
         onError: async (error) => {
           setGmailProcessing(false);
@@ -780,7 +767,12 @@ export default function DashboardPage() {
   async function onReanalyzeAll() {
     setReanalyzing(true);
     try {
-      await fetch("/api/postings/rescore-all", { method: "POST" });
+      const token = await getToken();
+      const response = await fetch("/api/postings/rescore-all", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!response.ok) throw new Error("Could not queue re-analysis");
       toast({
         title: "Re-analysis queued",
         description: "All jobs are being re-analyzed in the background. Scores will update shortly.",
@@ -800,12 +792,35 @@ export default function DashboardPage() {
     setSweepingDuplicates(true);
     try {
       const token = await getToken();
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+      const preview = await fetch("/api/postings/dedup-preview", { headers });
+      if (!preview.ok) throw new Error("Preview failed");
+      const result = await preview.json() as NonNullable<typeof cleanupPreview>;
+      if (!result.ids.length) {
+        toast({ title: "No duplicates found", description: "No confirmed copies are eligible for cleanup." });
+        return;
+      }
+      setCleanupPreview(result);
+    } catch {
+      toast({ title: "Cleanup preview failed", description: "Could not load jobs eligible for cleanup.", variant: "destructive" });
+    } finally {
+      setSweepingDuplicates(false);
+    }
+  }
+
+  async function confirmSweepDuplicates() {
+    if (!cleanupPreview) return;
+    setSweepingDuplicates(true);
+    try {
+      const token = await getToken();
       const res = await fetch("/api/postings/dedup-sweep", {
         method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), "Content-Type": "application/json" },
+        body: JSON.stringify({ selectedIds: cleanupPreview.ids }),
       });
       if (!res.ok) throw new Error("Sweep failed");
       const { removed } = await res.json() as { removed: number };
+      setCleanupPreview(null);
       qc.invalidateQueries({ queryKey: getListPostingsQueryKey() });
       qc.invalidateQueries({ queryKey: getListDeletedPostingsQueryKey() });
       qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
@@ -1670,11 +1685,11 @@ export default function DashboardPage() {
             }`}
           >
             Active
-            {activeCountQ.data != null && (
+            {summary != null && (
               <span className={`text-[10px] font-semibold px-1 py-0.5 rounded-full ${
                 activeTab === "active" ? "bg-indigo-500/20 text-indigo-300" : "bg-muted text-muted-foreground"
               }`}>
-                {activeCountQ.data.length}
+                {summary.totalPostings}
               </span>
             )}
           </button>
@@ -1691,11 +1706,11 @@ export default function DashboardPage() {
             }`}
           >
             Applied
-            {appliedCountQ.data != null && (
+            {summary != null && (
               <span className={`text-[10px] font-semibold px-1 py-0.5 rounded-full ${
                 activeTab === "applied" ? "bg-indigo-500/20 text-indigo-300" : "bg-muted text-muted-foreground"
               }`}>
-                {appliedCountQ.data.length}
+                {summary.appliedPostings ?? 0}
               </span>
             )}
           </button>
@@ -1712,11 +1727,11 @@ export default function DashboardPage() {
             }`}
           >
             Deleted
-            {deletedQ.data != null && deletedQ.data.length > 0 && (
+            {summary != null && (summary.archivedPostings ?? 0) > 0 && (
               <span className={`text-[10px] font-semibold px-1 py-0.5 rounded-full ${
                 activeTab === "deleted" ? "bg-red-500/20 text-red-300" : "bg-muted text-muted-foreground"
               }`}>
-                {deletedQ.data.length}
+                {summary.archivedPostings}
               </span>
             )}
           </button>
@@ -1904,6 +1919,8 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-3">
               {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
             </div>
+          ) : deletedQ.isError && !deletedQ.data ? (
+            <QueryError retry={() => { void deletedQ.refetch(); }} />
           ) : deletedPostings.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <Trash2 className="w-10 h-10 text-muted-foreground mb-4" />
@@ -1930,7 +1947,7 @@ export default function DashboardPage() {
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <FitScoreBadge score={score} status={item.scoreStatus} />
+                        <FitScoreBadge score={score} status={item.analysisState === "failed" && score == null ? "failed" : item.scoreStatus} />
                         {item.onlineMatchScore != null && (
                           <StatusBadge tone="neutral" title="Search match: discovery heuristic, separate from Profile fit">
                             Search match {item.onlineMatchScore}
@@ -2025,6 +2042,8 @@ export default function DashboardPage() {
               <Skeleton key={i} className="h-28 rounded-xl" />
             ))}
           </div>
+        ) : postingsQ.isError && !postingsQ.data ? (
+          <QueryError retry={() => { void postingsQ.refetch(); }} />
         ) : postings.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             {activeTab === "applied" ? (
@@ -2086,7 +2105,7 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0 px-4 pt-3 pb-2 sm:px-5 sm:py-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <FitScoreBadge score={score} status={item.scoreStatus} />
+                        <FitScoreBadge score={score} status={item.analysisState === "failed" && score == null ? "failed" : item.scoreStatus} />
                         <PreferenceBadge posting={posting} />
                         {item.onlineMatchScore != null && (
                           <StatusBadge tone="neutral" title="Search match: discovery heuristic, separate from Profile fit">
@@ -2394,7 +2413,45 @@ export default function DashboardPage() {
             })}
           </div>
         )}
+        <nav className="flex items-center justify-center gap-3 py-4" aria-label="Job pages">
+          <Button variant="outline" size="sm" disabled={page === 0 || postingsQ.isFetching} onClick={() => setPage((p) => p - 1)}>
+            Previous
+          </Button>
+          <span className="text-xs text-muted-foreground">Page {page + 1}</span>
+          <Button variant="outline" size="sm" disabled={(postingsQ.data?.length ?? 0) < 25 || postingsQ.isFetching} onClick={() => setPage((p) => p + 1)}>
+            Next
+          </Button>
+        </nav>
       </div>
+
+      <Dialog open={cleanupPreview !== null} onOpenChange={(open) => { if (!open && !sweepingDuplicates) setCleanupPreview(null); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Review confirmed copies</DialogTitle>
+            <DialogDescription>
+              These active jobs match a listing you already applied to or archived by individual-job identity.
+              Cleanup moves them to Deleted; descriptions and feedback are preserved and jobs can be restored.
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="max-h-64 overflow-y-auto space-y-2 text-sm" aria-label="Jobs to move to Deleted">
+            {cleanupPreview?.jobs.map((job) => (
+              <li key={job.id} className="rounded border border-border px-3 py-2">
+                <span className="font-medium text-foreground">{job.title}</span>
+                <span className="block text-muted-foreground">{job.company}</span>
+              </li>
+            ))}
+          </ul>
+          {(cleanupPreview?.total ?? 0) > (cleanupPreview?.jobs.length ?? 0) && (
+            <p className="text-xs text-muted-foreground">Showing the first 200. Review the remaining jobs in another cleanup pass.</p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" disabled={sweepingDuplicates} onClick={() => setCleanupPreview(null)}>Cancel</Button>
+            <Button disabled={sweepingDuplicates} onClick={confirmSweepDuplicates}>
+              {sweepingDuplicates ? "Moving…" : `Move ${cleanupPreview?.ids.length ?? 0} to Deleted`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add job modal */}
       <Dialog open={showAddModal} onOpenChange={setShowAddModal}>

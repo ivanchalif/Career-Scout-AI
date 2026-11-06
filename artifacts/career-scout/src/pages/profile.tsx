@@ -25,6 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import Layout from "@/components/layout";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 
 const profileSchema = z.object({
   skills: z.array(z.string()).default([]),
@@ -160,14 +161,15 @@ export default function ProfilePage() {
       });
       if (!putRes.ok) throw new Error("Upload failed");
 
-      await fetch("/api/storage/uploads/confirm", {
+      const confirmRes = await fetch("/api/storage/uploads/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeader },
         body: JSON.stringify({ objectPath }),
       });
+      if (!confirmRes.ok) throw new Error("Resume ownership could not be confirmed");
 
       const servingUrl = `/api/storage/objects/${objectPath.replace(/^\/objects\//, "")}`;
-      setValue("resumeUrl", servingUrl);
+      setValue("resumeUrl", servingUrl, { shouldDirty: true });
       toast({ title: "Resume uploaded", description: `${file.name} uploaded successfully.` });
     } catch {
       toast({ title: "Upload failed", description: "Failed to upload resume. Please try again.", variant: "destructive" });
@@ -180,7 +182,7 @@ export default function ProfilePage() {
   const upsertMutation = useUpsertProfile();
   const [savedAt, setSavedAt] = useState<Date | null>(null);
 
-  const { register, handleSubmit, control, setValue, watch, reset, formState: { errors } } =
+  const { register, handleSubmit, control, setValue, watch, reset, formState: { errors, isDirty } } =
     useForm<ProfileFormData>({
       resolver: zodResolver(profileSchema),
       defaultValues: {
@@ -189,6 +191,7 @@ export default function ProfilePage() {
         remotePreference: "hybrid",
       },
     });
+  useUnsavedChanges(isDirty || !!skillInput.trim() || !!locationInput.trim());
 
   const { fields: expFields, append: appendExp, remove: removeExp, replace: replaceExp } = useFieldArray({
     control,
@@ -235,7 +238,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     const p = profileQ.data;
-    if (!p) return;
+    if (!p || isDirty) return;
     reset({
       skills: p.skills ?? [],
       experienceHistory: (p.experienceHistory ?? []).map((e) => ({
@@ -254,7 +257,7 @@ export default function ProfilePage() {
     if (p.resumeText && p.resumeText.length > 0) {
       setResumeMode("paste");
     }
-  }, [profileQ.data, reset]);
+  }, [profileQ.data, reset, isDirty]);
 
   function addSkill() {
     const newSkills = skillInput
@@ -262,13 +265,13 @@ export default function ProfilePage() {
       .map((s) => s.trim())
       .filter((s) => s.length > 0 && !skills.includes(s));
     if (newSkills.length > 0) {
-      setValue("skills", [...skills, ...newSkills]);
+      setValue("skills", [...skills, ...newSkills], { shouldDirty: true });
     }
     setSkillInput("");
   }
 
   function removeSkill(skill: string) {
-    setValue("skills", skills.filter((s) => s !== skill));
+    setValue("skills", skills.filter((s) => s !== skill), { shouldDirty: true });
   }
 
   function addLocation() {
@@ -277,31 +280,38 @@ export default function ProfilePage() {
       .map((s) => s.trim())
       .filter((s) => s.length > 0 && !locationPreferences.includes(s));
     if (newLocs.length > 0) {
-      setValue("locationPreferences", [...locationPreferences, ...newLocs]);
+      setValue("locationPreferences", [...locationPreferences, ...newLocs], { shouldDirty: true });
     }
     setLocationInput("");
   }
 
   function removeLocation(loc: string) {
-    setValue("locationPreferences", locationPreferences.filter((l) => l !== loc));
+    setValue("locationPreferences", locationPreferences.filter((l) => l !== loc), { shouldDirty: true });
   }
 
   function toggleRemotePreference(val: "remote" | "hybrid" | "onsite") {
     if (remotePreferences.includes(val)) {
-      setValue("remotePreferences", remotePreferences.filter((v) => v !== val));
+      setValue("remotePreferences", remotePreferences.filter((v) => v !== val), { shouldDirty: true });
     } else {
-      setValue("remotePreferences", [...remotePreferences, val]);
+      setValue("remotePreferences", [...remotePreferences, val], { shouldDirty: true });
     }
   }
 
   async function onSubmit(data: ProfileFormData) {
-    const payload: UpsertProfileBody = {
+    const pendingSkills = skillInput.split(",").map((s) => s.trim()).filter(Boolean);
+    const pendingLocations = locationInput.split(",").map((s) => s.trim()).filter(Boolean);
+    const savedData = {
       ...data,
+      skills: [...new Set([...data.skills, ...pendingSkills])],
+      locationPreferences: [...new Set([...data.locationPreferences, ...pendingLocations])],
+    };
+    const payload: UpsertProfileBody = {
+      ...savedData,
       targetSalary: data.targetSalary || undefined,
       resumeUrl: data.resumeUrl || undefined,
       resumeText: resumeMode === "paste" ? (data.resumeText || undefined) : undefined,
       remotePreferences: data.remotePreferences,
-      locationPreferences: data.locationPreferences,
+      locationPreferences: savedData.locationPreferences,
       experienceHistory: data.experienceHistory.map((e) => ({
         title: e.title,
         company: e.company,
@@ -314,12 +324,15 @@ export default function ProfilePage() {
       { data: payload },
       {
         onSuccess: () => {
+          reset(savedData);
+          setSkillInput("");
+          setLocationInput("");
           qc.invalidateQueries({ queryKey: getGetProfileQueryKey() });
           setSavedAt(new Date());
           toast({ title: "Profile saved", description: "Your career profile has been updated." });
         },
-        onError: () =>
-          toast({ title: "Error", description: "Failed to save profile.", variant: "destructive" }),
+        onError: (error) =>
+          toast({ title: "Profile not saved", description: error.message || "Please check your profile and retry.", variant: "destructive" }),
       }
     );
   }

@@ -23,6 +23,9 @@ import type {
   DashboardSummary,
   DismissalReasonInput,
   DismissalUndoInput,
+  DuplicateCleanupPreview,
+  DuplicateCleanupResult,
+  DuplicateCleanupSelection,
   EmailFilterSettings,
   EmailSyncLogItem,
   ErrorEnvelope,
@@ -1849,6 +1852,169 @@ export const useImportPostingsCsv = <
   TContext
 > => {
   return useMutation(getImportPostingsCsvMutationOptions(options));
+};
+
+/**
+ * @summary Preview confirmed copies eligible for cleanup
+ */
+export const getPreviewDuplicateCleanupUrl = () => {
+  return `/api/postings/dedup-preview`;
+};
+
+export const previewDuplicateCleanup = async (
+  options?: RequestInit,
+): Promise<DuplicateCleanupPreview> => {
+  return customFetch<DuplicateCleanupPreview>(getPreviewDuplicateCleanupUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getPreviewDuplicateCleanupQueryKey = () => {
+  return [`/api/postings/dedup-preview`] as const;
+};
+
+export const getPreviewDuplicateCleanupQueryOptions = <
+  TData = Awaited<ReturnType<typeof previewDuplicateCleanup>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof previewDuplicateCleanup>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getPreviewDuplicateCleanupQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof previewDuplicateCleanup>>
+  > = ({ signal }) => previewDuplicateCleanup({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof previewDuplicateCleanup>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type PreviewDuplicateCleanupQueryResult = NonNullable<
+  Awaited<ReturnType<typeof previewDuplicateCleanup>>
+>;
+export type PreviewDuplicateCleanupQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Preview confirmed copies eligible for cleanup
+ */
+
+export function usePreviewDuplicateCleanup<
+  TData = Awaited<ReturnType<typeof previewDuplicateCleanup>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof previewDuplicateCleanup>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getPreviewDuplicateCleanupQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Move selected, still-confirmed copies to Deleted
+ */
+export const getCleanupDuplicatePostingsUrl = () => {
+  return `/api/postings/dedup-sweep`;
+};
+
+export const cleanupDuplicatePostings = async (
+  duplicateCleanupSelection: DuplicateCleanupSelection,
+  options?: RequestInit,
+): Promise<DuplicateCleanupResult> => {
+  return customFetch<DuplicateCleanupResult>(getCleanupDuplicatePostingsUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(duplicateCleanupSelection),
+  });
+};
+
+export const getCleanupDuplicatePostingsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cleanupDuplicatePostings>>,
+    TError,
+    { data: BodyType<DuplicateCleanupSelection> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof cleanupDuplicatePostings>>,
+  TError,
+  { data: BodyType<DuplicateCleanupSelection> },
+  TContext
+> => {
+  const mutationKey = ["cleanupDuplicatePostings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof cleanupDuplicatePostings>>,
+    { data: BodyType<DuplicateCleanupSelection> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return cleanupDuplicatePostings(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CleanupDuplicatePostingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof cleanupDuplicatePostings>>
+>;
+export type CleanupDuplicatePostingsMutationBody =
+  BodyType<DuplicateCleanupSelection>;
+export type CleanupDuplicatePostingsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Move selected, still-confirmed copies to Deleted
+ */
+export const useCleanupDuplicatePostings = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cleanupDuplicatePostings>>,
+    TError,
+    { data: BodyType<DuplicateCleanupSelection> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof cleanupDuplicatePostings>>,
+  TError,
+  { data: BodyType<DuplicateCleanupSelection> },
+  TContext
+> => {
+  return useMutation(getCleanupDuplicatePostingsMutationOptions(options));
 };
 
 /**

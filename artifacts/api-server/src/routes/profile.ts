@@ -5,7 +5,7 @@ import { db, userProfilesTable } from "@workspace/db";
 import { UpsertProfileBody, GetProfileResponse, UpsertProfileResponse } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
 import { rescoreAllPostings } from "../lib/scoringService";
-import { getResumeText } from "../lib/resumeReader";
+import { getResumeText, assertResumeOwnership } from "../lib/resumeReader";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { logger } from "../lib/logger";
 
@@ -29,9 +29,18 @@ router.put("/profile", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  if (parsed.data.resumeUrl) {
+    try { await assertResumeOwnership(parsed.data.resumeUrl, userId); }
+    catch {
+      res.status(400).json({ error: "Use a resume uploaded by this account, or paste resume text." });
+      return;
+    }
+  }
+
   const updateData = {
     ...parsed.data,
     userId,
+    scoringUpdatedAt: new Date(),
   };
 
   const [profile] = await db
@@ -42,6 +51,7 @@ router.put("/profile", requireAuth, async (req, res): Promise<void> => {
       set: {
         ...parsed.data,
         updatedAt: new Date(),
+        scoringUpdatedAt: updateData.scoringUpdatedAt,
       },
     })
     .returning();
@@ -76,7 +86,7 @@ router.post("/profile/parse-resume", requireAuth, async (req, res): Promise<void
   if (profile.resumeText && profile.resumeText.length > 50) {
     resumeText = profile.resumeText;
   } else if (profile.resumeUrl) {
-    resumeText = await getResumeText(profile.resumeUrl);
+    resumeText = await getResumeText(profile.resumeUrl, userId);
   }
 
   if (!resumeText || resumeText.length < 50) {

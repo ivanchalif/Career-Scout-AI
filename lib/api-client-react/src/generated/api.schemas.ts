@@ -95,6 +95,27 @@ export interface UpsertProfileBody {
   onlineDiscoveryMinMatchScore?: number;
 }
 
+export interface DuplicateCleanupJob {
+  id: number;
+  title: string;
+  company: string;
+}
+
+export interface DuplicateCleanupPreview {
+  ids: number[];
+  total: number;
+  jobs: DuplicateCleanupJob[];
+}
+
+export interface DuplicateCleanupSelection {
+  /** @maxItems 200 */
+  selectedIds: number[];
+}
+
+export interface DuplicateCleanupResult {
+  removed: number;
+}
+
 /**
  * @nullable
  */
@@ -198,6 +219,16 @@ export const PostingWithReportScoreStatus = {
   needs_reanalysis: "needs_reanalysis",
 } as const;
 
+export type PostingWithReportAnalysisState =
+  (typeof PostingWithReportAnalysisState)[keyof typeof PostingWithReportAnalysisState];
+
+export const PostingWithReportAnalysisState = {
+  queued: "queued",
+  running: "running",
+  failed: "failed",
+  completed: "completed",
+} as const;
+
 export type PostingFeedbackKind =
   (typeof PostingFeedbackKind)[keyof typeof PostingFeedbackKind];
 
@@ -245,6 +276,7 @@ export interface PostingWithReport {
   report: MatchReport | null;
   /** Pending without a fit report, or needing reanalysis after the profile was updated. */
   scoreStatus: PostingWithReportScoreStatus;
+  analysisState?: PostingWithReportAnalysisState;
   feedback?: PostingFeedback | null;
   /**
    * Display name of the configured online discovery source
@@ -717,6 +749,8 @@ export interface GmailSyncResult {
 
 export interface DashboardSummary {
   totalPostings: number;
+  appliedPostings?: number;
+  archivedPostings?: number;
   /** @nullable */
   avgFitScore: number | null;
   topMatches: PostingWithReport[];
@@ -802,6 +836,18 @@ export type ListPostingsParams = {
    */
   search?: string;
   /**
+   * @minimum 1
+   * @maximum 100
+   */
+  limit?: number;
+  /**
+   * @minimum 0
+   */
+  offset?: number;
+  sort?: ListPostingsSort;
+  archived?: boolean;
+  compact?: boolean;
+  /**
    * Minimum fit score filter
    */
   minFitScore?: number;
@@ -815,6 +861,21 @@ export type ListPostingsParams = {
    */
   hidden?: boolean;
 };
+
+export type ListPostingsSort =
+  (typeof ListPostingsSort)[keyof typeof ListPostingsSort];
+
+export const ListPostingsSort = {
+  recommended: "recommended",
+  "date-desc": "date-desc",
+  "date-asc": "date-asc",
+  "score-desc": "score-desc",
+  "score-asc": "score-asc",
+  "title-asc": "title-asc",
+  "title-desc": "title-desc",
+  "company-asc": "company-asc",
+  "company-desc": "company-desc",
+} as const;
 
 export type RestorePosting200 = {
   id: number;

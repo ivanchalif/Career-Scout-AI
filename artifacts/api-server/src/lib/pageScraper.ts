@@ -198,7 +198,7 @@ export async function fetchJobPageContent(url: string): Promise<PageResult | nul
   }
 }
 
-async function validatePublicPageUrl(rawUrl: string): Promise<URL> {
+export async function validatePublicPageUrl(rawUrl: string): Promise<URL> {
   let parsed: URL;
   try {
     parsed = new URL(rawUrl);

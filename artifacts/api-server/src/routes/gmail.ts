@@ -1,4 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
+import { completedGmailMessages } from "../lib/gmailCompletion";
 import { eq } from "drizzle-orm";
 import { db, gmailConnectionsTable, jobPostingsTable, gmailSeenKeysTable, userProfilesTable, syncEventsTable, emailSyncLogTable, type EmailSyncOutcome } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -208,7 +209,7 @@ router.post("/gmail/reprocess", requireAuth, async (req: Request, res: Response)
     .select({ gmailKey: gmailSeenKeysTable.gmailKey })
     .from(gmailSeenKeysTable)
     .where(eq(gmailSeenKeysTable.userId, userId));
-  const processedBaseIds = new Set(seenKeys.map((r) => r.gmailKey.split(":")[0]));
+  const processedBaseIds = completedGmailMessages(seenKeys);
 
   const results: Array<{ messageId: string; status: string; imported: number }> = [];
   const responseHistory = await loadResponseHistory(userId);
@@ -231,6 +232,7 @@ router.post("/gmail/reprocess", requireAuth, async (req: Request, res: Response)
       continue;
     }
     if (listings.length === 0) {
+      await db.insert(gmailSeenKeysTable).values({ userId, gmailKey: `${messageId}:complete` }).onConflictDoNothing();
       await markEmailAsRead(conn.accessToken, conn.refreshToken, messageId);
       results.push({ messageId, status: "no_listings", imported: 0 });
       continue;
@@ -244,8 +246,6 @@ router.post("/gmail/reprocess", requireAuth, async (req: Request, res: Response)
       const gmailKey = `${messageId}:${i}`;
       const title = listing.title || email.subject.slice(0, 200) || "Job Opportunity";
       const company = listing.company || extractSender(email.sender);
-
-      await db.insert(gmailSeenKeysTable).values({ userId, gmailKey }).onConflictDoNothing();
 
       const { isDuplicate } = await isFuzzyDuplicate(userId, title, company, { link: listing.url });
       if (isDuplicate) continue;
@@ -309,6 +309,7 @@ router.post("/gmail/reprocess", requireAuth, async (req: Request, res: Response)
       }
     }
 
+    await db.insert(gmailSeenKeysTable).values({ userId, gmailKey: `${messageId}:complete` }).onConflictDoNothing();
     await markEmailAsRead(conn.accessToken, conn.refreshToken, messageId);
     results.push({ messageId, status: imported > 0 ? "imported" : "all_skipped", imported });
   }

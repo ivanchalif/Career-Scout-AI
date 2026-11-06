@@ -145,6 +145,23 @@ paths:
           schema:
             type: string
           description: Search term to filter by title or company
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0 }
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [recommended, date-desc, date-asc, score-desc, score-asc, title-asc, title-desc, company-asc, company-desc]
+        - name: archived
+          in: query
+          schema: { type: boolean }
+        - name: compact
+          in: query
+          schema: { type: boolean }
         - name: minFitScore
           in: query
           schema:
@@ -499,6 +516,38 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
+  /postings/dedup-preview:
+    get:
+      operationId: previewDuplicateCleanup
+      tags: [postings]
+      summary: Preview confirmed copies eligible for cleanup
+      responses:
+        "200":
+          description: IDs of confirmed copies
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DuplicateCleanupPreview"
+
+  /postings/dedup-sweep:
+    post:
+      operationId: cleanupDuplicatePostings
+      tags: [postings]
+      summary: Move selected, still-confirmed copies to Deleted
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DuplicateCleanupSelection"
+      responses:
+        "200":
+          description: Cleanup result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DuplicateCleanupResult"
 
   /postings/near-duplicates:
     get:
@@ -1283,6 +1332,39 @@ components:
         onlineDiscoveryMinMatchScore:
           type: integer
 
+    DuplicateCleanupPreview:
+      type: object
+      required: [ids, total, jobs]
+      properties:
+        ids:
+          type: array
+          items: { type: integer }
+        total: { type: integer }
+        jobs:
+          type: array
+          items:
+            $ref: "#/components/schemas/DuplicateCleanupJob"
+    DuplicateCleanupJob:
+      type: object
+      required: [id, title, company]
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        company: { type: string }
+    DuplicateCleanupSelection:
+      type: object
+      required: [selectedIds]
+      properties:
+        selectedIds:
+          type: array
+          maxItems: 200
+          items: { type: integer, minimum: 1 }
+    DuplicateCleanupResult:
+      type: object
+      required: [removed]
+      properties:
+        removed: { type: integer }
+
     JobPosting:
       type: object
       properties:
@@ -1423,6 +1505,9 @@ components:
           type: string
           enum: [pending, current, needs_reanalysis]
           description: Pending without a fit report, or needing reanalysis after the profile was updated.
+        analysisState:
+          type: string
+          enum: [queued, running, failed, completed]
         feedback:
           oneOf:
             - $ref: "#/components/schemas/PostingFeedback"
@@ -2050,6 +2135,10 @@ components:
       type: object
       properties:
         totalPostings:
+          type: integer
+        appliedPostings:
+          type: integer
+        archivedPostings:
           type: integer
         avgFitScore:
           type: ["number", "null"]

@@ -2,6 +2,7 @@
 - [api-client-react dist rebuild](api-client-react-dist.md) — composite TS project; must run tsc in lib/api-client-react after editing src/ or hooks go missing from IDE.
 - [req.userId vs req.auth.userId](clerk-req-userId.md) — always use req.userId (set by requireAuth) not req.auth.userId; the latter can be undefined in Clerk Express v2.
 - [Gmail mark-as-read guard](gmail-mark-read-guard.md) — extractJobListings returns {listings, hadError}; only markEmailAsRead when !hadError, so LLM errors leave email unread for auto-retry.
+- [Digest completion](digest-completion.md) — a saved listing is partial progress, not proof the entire email was processed; retry incomplete digests.
 - [One-off Node scripts in pnpm workspace](pnpm-oneoff-scripts.md) — pnpm exec may not expose transitive CLIs; invoke their resolved virtual-store path or use plain ESM with absolute imports.
 - [OpenAPI codegen contract sync](openapi-codegen-contract-sync.md) — regenerate only after the spec reflects all shipped typed routes, or codegen can silently remove active client hooks.
 - [Online discovery source lifecycle](online-discovery-source-lifecycle.md) — suppress pauses a configured source; remove deletes only its config and never imported job history.
@@ -13,3 +14,4 @@
 - [Safe interaction regressions](safe-interaction-regressions.md) — prefer isolated UI integration tests for decision controls; do not require shared logins or touch existing jobs.
 - [Dashboard density](dashboard-density.md) — minimize the header/control area's vertical space; keep secondary controls accessible and current errors/progress apparent.
 - [Duplicate identity policy](duplicate-identity-policy.md) — automatic dedup needs listing identity; review needs supporting evidence; persist distinct-pair feedback and preserve history.
+- [Mailbox key rotation](mailbox-key-rotation.md) — keep the secret protecting saved IMAP credentials stable, or migrate/reconnect before rotating it.

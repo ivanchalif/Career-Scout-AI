@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, lazy, Suspense } from "react";
 import { ClerkProvider, SignIn, SignUp, Show, useClerk, useAuth } from "@clerk/react";
 import { shadcn } from "@clerk/themes";
 import { Switch, Route, Redirect, useLocation, Router as WouterRouter } from "wouter";
@@ -6,13 +6,13 @@ import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/reac
 import { Toaster } from "@/components/ui/toaster";
 import { DismissalDialogProvider } from "@/components/dismissal-dialog-provider";
 import LandingPage from "@/pages/landing";
-import DashboardPage from "@/pages/dashboard";
-import PostingDetailPage from "@/pages/posting-detail";
-import ProfilePage from "@/pages/profile";
-import InboxPage from "@/pages/inbox";
-import MetricsPage from "@/pages/metrics";
-import FilteredPage from "@/pages/filtered";
-import OnboardingPage from "@/pages/onboarding";
+const DashboardPage = lazy(() => import("@/pages/dashboard"));
+const PostingDetailPage = lazy(() => import("@/pages/posting-detail"));
+const ProfilePage = lazy(() => import("@/pages/profile"));
+const InboxPage = lazy(() => import("@/pages/inbox"));
+const MetricsPage = lazy(() => import("@/pages/metrics"));
+const FilteredPage = lazy(() => import("@/pages/filtered"));
+const OnboardingPage = lazy(() => import("@/pages/onboarding"));
 import NotFound from "@/pages/not-found";
 import { useGetProfile, getGetProfileQueryKey, setAuthTokenGetter } from "@workspace/api-client-react";
 
@@ -215,6 +215,7 @@ function ClerkProviderWithRoutes() {
         <ApiAuthBridge />
         <ClerkQueryClientCacheInvalidator />
         <DismissalDialogProvider>
+        <Suspense fallback={<div className="p-6 text-muted-foreground" role="status">Loading page…</div>}>
         <Switch>
           <Route path="/" component={HomeRoute} />
           <Route path="/sign-in/*?" component={SignInPage} />
@@ -258,6 +259,7 @@ function ClerkProviderWithRoutes() {
           </Route>
           <Route component={NotFound} />
         </Switch>
+        </Suspense>
         </DismissalDialogProvider>
         <Toaster />
       </QueryClientProvider>

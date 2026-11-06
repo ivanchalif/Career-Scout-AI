@@ -49,6 +49,7 @@ export const userProfilesTable = pgTable("user_profiles", {
   }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+  scoringUpdatedAt: timestamp("scoring_updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const insertUserProfileSchema = createInsertSchema(userProfilesTable).omit({ createdAt: true, updatedAt: true });

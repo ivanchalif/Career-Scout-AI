@@ -3,7 +3,11 @@ import request from "supertest";
 import express from "express";
 import type { NextFunction, Request, Response } from "express";
 
-vi.mock("drizzle-orm", () => ({ eq: vi.fn().mockReturnValue({}) }));
+vi.mock("drizzle-orm", () => ({
+  eq: vi.fn().mockReturnValue({}),
+  and: vi.fn().mockReturnValue({}),
+  inArray: vi.fn().mockReturnValue({}),
+}));
 vi.mock("@workspace/db", () => ({
   db: { select: vi.fn() },
   jobPostingsTable: {},
@@ -42,6 +46,8 @@ describe("GET /dashboard/summary", () => {
     dbSelect
       .mockReturnValueOnce(chain([]))
       .mockReturnValueOnce(chain([]))
+      .mockReturnValueOnce(chain([posting]))
+      .mockReturnValueOnce(chain([report]))
       .mockReturnValueOnce(chain([posting]))
       .mockReturnValueOnce(chain([report]));
 

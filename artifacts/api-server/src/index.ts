@@ -2,6 +2,8 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startGmailScheduler } from "./lib/gmailScheduler";
 import { startOnlineDiscoveryScheduler } from "./lib/onlineDiscovery";
+import { startScoringWorker } from "./lib/scoringQueue";
+import { protectLegacyMailboxCredentials } from "./lib/mailboxCredentials";
 
 const rawPort = process.env["PORT"];
 
@@ -26,5 +28,7 @@ app.listen(port, (err) => {
   logger.info({ port }, "Server listening");
 
   startGmailScheduler();
+  startScoringWorker();
+  void protectLegacyMailboxCredentials().catch((err) => logger.error({ err }, "Could not protect legacy mailbox credentials"));
   startOnlineDiscoveryScheduler();
 });

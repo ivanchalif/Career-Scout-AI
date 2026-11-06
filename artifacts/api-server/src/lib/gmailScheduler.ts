@@ -12,6 +12,7 @@ import { loadResponseHistory } from "./responseHistory";
 import { evaluateResponses } from "./responseLearning";
 import { GmailAuthorizationExpiredError, isGmailAuthorizationExpired } from "./gmailAuthError";
 import { isGmailSyncRunning, runGmailSync, type ReportGmailSyncProgress, type SyncUserResult } from "./gmailSyncState";
+import { completedGmailMessages } from "./gmailCompletion";
 export type { SyncUserResult } from "./gmailSyncState";
 
 /** Extracts the display name from a raw "From" header value. */
@@ -143,7 +144,7 @@ async function _syncUserInner(
     .from(gmailSeenKeysTable)
     .where(eq(gmailSeenKeysTable.userId, conn.userId));
 
-  const processedBaseIds = new Set(seenKeys.map((r) => r.gmailKey.split(":")[0]));
+  const processedBaseIds = completedGmailMessages(seenKeys);
   // Also deduplicate within the fetched batch itself (Gmail API can return the
   // same message ID twice when a message matches multiple query conditions).
   const seenInBatch = new Set<string>();
@@ -268,11 +269,6 @@ async function _syncUserInner(
       const title = listing.title || email.subject.slice(0, 200) || "Job Opportunity";
       const company = listing.company || extractSender(email.sender);
 
-      await db
-        .insert(gmailSeenKeysTable)
-        .values({ userId: conn.userId, gmailKey })
-        .onConflictDoNothing();
-
       const { isDuplicate, matchedTitle, matchedCompany, wasDeleted, wasApplied } = await isFuzzyDuplicate(conn.userId, title, company, { link: resolvedUrl });
       if (isDuplicate) {
         logger.info(
@@ -363,6 +359,11 @@ async function _syncUserInner(
     // Only mark as read when extraction succeeded — if the LLM call errored,
     // leave the email unread so the next sync automatically retries it.
     if (!hadError) {
+      // The posting's unique Gmail key makes retries idempotent. A message is
+      // complete only after every listing has reached a durable outcome.
+      await db.insert(gmailSeenKeysTable)
+        .values({ userId: conn.userId, gmailKey: `${email.messageId}:complete` })
+        .onConflictDoNothing();
       await markEmailAsRead(conn.accessToken, conn.refreshToken, email.messageId);
       logger.debug({ messageId: email.messageId }, "gmailScheduler: marked email as read");
     } else {

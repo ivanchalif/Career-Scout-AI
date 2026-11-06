@@ -4,6 +4,7 @@ export * from "./jobPostingFeedback";
 export * from "./jobPostingSources";
 export * from "./jobDuplicateExceptions";
 export * from "./matchReports";
+export * from "./scoringJobs";
 export * from "./gmailConnections";
 export * from "./gmailSeenKeys";
 export * from "./imapConnections";

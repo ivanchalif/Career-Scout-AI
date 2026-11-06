@@ -10,6 +10,7 @@ import { openai } from "@workspace/integrations-openai-ai-server";
 import { logger } from "./logger";
 import { getResumeText } from "./resumeReader";
 import { checkJobLink } from "./jobLinkHealth";
+import { enqueueScoring } from "./scoringQueue";
 
 const parsedJobSchema = z.object({
   title: z.string().default(""),
@@ -370,7 +371,7 @@ export async function scorePosting(
     resumeText = profile.resumeText;
     logger.info({ postingId, userId, chars: resumeText.length }, "scoringService: using stored resume text");
   } else if (profile?.resumeUrl) {
-    resumeText = await getResumeText(profile.resumeUrl);
+    resumeText = await getResumeText(profile.resumeUrl, userId);
     if (resumeText) {
       logger.info({ postingId, userId, chars: resumeText.length }, "scoringService: loaded resume text from URL");
     } else {
@@ -502,8 +503,6 @@ export async function scorePosting(
   return { report };
 }
 
-let backgroundQueue = Promise.resolve();
-
 /**
  * Enqueue a posting for background scoring.
  * All calls are serialized to prevent burst failures during large Gmail imports.
@@ -512,24 +511,8 @@ export function scorePostingBackground(
   postingId: number,
   userId: string,
 ): void {
-  backgroundQueue = backgroundQueue.then(async () => {
-    const [posting] = await db.select().from(jobPostingsTable)
-      .where(and(eq(jobPostingsTable.id, postingId), eq(jobPostingsTable.userId, userId)));
-    if (!posting || posting.closedAt || posting.deletedAt) return;
-    if (posting.link && !posting.availabilityCheckedAt) {
-      await checkJobLink(posting);
-      const [checked] = await db.select().from(jobPostingsTable)
-        .where(and(eq(jobPostingsTable.id, postingId), eq(jobPostingsTable.userId, userId)));
-      if (!checked || checked.closedAt || checked.deletedAt) return;
-    }
-    await scorePosting(postingId, userId).catch((err) => {
-      logger.error(
-        { postingId, userId, err },
-        "scoringService: background scoring failed",
-      );
-    });
-  }).catch((err) => {
-    logger.error({ postingId, err }, "scoringService: link validation failed");
+  void enqueueScoring(postingId, userId).catch((err) => {
+    logger.error({ postingId, err }, "Could not enqueue scoring; recovery worker will retry");
   });
 }
 
@@ -548,11 +531,7 @@ export async function rescoreAllPostings(userId: string, { forceParse = false }:
   if (allPostings.length > 0) {
     logger.info({ userId, count: allPostings.length, forceParse }, "scoringService: queuing all postings for re-score");
     for (const { id } of allPostings) {
-      backgroundQueue = backgroundQueue.then(async () => {
-        await scorePosting(id, userId, { forceParse }).catch((err) => {
-          logger.error({ postingId: id, userId, err }, "scoringService: background scoring failed");
-        });
-      });
+      await enqueueScoring(id, userId, forceParse);
     }
   }
 }

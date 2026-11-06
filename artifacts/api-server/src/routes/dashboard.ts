@@ -3,8 +3,8 @@ import { eq } from "drizzle-orm";
 import { db, jobPostingsTable, matchReportsTable, userProfilesTable, gmailConnectionsTable } from "@workspace/db";
 import { GetDashboardSummaryResponse } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
-import { isHiddenByWorkday } from "../lib/workdayFilter";
-import { bayAreaFilterReason } from "../lib/bayAreaFilter";
+import { postingFilterReason } from "../lib/postingFilters";
+import { and, inArray } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -21,36 +21,19 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     .from(gmailConnectionsTable)
     .where(eq(gmailConnectionsTable.userId, userId));
 
-  const companyFilter = (profile?.companyFilterSettings as { mode: string; companies: string[] } | null) ?? { mode: "off", companies: [] };
-  const titleExcludeKeywords: string[] = (profile?.titleExcludeKeywords as string[] | null) ?? [];
-
   const allPostings = await db
-    .select()
+    .select({
+      id: jobPostingsTable.id, title: jobPostingsTable.title, company: jobPostingsTable.company,
+      link: jobPostingsTable.link, location: jobPostingsTable.location, remoteType: jobPostingsTable.remoteType,
+      appliedAt: jobPostingsTable.appliedAt, deletedAt: jobPostingsTable.deletedAt, closedAt: jobPostingsTable.closedAt,
+    })
     .from(jobPostingsTable)
     .where(eq(jobPostingsTable.userId, userId));
 
   // Mirror the same filter chain the list endpoint uses
-  const activeOnly = allPostings.filter((p) => {
-    if (p.deletedAt) return false;
-    if (p.closedAt) return false;
-    if (p.appliedAt) return false;
-    if (isHiddenByWorkday(p, profile?.companyFilterSettings)) return false;
-    if (bayAreaFilterReason(p, profile?.companyFilterSettings)) return false;
-    if (companyFilter.mode !== "off" && companyFilter.companies.length > 0) {
-      const company = p.company.toLowerCase();
-      const matches = companyFilter.companies.some((c: string) => {
-        const entry = c.toLowerCase();
-        return company.includes(entry) || entry.includes(company);
-      });
-      if (companyFilter.mode === "include" && !matches) return false;
-      if (companyFilter.mode === "exclude" && matches) return false;
-    }
-    if (titleExcludeKeywords.length > 0) {
-      const title = p.title.toLowerCase();
-      if (titleExcludeKeywords.some((kw: string) => title.includes(kw.toLowerCase()))) return false;
-    }
-    return true;
-  });
+  const activeOnly = allPostings.filter((p) => !p.deletedAt && !p.closedAt && !p.appliedAt && !postingFilterReason(p, profile));
+  const appliedPostings = allPostings.filter((p) => !p.deletedAt && !p.closedAt && !!p.appliedAt && !postingFilterReason(p, profile)).length;
+  const archivedPostings = allPostings.filter((p) => !!p.deletedAt || !!p.closedAt).length;
 
   // CONTRACT: every stat returned by this endpoint MUST be derived from `activeOnly`
   // (or a subset of it via `activeIds`). Never compute a stat from `allPostings` directly,
@@ -59,7 +42,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
   const activeIds = new Set(activeOnly.map((p) => p.id));
 
   const reports = await db
-    .select()
+    .select({ jobPostingId: matchReportsTable.jobPostingId, fitScore: matchReportsTable.fitScore, updatedAt: matchReportsTable.updatedAt })
     .from(matchReportsTable)
     .where(eq(matchReportsTable.userId, userId));
 
@@ -72,16 +55,22 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
 
   // Strong matches: active jobs scoring >= 85
   const strongMatches = activeReports.filter((r) => (r.fitScore ?? 0) >= 85).length;
-  const activePostingById = new Map(activeOnly.map((posting) => [posting.id, posting]));
-  const topMatches = activeReports
+  const topIds = activeReports
     .sort((a, b) => (b.fitScore ?? -1) - (a.fitScore ?? -1))
-    .slice(0, 5)
+    .slice(0, 5).map((report) => report.jobPostingId);
+  const topPostings = topIds.length ? await db.select().from(jobPostingsTable)
+    .where(and(eq(jobPostingsTable.userId, userId), inArray(jobPostingsTable.id, topIds))) : [];
+  const topReports = topIds.length ? await db.select().from(matchReportsTable)
+    .where(and(eq(matchReportsTable.userId, userId), inArray(matchReportsTable.jobPostingId, topIds))) : [];
+  const activePostingById = new Map(topPostings.map((posting) => [posting.id, posting]));
+  const topMatches = topReports
+    .sort((a, b) => (b.fitScore ?? -1) - (a.fitScore ?? -1))
     .flatMap((report) => {
       const posting = activePostingById.get(report.jobPostingId);
       return posting ? [{
         posting,
         report,
-        scoreStatus: profile?.updatedAt && profile.updatedAt > report.updatedAt
+        scoreStatus: profile?.scoringUpdatedAt && profile.scoringUpdatedAt > report.updatedAt
           ? "needs_reanalysis" as const
           : "current" as const,
       }] : [];
@@ -90,6 +79,8 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
   res.json(
     GetDashboardSummaryResponse.parse({
       totalPostings,
+      appliedPostings,
+      archivedPostings,
       avgFitScore,
       topMatches,
       strongMatches,

@@ -9,6 +9,7 @@ import { filteredEmailsTable } from "@workspace/db";
 import { loadResponseHistory } from "../lib/responseHistory";
 import { evaluateResponses } from "../lib/responseLearning";
 import { logger } from "../lib/logger";
+import { encryptMailboxPassword, decryptMailboxPassword, isEncryptedMailboxPassword, validateMailboxTarget } from "../lib/mailboxCredentials";
 
 /** Extracts the display name from a raw "From" header value. */
 function parseSenderName(sender: string): string {
@@ -29,6 +30,11 @@ router.get("/imap/status", requireAuth, async (req, res): Promise<void> => {
   if (!conn) {
     res.json({ connected: false });
     return;
+  }
+
+  if (!isEncryptedMailboxPassword(conn.password)) {
+    await db.update(imapConnectionsTable).set({ password: encryptMailboxPassword(conn.password, userId) })
+      .where(eq(imapConnectionsTable.userId, userId));
   }
 
   res.json({
@@ -66,10 +72,10 @@ router.post("/imap/connect", requireAuth, async (req, res): Promise<void> => {
 
   await db
     .insert(imapConnectionsTable)
-    .values({ userId, host, port, username, password, tls: tls ?? true })
+    .values({ userId, host, port, username, password: encryptMailboxPassword(password, userId), tls: tls ?? true })
     .onConflictDoUpdate({
       target: imapConnectionsTable.userId,
-      set: { host, port, username, password, tls: tls ?? true, updatedAt: new Date() },
+      set: { host, port, username, password: encryptMailboxPassword(password, userId), tls: tls ?? true, updatedAt: new Date() },
     });
 
   res.json({ connected: true, host, port, username, tls: tls ?? true });
@@ -95,13 +101,19 @@ router.post("/imap/sync", requireAuth, async (req, res): Promise<void> => {
   }
 
   try {
+    await validateMailboxTarget(conn.host, conn.port, conn.tls);
+    const password = decryptMailboxPassword(conn.password, userId);
+    if (!isEncryptedMailboxPassword(conn.password)) {
+      await db.update(imapConnectionsTable).set({ password: encryptMailboxPassword(password, userId) })
+        .where(eq(imapConnectionsTable.userId, userId));
+    }
     const [userProfile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, userId));
     const filterCriteria = userProfile?.emailFilterSettings ?? undefined;
     const emails = await fetchImapJobEmails({
       host: conn.host,
       port: conn.port,
       username: conn.username,
-      password: conn.password,
+      password,
       tls: conn.tls,
     }, filterCriteria);
 
@@ -125,11 +137,6 @@ router.post("/imap/sync", requireAuth, async (req, res): Promise<void> => {
 
         const seenKey = `${email.messageId}:${i}`;
         if (processedKeys.has(seenKey)) continue;
-
-        await db
-          .insert(gmailSeenKeysTable)
-          .values({ userId, gmailKey: seenKey })
-          .onConflictDoNothing();
 
         const title = listing.title || email.subject.slice(0, 200) || "Job Opportunity";
         const company = listing.company || email.sender.replace(/<[^>]+>/g, "").trim().split("@")[0] || "Unknown";

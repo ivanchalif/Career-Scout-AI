@@ -32,7 +32,7 @@ export async function isFuzzyDuplicate(
   } : { isDuplicate: false };
 }
 
-async function removeConfirmedDuplicates(userId: string, anchorId?: number): Promise<number> {
+export async function previewConfirmedDuplicates(userId: string, anchorId?: number): Promise<number[]> {
   const postings = await db.select().from(jobPostingsTable).where(eq(jobPostingsTable.userId, userId));
   const exceptions = await loadDuplicateExceptions(userId);
   const anchors = anchorId == null
@@ -43,6 +43,11 @@ async function removeConfirmedDuplicates(userId: string, anchorId?: number): Pro
     && anchors.some((anchor) => anchor.id !== p.id
       && !exceptions.has(pairKey(anchor.id, p.id))
       && compareJobs(p, anchor).kind === "duplicate")).map((p) => p.id);
+  return ids;
+}
+
+async function removeConfirmedDuplicates(userId: string, anchorId?: number, allowedIds?: number[]): Promise<number> {
+  const ids = (await previewConfirmedDuplicates(userId, anchorId)).filter((id) => !allowedIds || allowedIds.includes(id));
   if (!ids.length) return 0;
   const removed = await db.update(jobPostingsTable).set({ deletedAt: new Date(), deletedBy: "sweep" })
     .where(and(eq(jobPostingsTable.userId, userId), inArray(jobPostingsTable.id, ids),
@@ -52,8 +57,8 @@ async function removeConfirmedDuplicates(userId: string, anchorId?: number): Pro
   return removed.length;
 }
 
-export async function runDedupSweep(userId: string): Promise<number> {
-  return removeConfirmedDuplicates(userId);
+export async function runDedupSweep(userId: string, selectedIds?: number[]): Promise<number> {
+  return removeConfirmedDuplicates(userId, undefined, selectedIds);
 }
 export async function sweepDuplicatesOf(userId: string, _title: string, _company: string, excludeId: number): Promise<number> {
   return removeConfirmedDuplicates(userId, excludeId);

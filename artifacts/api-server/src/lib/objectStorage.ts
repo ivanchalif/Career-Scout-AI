@@ -185,6 +185,9 @@ export class ObjectStorageService {
     }
 
     const objectFile = await this.getObjectEntityFile(normalizedPath);
+    const { getObjectAclPolicy } = await import("./objectAcl");
+    const existing = await getObjectAclPolicy(objectFile);
+    if (existing && existing.owner !== aclPolicy.owner) throw new Error("Object is already owned by another account");
     await setObjectAclPolicy(objectFile, aclPolicy);
     return normalizedPath;
   }

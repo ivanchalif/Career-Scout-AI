@@ -56,7 +56,7 @@ describe("Gmail pipeline progress", () => {
     finalize = undefined;
     vi.mocked(db.select).mockImplementation(() => ({
       from: (table: unknown) => ({
-        where: async () => table === gmailSeenKeysTable ? [{ gmailKey: "seen:0" }] : [],
+        where: async () => table === gmailSeenKeysTable ? [{ gmailKey: "seen:complete" }] : [],
       }),
     }) as unknown as ReturnType<typeof db.select>);
     vi.mocked(db.insert).mockImplementation((table) => ({

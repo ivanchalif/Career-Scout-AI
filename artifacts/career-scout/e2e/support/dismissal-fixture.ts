@@ -22,7 +22,7 @@ export const test = base.extend<{ dismissal: DismissalFixture }>({
       if (url.origin !== "http://127.0.0.1:5189") return route.abort();
       if (!url.pathname.startsWith("/api/")) return route.continue();
       const response = await fixture.respond(url.pathname, request.method(), request.postDataJSON(),
-        request.headers().authorization);
+        request.headers().authorization, url.searchParams);
       if (!response) {
         unhandled.push(`${request.method()} ${url.pathname}`);
         return route.fulfill({ status: 501, json: { error: "Unhandled test API request" } });
@@ -81,7 +81,7 @@ class DismissalFixture {
     this.held = { action, promise };
   }
 
-  async respond(path: string, method: string, body: Record<string, unknown> | null, authorization?: string) {
+  async respond(path: string, method: string, body: Record<string, unknown> | null, authorization?: string, searchParams?: URLSearchParams) {
     const json = (value: unknown, status = 200) => ({
       status, json: structuredClone(value),
     });
@@ -90,11 +90,14 @@ class DismissalFixture {
     }
     if (method === "GET") {
       switch (path) {
-        case "/api/postings": return json(this.item.posting.deletedAt ? [] : [this.item]);
+        case "/api/postings": return json(searchParams?.get("archived") === "true"
+          ? (this.item.posting.deletedAt ? [this.item] : [])
+          : (this.item.posting.deletedAt ? [] : [this.item]));
         case "/api/postings/deleted": return json(this.item.posting.deletedAt ? [this.item] : []);
         case `/api/postings/${this.id}`: return json(this.item);
         case "/api/dashboard/summary": return json({
-          totalPostings: this.item.posting.deletedAt ? 0 : 1, avgFitScore: 80,
+          totalPostings: this.item.posting.deletedAt ? 0 : 1,
+          appliedPostings: 0, archivedPostings: this.item.posting.deletedAt ? 1 : 0, avgFitScore: 80,
           topMatches: this.item.posting.deletedAt ? [] : [this.item], strongMatches: 1,
           hasProfile: true, gmailConnected: false,
         } satisfies DashboardSummary);
