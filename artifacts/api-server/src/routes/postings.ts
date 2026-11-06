@@ -26,7 +26,7 @@ import {
 import { requireAuth } from "../middlewares/requireAuth";
 import { scorePosting, scorePostingBackground, extractJobListings } from "../lib/scoringService";
 import { fetchSingleEmail } from "../lib/gmailClient";
-import { isFuzzyDuplicate, sweepDuplicatesOf, runDedupSweep, loadDuplicateExceptions, previewConfirmedDuplicates } from "../lib/dedup";
+import { isFuzzyDuplicate, runDedupSweep, loadDuplicateExceptions, previewConfirmedDuplicates } from "../lib/dedup";
 import { compareJobs, pairKey } from "../lib/duplicatePolicy";
 import { jobDuplicateExceptionsTable } from "@workspace/db";
 import { logger } from "../lib/logger";
@@ -165,6 +165,11 @@ router.post("/postings", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  const duplicate = await isFuzzyDuplicate(userId, parsed.data.title, parsed.data.company, { link: parsed.data.link });
+  if (duplicate.isDuplicate) {
+    res.status(409).json({ error: "This job already exists in your history (active, applied, or dismissed). Open the existing listing instead of adding another copy.", existingPostingId: duplicate.matchedId });
+    return;
+  }
   const [posting] = await db
     .insert(jobPostingsTable)
     .values({
@@ -188,20 +193,21 @@ router.get("/postings/deleted", requireAuth, async (req, res): Promise<void> => 
 router.get("/postings/near-duplicates", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId;
   const postings = await db.select().from(jobPostingsTable).where(and(
-    eq(jobPostingsTable.userId, userId), isNull(jobPostingsTable.deletedAt), isNull(jobPostingsTable.closedAt),
+    eq(jobPostingsTable.userId, userId),
   ));
   const exceptions = await loadDuplicateExceptions(userId);
   const seen = new Set<number>();
   const results: unknown[] = [];
-  const active = postings.filter((p) => !p.appliedAt);
-  const partners = [...postings.filter((p) => p.appliedAt), ...active];
+  const active = postings.filter((p) => !p.appliedAt && !p.deletedAt && !p.closedAt);
+  const partners = [...postings.filter((p) => p.appliedAt || p.deletedAt), ...active];
   for (const a of active) {
     if (seen.has(a.id)) continue;
     for (const b of partners) {
-      if (a.id === b.id || seen.has(b.id) || exceptions.has(pairKey(a.id, b.id))) continue;
+      if (a.id === b.id || (!b.appliedAt && !b.deletedAt && seen.has(b.id)) || exceptions.has(pairKey(a.id, b.id))) continue;
       const decision = compareJobs(a, b);
       if (decision.kind === "distinct") continue;
-      seen.add(a.id); seen.add(b.id);
+      seen.add(a.id);
+      if (!b.appliedAt && !b.deletedAt) seen.add(b.id);
       const row: Record<string, unknown> = { id1: a.id, id2: b.id, evidence: decision.evidence, confidence: decision.kind };
       for (const [posting, suffix] of [[a, "1"], [b, "2"]] as const) {
         Object.assign(row, {
@@ -307,7 +313,7 @@ router.post("/postings/import", requireAuth, upload.single("file"), async (req, 
   const existingPostings = await db
     .select({ title: jobPostingsTable.title, company: jobPostingsTable.company, link: jobPostingsTable.link })
     .from(jobPostingsTable)
-    .where(and(eq(jobPostingsTable.userId, userId), isNull(jobPostingsTable.deletedAt)));
+    .where(eq(jobPostingsTable.userId, userId));
 
 
   let imported = 0;
@@ -630,11 +636,6 @@ router.delete("/postings/:id", requireAuth, async (req, res): Promise<void> => {
 
   res.sendStatus(204);
 
-  sweepDuplicatesOf(userId, posting.title, posting.company, posting.id).then((removed) => {
-    if (removed > 0) logger.info({ userId, postingId: posting.id, removed }, "auto-dedup: removed duplicates after delete");
-  }).catch((err) => {
-    logger.warn({ userId, postingId: posting.id, err }, "auto-dedup: sweep failed after delete");
-  });
 });
 
 router.patch("/postings/:id/applied", requireAuth, async (req, res): Promise<void> => {
@@ -665,13 +666,6 @@ router.patch("/postings/:id/applied", requireAuth, async (req, res): Promise<voi
 
   res.json({ id: updated.id, appliedAt: updated.appliedAt });
 
-  if (newAppliedAt !== null) {
-    sweepDuplicatesOf(userId, updated.title, updated.company, updated.id).then((removed) => {
-      if (removed > 0) logger.info({ userId, postingId: updated.id, removed }, "auto-dedup: removed duplicates after apply");
-    }).catch((err) => {
-      logger.warn({ userId, postingId: updated.id, err }, "auto-dedup: sweep failed after apply");
-    });
-  }
 });
 
 router.post("/postings/rescore-all", requireAuth, async (req, res): Promise<void> => {
@@ -840,7 +834,7 @@ router.post("/postings/backfill-links", requireAuth, async (req, res): Promise<v
   res.json({ updated, skipped });
 });
 
-// Soft-deletes a posting the user has confirmed is a duplicate, then sweeps
+// Soft-deletes only the posting the user has confirmed is a duplicate.
 // for any remaining siblings in the background (same as delete but intent is
 // recorded in server logs for future threshold tuning).
 router.post("/postings/:id/retry-link", requireAuth, async (req, res): Promise<void> => {
@@ -978,9 +972,6 @@ router.post("/postings/:id/flag-duplicate", requireAuth, async (req, res): Promi
     "postings: user flagged posting as duplicate",
   );
 
-  sweepDuplicatesOf(userId, updated.title, updated.company, id).catch((err) => {
-    logger.warn({ err, id }, "flag-duplicate: background sweep failed");
-  });
 
   res.status(204).end();
 });

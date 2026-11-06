@@ -984,7 +984,7 @@ export default function DashboardPage() {
           reset();
           toast({ title: "Job added", description: `"${data.title}" at ${data.company} added.` });
         },
-        onError: () => toast({ title: "Error", description: "Failed to add job posting.", variant: "destructive" }),
+        onError: (error) => toast({ title: "Job not added", description: error.data?.error ?? error.message, variant: "destructive" }),
       }
     );
   }

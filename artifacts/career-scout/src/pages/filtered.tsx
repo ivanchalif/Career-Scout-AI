@@ -1,4 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
+import { useAuth } from "@clerk/react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import {
   EyeOff, ExternalLink, Building2, Tag, Loader2,
@@ -9,6 +12,8 @@ import {
   useListPostings,
   useListFilteredEmails,
   useListEmailSyncLog,
+  getListPostingsQueryKey,
+  getGetDashboardSummaryQueryKey,
 } from "@workspace/api-client-react";
 import type { FilteredEmailReason } from "@workspace/api-client-react";
 import Layout from "@/components/layout";
@@ -193,6 +198,29 @@ function EmptyState({ icon: Icon, title, sub }: { icon: React.ElementType; title
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function FilteredPage() {
+  const { getToken } = useAuth();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [savingDistinct, setSavingDistinct] = useState<string | null>(null);
+  async function markDistinct(postingId: number, otherPostingId: number) {
+    setSavingDistinct(`${postingId}:${otherPostingId}`);
+    try {
+      const token = await getToken();
+      const response = await fetch("/api/postings/not-duplicates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ postingId, otherPostingId }),
+      });
+      if (!response.ok) throw new Error("Could not save this choice. Please try again.");
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: getListPostingsQueryKey() }),
+        qc.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() }),
+      ]);
+      toast({ title: "Marked as distinct", description: "This comparison will no longer hide the job. Other filters or matching history may still apply." });
+    } catch (error) {
+      toast({ title: "Choice not saved", description: error instanceof Error ? error.message : "Please try again.", variant: "destructive" });
+    } finally { setSavingDistinct(null); }
+  }
   const [tab, setTab] = useState<Tab>("suppressed");
 
   // ── Suppressed tab filters ────
@@ -237,6 +265,7 @@ export default function FilteredPage() {
         if (suppReason === "title" && !filterReason?.byTitle) return false;
         if (suppReason === "workday" && !filterReason?.byAts) return false;
         if (suppReason === "location" && !filterReason?.byLocation) return false;
+        if (suppReason === "duplicate" && !filterReason?.byDuplicate) return false;
         if (q) {
           const haystack = `${posting.title} ${posting.company} ${posting.location ?? ""}`.toLowerCase();
           if (!haystack.includes(q)) return false;
@@ -333,6 +362,7 @@ export default function FilteredPage() {
                 { value: "title", label: "Title keyword" },
                 { value: "workday", label: "Workday ATS" },
                 { value: "location", label: "Location / remote" },
+                { value: "duplicate", label: "Previously applied / dismissed" },
               ]}
             />
 
@@ -390,6 +420,23 @@ export default function FilteredPage() {
                         </div>
                         {filterReason && (
                           <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                            {filterReason.duplicateMatches?.map((match) => (
+                              <div key={match.id} className="flex flex-wrap items-center gap-2 text-xs">
+                                <span className="sem-badge" data-tone="hidden">
+                                  Same posting as {match.status} job: {match.title} at {match.company}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="text-indigo-300 underline underline-offset-2 disabled:opacity-50"
+                                  aria-label={`Not a duplicate of ${match.title} at ${match.company}, history record ${match.id}`}
+                                  disabled={savingDistinct !== null}
+                                  aria-busy={savingDistinct === `${posting.id}:${match.id}`}
+                                  onClick={() => markDistinct(posting.id, match.id)}
+                                >
+                                  {savingDistinct === `${posting.id}:${match.id}` ? "Saving…" : "Not a duplicate"}
+                                </button>
+                              </div>
+                            ))}
                             {filterReason.byLocation && (
                               <span className="sem-badge" data-tone="hidden" title="Turn off SF Bay Area or fully remote in Dashboard filters to show this job again.">
                                 {filterReason.locationReason ?? "Location / remote"}

@@ -26,6 +26,7 @@ import type {
   DuplicateCleanupPreview,
   DuplicateCleanupResult,
   DuplicateCleanupSelection,
+  DuplicatePostingConflict,
   EmailFilterSettings,
   EmailSyncLogItem,
   ErrorEnvelope,
@@ -609,7 +610,7 @@ export const createPosting = async (
 };
 
 export const getCreatePostingMutationOptions = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<DuplicatePostingConflict>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -650,13 +651,13 @@ export type CreatePostingMutationResult = NonNullable<
   Awaited<ReturnType<typeof createPosting>>
 >;
 export type CreatePostingMutationBody = BodyType<CreatePostingBody>;
-export type CreatePostingMutationError = ErrorType<unknown>;
+export type CreatePostingMutationError = ErrorType<DuplicatePostingConflict>;
 
 /**
  * @summary Create a job posting
  */
 export const useCreatePosting = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<DuplicatePostingConflict>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<

@@ -1,8 +1,40 @@
 import { describe, expect, it } from "vitest";
-import { atsIdentity, compareJobs, individualJobUrl, normalizeEmployer, normalizeTitle, pairKey } from "../duplicatePolicy";
+import { atsIdentity, canonicalizeJobUrl, compareJobs, individualJobUrl, normalizeEmployer, normalizeTitle, pairKey } from "../duplicatePolicy";
 
 const a = { title: "Senior Product Manager (AI)", company: "Acme Technologies, Inc.", link: "https://jobs.lever.co/acme/req-1", location: "San Francisco, CA" };
 describe("duplicate evidence", () => {
+  it("unwraps LinkedIn login redirects and ignores email tracking", () => {
+    const publicUrl = "https://www.linkedin.com/jobs/view/4485526932/";
+    const wrapper = `https://www.linkedin.com/uas/login?session_redirect=${encodeURIComponent(`${publicUrl}?trackingId=first`)}&skipRedirect=true`;
+    const other = `https://www.linkedin.com/ssr-login/passwordless-email-login?session_redirect=${encodeURIComponent(`${publicUrl}?trackingId=second`)}&otpToken=not-a-real-token`;
+    expect(canonicalizeJobUrl(wrapper)).toBe("https://linkedin.com/jobs/view/4485526932");
+    expect(compareJobs({ ...a, link: wrapper }, { ...a, link: other }).kind).toBe("duplicate");
+    expect(compareJobs({ ...a, link: wrapper }, { ...a, link: publicUrl }).kind).toBe("duplicate");
+  });
+  it.each([
+    "https://evil.example/jobs/view/4485526932",
+    "https://linkedin.com.evil.example/jobs/view/4485526932",
+    "https://user:pass@linkedin.com/jobs/view/4485526932",
+    "javascript:alert(1)",
+  ])("does not trust unsafe or foreign LinkedIn redirect targets: %s", (target) => {
+    const link = `https://www.linkedin.com/uas/login?session_redirect=${encodeURIComponent(target)}`;
+    expect(individualJobUrl(link)).toBeNull();
+  });
+  it("recognizes stable Jobright IDs despite changing impression IDs", () => {
+    const link = "https://jobright.ai/jobs/info/6ac43d34064da25272e12265";
+    expect(compareJobs({ ...a, link: `${link}?imp_id=first&utm_source=email` },
+      { ...a, link: `${link}?imp_id=second&utm_source=another` }).kind).toBe("duplicate");
+  });
+  it.each([
+    ["https://linkedin.com/jobs/view/123", "https://linkedin.com/jobs/view/456"],
+    ["https://jobright.ai/jobs/info/abc", "https://jobright.ai/jobs/info/def"],
+  ])("preserves distinct provider job IDs even with matching text", (first, second) => {
+    expect(compareJobs({ ...a, link: first }, { ...a, link: second }).kind).toBe("distinct");
+  });
+  it("preserves functional job identifiers on unknown providers", () => {
+    expect(compareJobs({ ...a, link: "https://example.org/jobs?jobId=123" },
+      { ...a, link: "https://example.org/jobs?jobId=456" }).kind).not.toBe("duplicate");
+  });
   it("rejects the real Uber/Cultura false positive", () => {
     expect(compareJobs(
       { title: "Sr Product Manager - Uber Parcel", company: "Uber Technologies, Inc." },

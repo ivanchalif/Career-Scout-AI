@@ -45,7 +45,8 @@ test("dismissal prompt is persistent and mounted outside routes", async () => {
   assert.match(dialog, /undoToken: token, reason: kind/);
   assert.match(dialog, /setToken\(result\.undoToken \|\| token\)/);
   assert.match(dialog, /undoToken: token \}/);
-  assert.match(app, /<DismissalDialogProvider>\s*<Switch>/);
+  // Page-loading boundaries may sit between the persistent provider and routes.
+  assert.match(app, /<DismissalDialogProvider>[\s\S]*?<Switch>[\s\S]*?<\/Switch>[\s\S]*?<\/DismissalDialogProvider>/);
   assert.match(hook, /showDismissalDialog\(\{ id, undoToken: res\.undoToken/);
   assert.doesNotMatch(hook, /DismissToastBody|TOAST_MS/);
 });

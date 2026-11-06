@@ -70,12 +70,13 @@ describe("identity-based imports and cleanup", () => {
     expect(await runDedupSweep("owner")).toBe(1);
     expect(state.conditions.find((c) => c.op === "in").value).toEqual([4]);
   });
-  it("preserves the grace period and tokenized reversible dismissals", async () => {
+  it("allows explicit cleanup of recent copies but protects tokenized reversible dismissals", async () => {
     state.postings = [
       posting(1, { createdAt: new Date() }), posting(2, { dismissalUndoToken: "undo" }),
       posting(3, { appliedAt: new Date() }),
     ];
-    expect(await runDedupSweep("owner")).toBe(0);
+    expect(await runDedupSweep("owner")).toBe(1);
+    expect(state.conditions.find((c) => c.op === "in").value).toEqual([1]);
   });
   it("action-triggered cleanup anchors to the exact actioned posting", async () => {
     state.postings = [posting(1), posting(2, { appliedAt: new Date() }), posting(3, { link: "https://jobs.lever.co/acme/req-3", appliedAt: new Date() })];

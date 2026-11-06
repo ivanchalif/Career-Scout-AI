@@ -3,6 +3,7 @@ import { db, jobPostingsTable as p, matchReportsTable as r, jobPostingFeedbackTa
 import { postingFilterReason } from "./postingFilters";
 import { rankCandidate, buildDiscoveryCriteria } from "./onlineDiscovery";
 import { scheduleJobLinkChecks, isConfirmedClosedAvailability } from "./jobLinkHealth";
+import { loadHistoricalDuplicateMatches } from "./dedup";
 
 export const POSTING_SORTS = ["recommended", "date-desc", "date-asc", "score-desc", "score-asc", "title-asc", "title-desc", "company-asc", "company-desc"] as const;
 export type PostingListOptions = {
@@ -16,6 +17,13 @@ export type PostingListOptions = {
  */
 export async function listPostingPage(userId: string, options: PostingListOptions) {
   const [profile] = await db.select().from(userProfilesTable).where(eq(userProfilesTable.userId, userId));
+  const duplicates: Awaited<ReturnType<typeof loadHistoricalDuplicateMatches>> =
+    options.archived ? new Map() : await loadHistoricalDuplicateMatches(userId);
+  const filterReason = (posting: Parameters<typeof postingFilterReason>[0] & { id: number }) =>
+    postingFilterReason(posting, profile, (duplicates.get(posting.id) ?? []).map((anchor) => ({
+      id: anchor.id, title: anchor.title, company: anchor.company,
+      status: anchor.deletedAt ? "dismissed" as const : "applied" as const,
+    })));
   const conditions = [eq(p.userId, userId)];
   if (options.archived) conditions.push(or(isNotNull(p.deletedAt), isNotNull(p.closedAt))!);
   else conditions.push(isNull(p.deletedAt), isNull(p.closedAt));
@@ -50,7 +58,7 @@ export async function listPostingPage(userId: string, options: PostingListOption
   }
   const visible = candidates.filter((candidate) => !confirmedClosed.some((closed) => closed.id === candidate.id));
   const eligible = options.archived ? visible : visible.filter((posting) =>
-    options.hidden ? !!postingFilterReason(posting, profile) : !postingFilterReason(posting, profile));
+    options.hidden ? !!filterReason(posting) : !filterReason(posting));
   if (!options.archived && !options.hidden) {
     scheduleJobLinkChecks(visible.map((posting) => ({
       id: posting.id, userId, link: posting.link, closedAt: null, deletedAt: null,
@@ -84,7 +92,7 @@ export async function listPostingPage(userId: string, options: PostingListOption
       report: options.compact && report ? { ...report, reasoning: null, missingSkills: [], matchedSkills: report.matchedSkills.slice(0, 4) } : report,
       feedback: feedback?.kind ? feedback : null, sourceName, onlineMatchScore, scoreStatus,
       analysisState: scoring?.status ?? (report?.fitScore == null ? "queued" : "completed"),
-      ...(options.hidden ? { filterReason: postingFilterReason(posting, profile) } : {}),
+      ...(options.hidden ? { filterReason: filterReason(posting) } : {}),
     }];
   });
 }

@@ -5,6 +5,8 @@ import { GetDashboardSummaryResponse } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
 import { postingFilterReason } from "../lib/postingFilters";
 import { and, inArray } from "drizzle-orm";
+import { historicalDuplicateMatches } from "../lib/duplicateVisibility";
+import { loadDuplicateExceptions } from "../lib/dedup";
 
 const router: IRouter = Router();
 
@@ -31,7 +33,9 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     .where(eq(jobPostingsTable.userId, userId));
 
   // Mirror the same filter chain the list endpoint uses
-  const activeOnly = allPostings.filter((p) => !p.deletedAt && !p.closedAt && !p.appliedAt && !postingFilterReason(p, profile));
+  const duplicates = historicalDuplicateMatches(allPostings, await loadDuplicateExceptions(userId));
+  const activeOnly = allPostings.filter((p) => !p.deletedAt && !p.closedAt && !p.appliedAt
+    && !duplicates.has(p.id) && !postingFilterReason(p, profile));
   const appliedPostings = allPostings.filter((p) => !p.deletedAt && !p.closedAt && !!p.appliedAt && !postingFilterReason(p, profile)).length;
   const archivedPostings = allPostings.filter((p) => !!p.deletedAt || !!p.closedAt).length;
 

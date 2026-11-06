@@ -50,6 +50,22 @@ beforeAll(async () => {
 beforeEach(() => { state.postings = []; state.exceptions = []; state.writes = 0; });
 
 describe("pair-specific duplicate review API", () => {
+  it("includes dismissed history in review without modifying it", async () => {
+    state.postings = [posting(1), posting(2, { deletedAt: new Date() })];
+    const response = await request(app).get("/api/postings/near-duplicates").expect(200);
+    expect(response.body[0]).toMatchObject({ id1: 1, id2: 2, confidence: "review" });
+    expect(response.body[0].deleted_at2).toBeTruthy();
+    expect(state.writes).toBe(0);
+  });
+  it("blocks manual copies of applied/dismissed provider IDs with an explanatory conflict", async () => {
+    state.postings = [posting(2, { deletedAt: new Date(), link: "https://jobright.ai/jobs/info/abc?imp_id=old" })];
+    const response = await request(app).post("/api/postings").send({
+      title: "Product Manager", company: "Acme Technologies",
+      link: "https://jobright.ai/jobs/info/abc?imp_id=new", fullDescription: "Description",
+    }).expect(409);
+    expect(response.body.existingPostingId).toBe(2);
+    expect(state.writes).toBe(0);
+  });
   it("never offers the reported Uber/Cultura pair", async () => {
     state.postings = [
       posting(1, { title: "Sr Product Manager - Uber Parcel", company: "Uber Technologies, Inc." }),

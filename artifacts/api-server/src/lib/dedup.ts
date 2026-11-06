@@ -1,16 +1,28 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db, jobPostingsTable, jobDuplicateExceptionsTable } from "@workspace/db";
 import { compareJobs, normalizeTitle, pairKey, type DuplicateCandidate } from "./duplicatePolicy";
+import { historicalDuplicateMatches } from "./duplicateVisibility";
 export { canonicalizeJobUrl } from "./duplicatePolicy";
 /** Compatibility for discovery retrieval keys; not an automatic duplicate test. */
 export const normalizeFuzzy = normalizeTitle;
 
-const SWEEP_GRACE_PERIOD_MS = 4 * 60 * 60 * 1000;
 export type DuplicatePosting = typeof jobPostingsTable.$inferSelect;
 
 export async function loadDuplicateExceptions(userId: string): Promise<Set<string>> {
   const rows = await db.select().from(jobDuplicateExceptionsTable).where(eq(jobDuplicateExceptionsTable.userId, userId));
   return new Set(rows.map((row) => pairKey(row.postingIdLow, row.postingIdHigh)));
+}
+
+export async function loadHistoricalDuplicateMatches(userId: string) {
+  const [postings, exceptions] = await Promise.all([
+    db.select({
+      id: jobPostingsTable.id, title: jobPostingsTable.title, company: jobPostingsTable.company,
+      link: jobPostingsTable.link, appliedAt: jobPostingsTable.appliedAt,
+      deletedAt: jobPostingsTable.deletedAt, closedAt: jobPostingsTable.closedAt,
+    }).from(jobPostingsTable).where(eq(jobPostingsTable.userId, userId)),
+    loadDuplicateExceptions(userId),
+  ]);
+  return historicalDuplicateMatches(postings, exceptions);
 }
 
 /** Kept as a compatibility name; text similarity NEVER blocks an import. */
@@ -39,7 +51,6 @@ export async function previewConfirmedDuplicates(userId: string, anchorId?: numb
     ? postings.filter((p) => p.deletedAt || p.appliedAt)
     : postings.filter((p) => p.id === anchorId);
   const ids = postings.filter((p) => !p.deletedAt && !p.closedAt && !p.appliedAt && !p.dismissalUndoToken
-    && p.createdAt.getTime() < Date.now() - SWEEP_GRACE_PERIOD_MS
     && anchors.some((anchor) => anchor.id !== p.id
       && !exceptions.has(pairKey(anchor.id, p.id))
       && compareJobs(p, anchor).kind === "duplicate")).map((p) => p.id);

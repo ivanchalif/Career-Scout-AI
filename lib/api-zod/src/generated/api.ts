@@ -288,6 +288,17 @@ export const ListPostingsResponseItem = zod.object({
     .describe("Profile match score used by online discovery"),
   filterReason: zod
     .object({
+      byDuplicate: zod.boolean().optional(),
+      duplicateMatches: zod
+        .array(
+          zod.object({
+            id: zod.number(),
+            title: zod.string(),
+            company: zod.string(),
+            status: zod.enum(["applied", "dismissed"]),
+          }),
+        )
+        .optional(),
       byLocation: zod.boolean().optional(),
       locationReason: zod.string().nullish(),
       byAts: zod
@@ -440,6 +451,17 @@ export const ListDeletedPostingsResponseItem = zod.object({
     .describe("Profile match score used by online discovery"),
   filterReason: zod
     .object({
+      byDuplicate: zod.boolean().optional(),
+      duplicateMatches: zod
+        .array(
+          zod.object({
+            id: zod.number(),
+            title: zod.string(),
+            company: zod.string(),
+            status: zod.enum(["applied", "dismissed"]),
+          }),
+        )
+        .optional(),
       byLocation: zod.boolean().optional(),
       locationReason: zod.string().nullish(),
       byAts: zod
@@ -584,6 +606,17 @@ export const GetPostingResponse = zod.object({
     .describe("Profile match score used by online discovery"),
   filterReason: zod
     .object({
+      byDuplicate: zod.boolean().optional(),
+      duplicateMatches: zod
+        .array(
+          zod.object({
+            id: zod.number(),
+            title: zod.string(),
+            company: zod.string(),
+            status: zod.enum(["applied", "dismissed"]),
+          }),
+        )
+        .optional(),
       byLocation: zod.boolean().optional(),
       locationReason: zod.string().nullish(),
       byAts: zod
@@ -861,6 +894,17 @@ export const UndoPostingDismissalResponse = zod.object({
     .describe("Profile match score used by online discovery"),
   filterReason: zod
     .object({
+      byDuplicate: zod.boolean().optional(),
+      duplicateMatches: zod
+        .array(
+          zod.object({
+            id: zod.number(),
+            title: zod.string(),
+            company: zod.string(),
+            status: zod.enum(["applied", "dismissed"]),
+          }),
+        )
+        .optional(),
       byLocation: zod.boolean().optional(),
       locationReason: zod.string().nullish(),
       byAts: zod
@@ -1762,6 +1806,17 @@ export const GetDashboardSummaryResponse = zod.object({
         .describe("Profile match score used by online discovery"),
       filterReason: zod
         .object({
+          byDuplicate: zod.boolean().optional(),
+          duplicateMatches: zod
+            .array(
+              zod.object({
+                id: zod.number(),
+                title: zod.string(),
+                company: zod.string(),
+                status: zod.enum(["applied", "dismissed"]),
+              }),
+            )
+            .optional(),
           byLocation: zod.boolean().optional(),
           locationReason: zod.string().nullish(),
           byAts: zod

@@ -247,9 +247,6 @@ router.post("/gmail/reprocess", requireAuth, async (req: Request, res: Response)
       const title = listing.title || email.subject.slice(0, 200) || "Job Opportunity";
       const company = listing.company || extractSender(email.sender);
 
-      const { isDuplicate } = await isFuzzyDuplicate(userId, title, company, { link: listing.url });
-      if (isDuplicate) continue;
-
       let fullDescription = listing.description;
       let resolvedUrl = listing.url;
       let closureFields: ReturnType<typeof missingJobFields> = {};
@@ -263,6 +260,10 @@ router.post("/gmail/reprocess", requireAuth, async (req: Request, res: Response)
           }
         }
       }
+
+      // Use the resolved identity, matching scheduled Gmail and online imports.
+      const { isDuplicate } = await isFuzzyDuplicate(userId, title, company, { link: resolvedUrl });
+      if (isDuplicate) continue;
 
       // Check blocked body keywords
       if (blockedKeywords.length > 0) {

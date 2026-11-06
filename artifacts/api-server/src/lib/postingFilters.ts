@@ -5,9 +5,11 @@ export type PostingVisibility = {
   companyFilterSettings?: { mode: string; companies: string[]; excludeWorkday?: boolean; bayAreaNonRemoteOnly?: boolean } | null;
   titleExcludeKeywords?: string[] | null;
 };
+export type DuplicateFilterMatch = { id: number; title: string; company: string; status: "applied" | "dismissed" };
 export function postingFilterReason(
   posting: { title: string; company: string; link?: string | null; location?: string | null; remoteType?: string | null },
   profile?: PostingVisibility | null,
+  duplicateMatches: DuplicateFilterMatch[] = [],
 ) {
   const settings = profile?.companyFilterSettings;
   const matchedCompany = settings?.companies.find((entry) =>
@@ -17,8 +19,9 @@ export function postingFilterReason(
   const titleReasons = (profile?.titleExcludeKeywords ?? []).filter((keyword) => posting.title.toLowerCase().includes(keyword.toLowerCase()));
   const locationReason = bayAreaFilterReason(posting, settings);
   const byAts = isHiddenByWorkday(posting, settings);
-  if (!companyReason && !titleReasons.length && !locationReason && !byAts) return null;
+  if (!companyReason && !titleReasons.length && !locationReason && !byAts && !duplicateMatches.length) return null;
   return {
+    byDuplicate: duplicateMatches.length > 0, duplicateMatches,
     byLocation: !!locationReason, locationReason, byAts,
     byCompany: !!companyReason, companyReason, byTitle: !!titleReasons.length, titleReasons,
   };

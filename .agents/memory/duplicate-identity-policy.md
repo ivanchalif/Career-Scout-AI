@@ -20,3 +20,9 @@ Do not retroactively restore or remove historical jobs as part of deploying dupl
 **Why:** The approved implementation explicitly excluded automatic historical restoration or deletion.
 
 **How to apply:** Do not trigger a historical cleanup on page load or scheduled sync. Historical auditing/restoration requires a separate user decision; explicit cleanup and action-triggered matching must still require listing identity and preserve content.
+
+Hide confirmed copies of applied/dismissed jobs through reversible visibility filtering rather than automatically changing the copies' saved lifecycle.
+
+**Why:** The user explicitly approved fixing duplicate-filtering gaps “without changing history.” Secondary auto-deletions also make undoing the original action incomplete.
+
+**How to apply:** Keep the applied/dismissed records and their copies intact. Expose hidden copies and their evidence in Filtered; pair-specific exceptions or undoing the anchor action restore visibility. Only an explicit cleanup selection may change additional records.

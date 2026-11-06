@@ -21,6 +21,9 @@ vi.mock("../../middlewares/requireAuth", () => ({
     next();
   },
 }));
+vi.mock("../../lib/dedup", () => ({
+  loadDuplicateExceptions: vi.fn(async () => new Set<string>()),
+}));
 
 import { db } from "@workspace/db";
 
@@ -31,6 +34,22 @@ const chain = (rows: unknown[]) => ({
 });
 
 describe("GET /dashboard/summary", () => {
+  it("excludes historical copies from all Active summary statistics", async () => {
+    dbSelect
+      .mockReturnValueOnce(chain([]))
+      .mockReturnValueOnce(chain([]))
+      .mockReturnValueOnce(chain([
+        { id: 1, title: "Role", company: "Example", link: "https://jobright.ai/jobs/info/abc?imp_id=new" },
+        { id: 2, title: "Role", company: "Example", link: "https://jobright.ai/jobs/info/abc?imp_id=old", appliedAt: new Date() },
+        { id: 3, title: "Other", company: "Example", link: null },
+      ]))
+      .mockReturnValueOnce(chain([{ jobPostingId: 1, fitScore: 99 }]));
+    const { default: dashboardRouter } = await import("../dashboard");
+    const app = express();
+    app.use(dashboardRouter);
+    const response = await request(app).get("/dashboard/summary").expect(200);
+    expect(response.body).toMatchObject({ totalPostings: 1, appliedPostings: 1, strongMatches: 0, avgFitScore: null, topMatches: [] });
+  });
   it("returns the required topMatches contract field", async () => {
     const posting = {
       id: 7, userId: "test-user", title: "Product Manager", company: "Example",

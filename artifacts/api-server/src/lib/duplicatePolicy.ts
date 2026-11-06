@@ -8,7 +8,27 @@ export type DuplicateDecision = { kind: "distinct" | "review" | "duplicate"; evi
 
 export function canonicalizeJobUrl(rawUrl: string): string {
   try {
-    const url = new URL(rawUrl.trim());
+    let url = new URL(rawUrl.trim());
+    if (!["https:", "http:"].includes(url.protocol) || url.username || url.password) return "";
+    const isLinkedIn = (candidate: URL) => /^(?:www\.|m\.)?linkedin\.com$/i.test(candidate.hostname)
+      && ["http:", "https:"].includes(candidate.protocol) && !candidate.username && !candidate.password;
+    // Email links may wrap a public posting in a login URL. Never follow arbitrary
+    // redirects or retain login tokens in the identity of an individual job.
+    if (isLinkedIn(url)) {
+      for (let depth = 0; depth < 3; depth++) {
+        const id = url.pathname.match(/^\/jobs\/view\/(?:[^/]*-)?(\d+)\/?$/)?.[1];
+        if (id) return `https://linkedin.com/jobs/view/${id}`;
+        const redirect = url.searchParams.get("session_redirect");
+        if (!redirect) break;
+        const target = new URL(redirect, "https://linkedin.com");
+        if (!isLinkedIn(target)) break;
+        url = target;
+      }
+    }
+    if (/^(?:www\.)?jobright\.ai$/i.test(url.hostname)) {
+      const id = url.pathname.match(/^\/jobs\/info\/([a-z0-9-]+)\/?$/i)?.[1];
+      if (id) return `https://jobright.ai/jobs/info/${id}`;
+    }
     url.hash = "";
     for (const key of [...url.searchParams.keys()]) {
       if (/^(utm_|ref$|source$|src$|gclid$|fbclid$|trk$)/i.test(key)) url.searchParams.delete(key);
@@ -40,24 +60,40 @@ export function normalizeTitle(value: string): string {
 export function individualJobUrl(raw?: string | null): string | null {
   if (!raw) return null;
   try {
-    const url = new URL(raw);
+    const canonical = canonicalizeJobUrl(raw);
+    if (!canonical) return null;
+    const url = new URL(canonical);
     if (!["https:", "http:"].includes(url.protocol) || url.username || url.password) return null;
-    if (jobLinkKind(raw) === "listing") return null;
-    if (jobLinkKind(raw) === "job") return canonicalizeJobUrl(raw);
+    if (jobLinkKind(canonical) === "listing") return null;
+    if (jobLinkKind(canonical) === "job") return canonical;
     if (/\b(?:search|category|department|team|board|all-jobs)\b/i.test(url.pathname)) return null;
     const jobId = ["jobId", "job_id", "jid", "gh_jid", "requisitionId"].find((key) => url.searchParams.get(key));
-    if (jobId || /\/(?:jobs?|careers?|positions?|openings?|requisitions?)\/.+/i.test(url.pathname)) return canonicalizeJobUrl(raw);
+    if (jobId || /\/(?:jobs?|careers?|positions?|openings?|requisitions?)\/.+/i.test(url.pathname)) return canonical;
     return null;
   } catch { return null; }
 }
 
-/** IDs include platform and employer scope; unrelated employers may reuse IDs. */
+/** Indexable proof of identity, shared by import, dashboard and review paths. */
+export function jobIdentityKeys(posting: DuplicateCandidate): string[] {
+  const url = individualJobUrl(posting.link);
+  const ats = atsIdentity(posting.link);
+  return [
+    ...(url ? [`url:${url}`] : []),
+    ...(ats ? [`ats:${ats.scope}:${ats.id}`] : []),
+  ];
+}
+
+/** ATS IDs include employer scope; provider-wide job IDs include provider scope. */
 export function atsIdentity(raw?: string | null): { scope: string; id: string } | null {
   if (!raw) return null;
   try {
-    const url = new URL(raw);
+    const url = new URL(canonicalizeJobUrl(raw));
     const host = url.hostname.toLowerCase().replace(/^www\./, "");
     const parts = url.pathname.split("/").filter(Boolean);
+    if (host === "linkedin.com" && /^\/jobs\/view\/\d+$/.test(url.pathname))
+      return { scope: "linkedin", id: parts[2] };
+    if (host === "jobright.ai" && /^\/jobs\/info\/[^/]+$/.test(url.pathname))
+      return { scope: "jobright", id: parts[2] };
     if (/^jobs(?:\.eu)?\.lever\.co$/.test(host) && parts[0] && parts[1] && !["search", "apply"].includes(parts[1]))
       return { scope: `lever:${parts[0].toLowerCase()}`, id: parts[1] };
     if (/^(?:boards|job-boards)(?:\.eu)?\.greenhouse\.io$/.test(host) && parts[0] !== "embed") {

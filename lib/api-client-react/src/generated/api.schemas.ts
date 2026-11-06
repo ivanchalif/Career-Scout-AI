@@ -248,7 +248,24 @@ export interface PostingFeedback {
   createdAt: string;
 }
 
+export type DuplicateFilterMatchStatus =
+  (typeof DuplicateFilterMatchStatus)[keyof typeof DuplicateFilterMatchStatus];
+
+export const DuplicateFilterMatchStatus = {
+  applied: "applied",
+  dismissed: "dismissed",
+} as const;
+
+export interface DuplicateFilterMatch {
+  id: number;
+  title: string;
+  company: string;
+  status: DuplicateFilterMatchStatus;
+}
+
 export interface PostingFilterReason {
+  byDuplicate?: boolean;
+  duplicateMatches?: DuplicateFilterMatch[];
   byLocation?: boolean;
   /** @nullable */
   locationReason?: string | null;
@@ -362,6 +379,11 @@ export interface DismissalReasonInput {
 export interface DismissalUndoInput {
   /** @minLength 1 */
   undoToken: string;
+}
+
+export interface DuplicatePostingConflict {
+  error: string;
+  existingPostingId: number;
 }
 
 export type EmailSyncLogItemOutcome =

@@ -208,6 +208,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/JobPosting"
 
+        "409":
+          description: This individual job already exists in the user's history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DuplicatePostingConflict"
+
   /postings/deleted:
     get:
       operationId: listDeletedPostings
@@ -1586,6 +1593,12 @@ components:
     PostingFilterReason:
       type: object
       properties:
+        byDuplicate:
+          type: boolean
+        duplicateMatches:
+          type: array
+          items:
+            $ref: "#/components/schemas/DuplicateFilterMatch"
         byLocation:
           type: boolean
         locationReason:
@@ -1608,6 +1621,22 @@ components:
         - companyReason
         - byTitle
         - titleReasons
+
+    DuplicateFilterMatch:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        company: { type: string }
+        status: { type: string, enum: [applied, dismissed] }
+      required: [id, title, company, status]
+
+    DuplicatePostingConflict:
+      type: object
+      properties:
+        error: { type: string }
+        existingPostingId: { type: integer }
+      required: [error, existingPostingId]
 
     EmailSyncLogItem:
       type: object
