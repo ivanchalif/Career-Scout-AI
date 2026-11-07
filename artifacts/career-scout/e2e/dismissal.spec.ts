@@ -100,7 +100,7 @@ test("changing reasons twice then Undo restores the exact pre-dismissal feedback
   // that the newest response token, not the original prop, must be used.
   dismissal.rotateReasonToken = true;
   await page.goto("/dashboard");
-  await expect(page.getByTestId(`posting-more-like-this-${dismissal.id}`)).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId(`posting-flag-duplicate-${dismissal.id}`)).toBeVisible();
   await page.getByTestId(`posting-dismiss-${dismissal.id}`).click();
   const dialog = page.getByRole("dialog", { name: "Job dismissed" });
   const firstToken = dismissal.item.posting.dismissalUndoToken;
@@ -123,9 +123,9 @@ test("changing reasons twice then Undo restores the exact pre-dismissal feedback
   ]);
   expect(dismissal.item.feedback).toEqual(dismissal.originalFeedback);
   expect(dismissal.item.posting.deletedAt).toBeNull();
-  await expect(page.getByTestId(`posting-more-like-this-${dismissal.id}`)).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId(`posting-flag-duplicate-${dismissal.id}`)).toBeVisible();
   await page.reload();
-  await expect(page.getByTestId(`posting-more-like-this-${dismissal.id}`)).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId(`posting-flag-duplicate-${dismissal.id}`)).toBeVisible();
 });
 
 for (const priorFeedback of [false, true]) {

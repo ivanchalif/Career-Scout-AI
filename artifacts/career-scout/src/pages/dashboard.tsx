@@ -2219,7 +2219,7 @@ export default function DashboardPage() {
                         ? <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
                         : posting.appliedAt ? <Undo2 className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
                     </Button>
-                    <PostingDecisionControls postingId={posting.id} feedback={item.feedback} />
+                    <PostingDecisionControls postingId={posting.id} feedback={item.feedback} primaryAction="duplicate" />
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button type="button" variant="ghost" size="icon" className="w-9 h-9 sm:w-8 sm:h-8 text-muted-foreground" aria-label="More actions" data-testid={`posting-more-actions-${posting.id}`}>
