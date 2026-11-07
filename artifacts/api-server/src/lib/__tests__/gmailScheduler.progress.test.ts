@@ -209,7 +209,7 @@ describe("Gmail pipeline progress", () => {
     expect(result.synced).toBe(1);
     const imported = saved.find((entry) => entry.table === jobPostingsTable);
     expect(imported?.values).toMatchObject({
-      preferenceAdjustment: 8, preferenceReasons: ["Similar to jobs you applied for"],
+      preferenceAdjustment: 8, preferenceReasons: ["Similar to jobs you applied for (1 independent response)"],
     });
     expect(imported?.values).not.toHaveProperty("fitScore");
   });

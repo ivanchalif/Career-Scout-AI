@@ -11,6 +11,63 @@ const example = (kind: string, company = "Past Company", overrides: Partial<Resp
 });
 
 describe("learning from job responses", () => {
+  it("learns explicitly junior scope without excluding imports or penalizing senior and unknown scope", () => {
+    const history = [example("too_junior", "One", { title: "Junior Product Manager" }),
+      example("too_junior", "Two", { title: "Junior Product Manager" })];
+    const result = evaluateResponses({ ...candidate, title: "Junior Product Manager" }, history);
+    expect(result).toMatchObject({ adjustment: -12, suppress: false });
+    expect(result.reasons[0]).toContain("2 independent responses");
+    expect(result.reasons[0]).toContain("Too junior");
+    for (const title of ["Senior Product Manager", "Product Manager", "Director of Product Management",
+      "Senior Associate Product Manager", "Junior Software Engineer"]) {
+      expect(evaluateResponses({ ...candidate, title }, history)).toMatchObject({ adjustment: 0, suppress: false });
+    }
+  });
+
+  it("does not infer junior scope merely because a user dismissed an unqualified title", () => {
+    expect(evaluateResponses({ ...candidate, title: "Junior Product Manager" }, [
+      example("too_junior"), example("too_junior", "Two"),
+    ])).toMatchObject({ adjustment: 0, suppress: false });
+  });
+
+  it("requires related roles with the same unambiguous, explicit title domain", () => {
+    const history = [example("wrong_domain", "One", { title: "Product Manager Cybersecurity" }),
+      example("wrong_domain", "Two", { title: "Product Manager Cybersecurity" })];
+    const result = evaluateResponses({ ...candidate, title: "Product Manager Cybersecurity" }, history);
+    expect(result).toMatchObject({ adjustment: -12, suppress: false });
+    expect(result.reasons[0]).toContain("cybersecurity");
+    expect(result.reasons[0]).toContain("Wrong domain");
+    for (const title of ["Product Manager", "Product Manager Healthcare", "Cybersecurity Engineer",
+      "Product Manager Healthcare and Cybersecurity"]) {
+      expect(evaluateResponses({ ...candidate, title }, history)).toMatchObject({ adjustment: 0, suppress: false });
+    }
+    expect(evaluateResponses({ ...candidate, company: "Cybersecurity Corp" }, history).adjustment).toBe(0);
+  });
+
+  it("does not guess a domain from generic wrong-domain feedback or a company's name", () => {
+    expect(evaluateResponses({ ...candidate, title: "Fintech Product Manager" },
+      [example("wrong_domain", "Banking Company")]).adjustment).toBe(0);
+  });
+
+  it("keeps new reasons bounded, reversible, age-weighted and balanced by applications", () => {
+    const job = { ...candidate, title: "Junior Product Manager" };
+    const history = Array.from({ length: 10 }, (_, i) =>
+      example("too_junior", `Company ${i}`, { title: job.title }));
+    expect(evaluateResponses(job, history)).toMatchObject({ adjustment: -20, suppress: false });
+    expect(evaluateResponses(job, [history[0], { ...history[0], link: "https://mirror.example/jobs/1" }]).adjustment).toBe(-6);
+    expect(evaluateResponses(job, [example("dismissed", "One", { title: job.title })]).adjustment).toBe(0);
+    expect(evaluateResponses(job, [history[0], example("applied", "Positive", { title: job.title })]).adjustment).toBe(2);
+    expect(evaluateResponses(job, [{ ...history[0], at: "2020-01-01" }], Date.UTC(2026, 10, 1)).adjustment).toBe(-1);
+    expect(evaluateResponses(job, []).reasons).toEqual([]);
+  });
+
+  it("weights an explicit like more strongly than applying without double counting either example", () => {
+    const applied = evaluateResponses(candidate, [example("applied")]);
+    const liked = evaluateResponses(candidate, [example("more_like_this")]);
+    expect(liked.adjustment).toBeGreaterThan(applied.adjustment);
+    expect(applied.reasons[0]).toContain("1 independent response");
+  });
+
   it.each(["applied", "more_like_this"])("favors similar roles after %s, without changing AI fit", (kind) => {
     const result = evaluateResponses(candidate, [example(kind)]);
     expect(result.adjustment).toBeGreaterThan(0);

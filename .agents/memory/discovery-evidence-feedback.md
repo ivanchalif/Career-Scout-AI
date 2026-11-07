@@ -99,6 +99,12 @@ The user's location rule allows ANY SF Bay Area role (on-site, hybrid, or remote
 
 **How to apply:** Recognize Bay Area cities as well as regional labels; distinguish unknown location from unknown remote eligibility at a known outside location. Apply the reversible rule to existing and future postings and dashboard counts, and retain hidden jobs in Filtered with a reason. Do not delete jobs, infer location from headquarters, or treat a hybrid role's remote days as fully remote.
 
+“Too junior” and “Wrong domain” learning starts conservatively with explicit, unambiguous title evidence and ranking-only adjustments. Unknown scope/domain must remain neutral.
+
+**Why:** The user approved reason-specific learning without changing saved filters or history. Generic titles, employer names, and incidental description words cannot reliably establish the dismissed dimension.
+
+**How to apply:** Do not broaden these signals into automatic import exclusions or retrofit saved scores without separate approval. Explanations must distinguish import-time ranking adjustments from Profile fit and from current learning after Undo.
+
 Source investigations must distinguish poor relevance from broken retrieval, and investigate without consuming discovery progress or importing jobs. Review exact source-local changes before applying them.
 
 **Why:** "Low usefulness" is based on user responses, not necessarily a technical fault. The user requested a way to investigate and review/implement solutions; silently widening eligibility or inventing exclusions would undermine their saved preferences.

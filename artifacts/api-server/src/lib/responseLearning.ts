@@ -1,4 +1,5 @@
 import { compareJobs, individualJobUrl } from "./duplicatePolicy";
+import { explicitTitleDomain, juniorScope } from "./responseEvidence";
 
 export type ResponseExample = {
   kind: string;
@@ -79,6 +80,8 @@ export function evaluateResponses(
   const url = individualJobUrl(candidate.link ?? candidate.url);
   const location = knownLocation(candidate.location);
   const workday = isWorkdayListing(candidate.link ?? candidate.url);
+  const scope = juniorScope(candidate.title);
+  const domain = explicitTitleDomain(candidate.title);
   const votes = new Map<string, { positive: number; negative: number; strong: boolean; reason: string }>();
   let repeat = false;
 
@@ -114,6 +117,13 @@ export function evaluateResponses(
       negative = 8 * role * recency;
       strong = specificRole && role >= 0.8 && recency >= 0.5;
       reason = "Similar to jobs dismissed for their location";
+    } else if (example.kind === "too_junior" && scope && scope === juniorScope(example.title) && role >= 0.5) {
+      negative = 6 * role * recency;
+      // New inferred preferences rank only; they never discard an import.
+      reason = `Lower priority: ${scope} scope explicitly named in the title, like jobs you marked Too junior`;
+    } else if (example.kind === "wrong_domain" && domain && domain === explicitTitleDomain(example.title) && role >= 0.5) {
+      negative = 6 * role * recency;
+      reason = `Lower priority: ${domain} explicitly named in the title, like jobs you marked Wrong domain`;
     } else if (example.kind === "workday" && workday) {
       negative = 8 * recency;
       // Explicit ATS visibility settings keep these imports recoverable.
@@ -139,12 +149,17 @@ export function evaluateResponses(
   const adjustment = Math.round(Math.max(-20, Math.min(12, positive - negative)));
   const suppress = repeat || (negatives.filter((signal) => signal.strong).length >= 2
     && positives.length === 0 && adjustment <= -12);
+  const explanations = new Map<string, number>();
+  for (const signal of signals) {
+    explanations.set(signal.reason, (explanations.get(signal.reason) ?? 0) + 1);
+  }
   return {
     adjustment,
     suppress,
     reasons: [...new Set([
       ...(repeat ? ["Previously applied, dismissed, closed, or reported as a duplicate"] : []),
-      ...signals.map((signal) => signal.reason),
+      ...[...explanations].map(([reason, count]) =>
+        `${reason} (${count} independent ${count === 1 ? "response" : "responses"})`),
     ])],
   };
 }
