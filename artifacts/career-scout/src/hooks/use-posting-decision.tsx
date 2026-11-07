@@ -10,6 +10,7 @@ import {
   getGetDashboardSummaryQueryKey,
 } from "@workspace/api-client-react";
 import { toast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { useDismissalDialog } from "@/components/dismissal-dialog-provider";
 import { type DismissReason } from "@/lib/dismissal-reasons";
 import { removePostingFromCache } from "@/lib/posting-cache";
@@ -42,7 +43,20 @@ export function usePostingDecision() {
         removePostingFromCache(old, id),
       );
       refreshAll(qc, id);
-      showDismissalDialog({ id, undoToken: res.undoToken, reason: reason ?? null });
+      if (reason === "duplicate") {
+        toast({
+          title: "Flagged as duplicate",
+          description: "Moved to Deleted with reason: Duplicate.",
+          duration: 8000,
+          action: (
+            <ToastAction altText="Undo duplicate flag" onClick={() => void undoDismissal(id, res.undoToken)}>
+              Undo
+            </ToastAction>
+          ),
+        });
+      } else {
+        showDismissalDialog({ id, undoToken: res.undoToken, reason: reason ?? null });
+      }
       return true;
     } catch {
       toast({ title: "Could not dismiss job", description: "Please try again.", variant: "destructive" });

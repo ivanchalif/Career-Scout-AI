@@ -15,6 +15,12 @@ Dismissal choices must be uniform across entry points and ordered alphabetically
 
 **How to apply:** Keep additions in the shared list and API contract, preserve readable labels for stored feedback, and verify both initial dismissal and later reason changes accept each new option.
 
+Explicitly flagging a possible duplicate skips the dismissal reason dialog; save the Duplicate reason directly and offer a non-modal Undo confirmation. Ordinary dismissals retain the persistent reason dialog.
+
+**Why:** The user already confirmed the duplicate reason through that action and explicitly asked not to be prompted for it again.
+
+**How to apply:** Apply this exception in the shared dismissal flow so duplicate shortcuts remain consistent without losing reversible dismissal or error handling.
+
 For other interactive toasts, do not assume that increasing a Radix toast's duration alone pauses it.
 
 **Why:** Browser testing showed that a portaled menu moves focus outside the toast viewport. Radix can resume its previously captured remaining time despite a longer duration, closing both the toast and the open menu.
