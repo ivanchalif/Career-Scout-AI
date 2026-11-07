@@ -36,12 +36,13 @@ test("every reason picker uses the shared renderer instead of a local list", asy
   }
 });
 
-test("dismissal prompt is persistent and mounted outside routes", async () => {
+test("dismissal prompt stays mounted outside routes and pauses auto-dismiss while saving", async () => {
   const dialog = await readFile(new URL("../src/components/dismissal-dialog-provider.tsx", import.meta.url), "utf8");
   const app = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
   const hook = await readFile(new URL("../src/hooks/use-posting-decision.tsx", import.meta.url), "utf8");
   assert.match(dialog, /<Dialog open/);
   assert.doesNotMatch(dialog, /setTimeout|setInterval|TOAST_MS/);
+  assert.match(dialog, /autoDismissPaused=\{busy\}/);
   assert.match(dialog, /undoToken: token, reason: kind/);
   assert.match(dialog, /setToken\(result\.undoToken \|\| token\)/);
   assert.match(dialog, /undoToken: token \}/);

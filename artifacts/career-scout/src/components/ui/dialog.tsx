@@ -3,8 +3,24 @@ import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { ModalAutoDismissContext, useModalAutoDismiss, useModalOwner } from "@/components/modal-auto-dismiss"
 
-const Dialog = DialogPrimitive.Root
+function Dialog({
+  open: controlledOpen, defaultOpen = false, onOpenChange, autoDismissPaused = false, ...props
+}: React.ComponentProps<typeof DialogPrimitive.Root> & { autoDismissPaused?: boolean }) {
+  const [localOpen, setLocalOpen] = React.useState(defaultOpen)
+  const open = controlledOpen ?? localOpen
+  const owner = React.useId()
+  function changeOpen(next: boolean) {
+    if (controlledOpen === undefined) setLocalOpen(next)
+    onOpenChange?.(next)
+  }
+  return (
+    <ModalAutoDismissContext.Provider value={{ owner, open, paused: autoDismissPaused, close: () => changeOpen(false) }}>
+      <DialogPrimitive.Root {...props} open={open} onOpenChange={changeOpen} />
+    </ModalAutoDismissContext.Provider>
+  )
+}
 
 const DialogTrigger = DialogPrimitive.Trigger
 
@@ -30,11 +46,21 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+>(({ className, children, ...props }, ref) => {
+  const [content, setContent] = React.useState<HTMLDivElement | null>(null)
+  const owner = useModalOwner()
+  useModalAutoDismiss(content)
+  const setRef = React.useCallback((node: HTMLDivElement | null) => {
+    setContent(node)
+    if (typeof ref === "function") ref(node)
+    else if (ref) ref.current = node
+  }, [ref])
+  return (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
-      ref={ref}
+      ref={setRef}
+      data-modal-owner={owner}
       className={cn(
         "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
         className
@@ -48,7 +74,8 @@ const DialogContent = React.forwardRef<
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
   </DialogPortal>
-))
+  )
+})
 DialogContent.displayName = DialogPrimitive.Content.displayName
 
 const DialogHeader = ({

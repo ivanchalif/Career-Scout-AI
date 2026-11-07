@@ -51,7 +51,7 @@ const expectedReasons = [
   { kind: "wrong_location", label: "Wrong location" },
 ] as const;
 
-test("dialog and open reason menu survive card removal and 60 seconds without interaction", async ({ page, dismissal }) => {
+test("modal auto-dismisses after three idle seconds, including an open reason menu", async ({ page, dismissal }) => {
   await page.clock.install();
   await page.goto("/dashboard");
   await page.getByTestId(`posting-dismiss-${dismissal.id}`).click();
@@ -59,16 +59,61 @@ test("dialog and open reason menu survive card removal and 60 seconds without in
   await expect(dialog).toBeVisible();
   await expect(page.getByTestId(`posting-card-${dismissal.id}`)).toHaveCount(0);
   await dialog.getByRole("button", { name: "Add reason" }).click();
-  await page.clock.fastForward(60_000);
-  // Radix's modal menu temporarily hides its parent dialog from the
-  // accessibility tree; assert the actual dialog element remains visible.
+  await page.getByRole("menuitem", { name: "Wrong location", exact: true }).hover();
+  await page.clock.fastForward(2900);
   await expect(page.getByTestId(`dismiss-dialog-${dismissal.id}`)).toBeVisible();
   await expect(page.getByRole("menuitem")).toHaveText(expectedReasons.map(reason => reason.label));
-  await page.getByRole("menuitem", { name: "Wrong location", exact: true }).click();
-  await expect(dialog.getByRole("status")).toHaveText("Reason: Wrong location");
-  await dialog.getByRole("button", { name: "Undo dismissal" }).click();
+  await page.clock.fastForward(400);
+  await expect(page.getByTestId(`dismiss-dialog-${dismissal.id}`)).toHaveCount(0);
+  expect(dismissal.mutations.map(item => item.action)).toEqual(["dismiss"]);
+});
+
+test("modal auto-dismisses after two seconds outside despite continued mouse movement", async ({ page, dismissal }) => {
+  await page.clock.install();
+  await page.goto("/dashboard");
+  await page.getByTestId(`posting-dismiss-${dismissal.id}`).click();
+  const dialog = page.getByTestId(`dismiss-dialog-${dismissal.id}`);
+  await expect(dialog).toBeVisible();
+  await page.mouse.move(5, 5);
+  await page.clock.fastForward(1000);
+  await page.mouse.move(15, 15);
+  await page.clock.fastForward(900);
+  await expect(dialog).toBeVisible();
+  await page.clock.fastForward(400);
   await expect(dialog).toHaveCount(0);
-  await expect(page.getByTestId(`posting-card-${dismissal.id}`)).toBeVisible();
+});
+
+test("returning inside cancels outside dismissal and keyboard activity resets idle time", async ({ page, dismissal }) => {
+  await page.clock.install();
+  await page.goto("/dashboard");
+  await page.getByTestId(`posting-dismiss-${dismissal.id}`).click();
+  const dialog = page.getByTestId(`dismiss-dialog-${dismissal.id}`);
+  await expect(dialog).toBeVisible();
+  await page.mouse.move(5, 5);
+  await page.clock.fastForward(1500);
+  await dialog.getByRole("button", { name: "Add reason" }).hover();
+  await page.clock.fastForward(1500);
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Tab");
+  await page.clock.fastForward(2500);
+  await expect(dialog).toBeVisible();
+  await page.clock.fastForward(800);
+  await expect(dialog).toHaveCount(0);
+});
+
+test("Add job draft survives auto-dismiss and reopening", async ({ page, dismissal }) => {
+  await page.clock.install();
+  await page.goto("/dashboard");
+  await page.getByRole("button", { name: "Add job", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Add job posting" });
+  await dialog.getByTestId("input-job-title").fill("Draft role");
+  await dialog.getByTestId("input-company").fill("Draft company");
+  await page.clock.fastForward(3300);
+  await expect(dialog).toHaveCount(0);
+  await page.getByRole("button", { name: "Add job", exact: true }).click();
+  await expect(dialog.getByTestId("input-job-title")).toHaveValue("Draft role");
+  await expect(dialog.getByTestId("input-company")).toHaveValue("Draft company");
+  expect(dismissal.mutations).toEqual([]);
 });
 
 for (const { kind, label } of expectedReasons) {

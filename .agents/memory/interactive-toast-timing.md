@@ -1,13 +1,13 @@
 ---
 name: Dismissal dialog behavior
-description: Dismissal now uses a persistent dialog; timing cautions apply to other interactive toasts.
+description: Shared modal inactivity timing, duplicate shortcut exception, and portaled interaction safeguards.
 ---
 
-Dismissal uses a persistent centered dialog like the applied prompt, not an expiring notification. Reasons remain optional, and Undo must remain usable while the dialog is open.
+All app modals auto-dismiss after three seconds without activity, or two seconds of pointer activity outside the modal. Inside keyboard/touch activity resets inactivity; saves in flight pause automatic closing. Ordinary dismissal remains a centered dialog with optional reasons and Undo.
 
-**Why:** The user asked for the dismissed modal to work like the applied modal, superseding the earlier three-second dismissal-toast behavior.
+**Why:** The user explicitly requested shared automatic timing for all modals, superseding the earlier persistent-dialog behavior.
 
-**How to apply:** Keep the prompt mounted above job cards and routes so removing a job or leaving its detail page cannot close it. Close only on user action or successful Undo; retain the latest Undo token after changing reasons.
+**How to apply:** Use the shared modal timing rather than per-page timers. Count owned portaled menus as inside, do not extend the outside deadline for continued outside movement, preserve form drafts on timeout, and retain the latest Undo token after changing reasons.
 
 Dismissal choices must be uniform across entry points and ordered alphabetically by their displayed labels.
 
@@ -15,7 +15,7 @@ Dismissal choices must be uniform across entry points and ordered alphabetically
 
 **How to apply:** Keep additions in the shared list and API contract, preserve readable labels for stored feedback, and verify both initial dismissal and later reason changes accept each new option.
 
-Explicitly flagging a possible duplicate skips the dismissal reason dialog; save the Duplicate reason directly and offer a non-modal Undo confirmation. Ordinary dismissals retain the persistent reason dialog.
+Explicitly flagging a possible duplicate skips the dismissal reason dialog; save the Duplicate reason directly and offer a non-modal Undo confirmation. Ordinary dismissals retain the reason dialog with shared automatic timing.
 
 **Why:** The user already confirmed the duplicate reason through that action and explicitly asked not to be prompted for it again.
 

@@ -38,7 +38,7 @@ export function AppliedPreferenceDialog({
   }
 
   return (
-    <Dialog open onOpenChange={open => { if (!open && !feedback.isPending) onClose(); }}>
+    <Dialog open autoDismissPaused={feedback.isPending} onOpenChange={open => { if (!open && !feedback.isPending) onClose(); }}>
       <DialogContent data-testid="applied-preference-dialog">
         <DialogHeader>
           <DialogTitle>Find more jobs like this?</DialogTitle>

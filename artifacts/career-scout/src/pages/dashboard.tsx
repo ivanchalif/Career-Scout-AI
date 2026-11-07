@@ -2435,7 +2435,7 @@ export default function DashboardPage() {
         <JobPagination page={page} totalPages={totalPages} loading={postingsQ.isFetching} onPageChange={setPage} />
       </div>
 
-      <Dialog open={cleanupPreview !== null} onOpenChange={(open) => { if (!open && !sweepingDuplicates) setCleanupPreview(null); }}>
+      <Dialog open={cleanupPreview !== null} autoDismissPaused={sweepingDuplicates} onOpenChange={(open) => { if (!open && !sweepingDuplicates) setCleanupPreview(null); }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Review confirmed copies</DialogTitle>
@@ -2465,7 +2465,7 @@ export default function DashboardPage() {
       </Dialog>
 
       {/* Add job modal */}
-      <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
+      <Dialog open={showAddModal} autoDismissPaused={createMutation.isPending} onOpenChange={setShowAddModal}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Add job posting</DialogTitle>

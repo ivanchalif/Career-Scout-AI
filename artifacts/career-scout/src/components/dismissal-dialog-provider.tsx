@@ -92,7 +92,7 @@ function DismissalDialog({ job, onClose }: { job: DismissedJob; onClose: () => v
   }
 
   return (
-    <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}>
+    <Dialog open autoDismissPaused={busy} onOpenChange={open => { if (!open && !busy) onClose(); }}>
       <DialogContent data-testid={`dismiss-dialog-${job.id}`}>
         <DialogHeader>
           <DialogTitle>Job dismissed</DialogTitle>
