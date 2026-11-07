@@ -744,6 +744,39 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /online-discovery/sources/{id}/investigate:
+    post:
+      operationId: investigateOnlineDiscoverySource
+      tags: [onlineDiscovery]
+      summary: Investigate source usefulness and test live retrieval without importing jobs
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Source investigation and reviewable recommendations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SourceInvestigation"
+        "400":
+          description: Invalid source ID
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: Source not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "429":
+          description: Another source investigation is running
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
   /online-discovery/sources/{id}:
     patch:
       operationId: updateOnlineDiscoverySource
@@ -1828,6 +1861,51 @@ components:
         - scheduleHours
         - minimumMatchScore
         - freshnessWindow
+
+    SourceDismissalCount:
+      type: object
+      required: [reason, count]
+      properties:
+        reason: { type: string }
+        count: { type: integer }
+    SourceRecommendation:
+      type: object
+      required: [id, title, explanation, action, proposedUrl]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        explanation: { type: string }
+        action: { type: string, enum: [pause, update_query, edit, retry] }
+        proposedUrl: { type: [string, "null"] }
+    SourceInvestigationProbe:
+      type: object
+      required: [status, error, retrieved, unseen, eligibleBySavedFilters, knownPostingDates, recoveryNotes, warnings]
+      properties:
+        status: { type: string, enum: [ok, failed, not_run] }
+        error: { type: [string, "null"] }
+        retrieved: { type: integer }
+        unseen: { type: integer }
+        eligibleBySavedFilters: { type: integer }
+        knownPostingDates: { type: integer }
+        recoveryNotes: { type: array, items: { type: string } }
+        warnings: { type: array, items: { type: string } }
+    SourceInvestigation:
+      type: object
+      required: [sourceId, sourceUpdatedAt, investigatedAt, summary, findings, dismissals, health, probe, recommendations]
+      properties:
+        sourceId: { type: integer }
+        sourceUpdatedAt: { type: string, format: date-time }
+        investigatedAt: { type: string, format: date-time }
+        summary: { type: string }
+        findings: { type: array, items: { type: string } }
+        dismissals:
+          type: array
+          items: { $ref: "#/components/schemas/SourceDismissalCount" }
+        health: { $ref: "#/components/schemas/OnlineDiscoverySourceHealth" }
+        probe: { $ref: "#/components/schemas/SourceInvestigationProbe" }
+        recommendations:
+          type: array
+          items: { $ref: "#/components/schemas/SourceRecommendation" }
 
     OnlineDiscoverySourceHealth:
       type: object

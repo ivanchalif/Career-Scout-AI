@@ -68,6 +68,7 @@ import type {
   RecordNotDuplicateBody,
   ReopenPosting200,
   RestorePosting200,
+  SourceInvestigation,
   TitleExcludeSettings,
   UploadUrlRequest,
   UploadUrlResponse,
@@ -2776,6 +2777,96 @@ export const useCreateOnlineDiscoverySource = <
   TContext
 > => {
   return useMutation(getCreateOnlineDiscoverySourceMutationOptions(options));
+};
+
+/**
+ * @summary Investigate source usefulness and test live retrieval without importing jobs
+ */
+export const getInvestigateOnlineDiscoverySourceUrl = (id: number) => {
+  return `/api/online-discovery/sources/${id}/investigate`;
+};
+
+export const investigateOnlineDiscoverySource = async (
+  id: number,
+  options?: RequestInit,
+): Promise<SourceInvestigation> => {
+  return customFetch<SourceInvestigation>(
+    getInvestigateOnlineDiscoverySourceUrl(id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getInvestigateOnlineDiscoverySourceMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof investigateOnlineDiscoverySource>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof investigateOnlineDiscoverySource>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["investigateOnlineDiscoverySource"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof investigateOnlineDiscoverySource>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return investigateOnlineDiscoverySource(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type InvestigateOnlineDiscoverySourceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof investigateOnlineDiscoverySource>>
+>;
+
+export type InvestigateOnlineDiscoverySourceMutationError =
+  ErrorType<ErrorResponse>;
+
+/**
+ * @summary Investigate source usefulness and test live retrieval without importing jobs
+ */
+export const useInvestigateOnlineDiscoverySource = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof investigateOnlineDiscoverySource>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof investigateOnlineDiscoverySource>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(
+    getInvestigateOnlineDiscoverySourceMutationOptions(options),
+  );
 };
 
 /**

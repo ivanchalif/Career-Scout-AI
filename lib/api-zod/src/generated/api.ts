@@ -1467,6 +1467,59 @@ export const CreateOnlineDiscoverySourceBody = zod.object({
 });
 
 /**
+ * @summary Investigate source usefulness and test live retrieval without importing jobs
+ */
+export const InvestigateOnlineDiscoverySourceParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const InvestigateOnlineDiscoverySourceResponse = zod.object({
+  sourceId: zod.number(),
+  sourceUpdatedAt: zod.coerce.date(),
+  investigatedAt: zod.coerce.date(),
+  summary: zod.string(),
+  findings: zod.array(zod.string()),
+  dismissals: zod.array(
+    zod.object({
+      reason: zod.string(),
+      count: zod.number(),
+    }),
+  ),
+  health: zod.object({
+    color: zod.enum(["green", "yellow", "red"]),
+    label: zod.string(),
+    reasons: zod.array(zod.string()),
+    latestSearchAdded: zod.number().nullable(),
+    totalAdded: zod.number(),
+    recentAdded: zod.number(),
+    applied: zod.number(),
+    dismissed: zod.number(),
+    knownPostingDates: zod.number(),
+    recentPostings: zod.number(),
+    lastSearchAt: zod.coerce.date().nullable(),
+  }),
+  probe: zod.object({
+    status: zod.enum(["ok", "failed", "not_run"]),
+    error: zod.string().nullable(),
+    retrieved: zod.number(),
+    unseen: zod.number(),
+    eligibleBySavedFilters: zod.number(),
+    knownPostingDates: zod.number(),
+    recoveryNotes: zod.array(zod.string()),
+    warnings: zod.array(zod.string()),
+  }),
+  recommendations: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      explanation: zod.string(),
+      action: zod.enum(["pause", "update_query", "edit", "retry"]),
+      proposedUrl: zod.string().nullable(),
+    }),
+  ),
+});
+
+/**
  * @summary Edit, suppress, or restore an online job source
  */
 export const UpdateOnlineDiscoverySourceParams = zod.object({

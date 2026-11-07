@@ -3,6 +3,8 @@ import { and, eq } from "drizzle-orm";
 import { db, onlineDiscoverySourcesTable, onlineDiscoveryProgressTable, userProfilesTable } from "@workspace/db";
 import {
   CreateOnlineDiscoverySourceBody,
+  InvestigateOnlineDiscoverySourceParams,
+  InvestigateOnlineDiscoverySourceResponse,
   DeleteOnlineDiscoverySourceParams,
   GetOnlineDiscoverySourcesResponse,
   GetOnlineDiscoveryStatusResponse,
@@ -14,6 +16,7 @@ import {
   UpdateOnlineDiscoverySettingsResponse,
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
+import { investigateSource, SourceInvestigationBusyError } from "../lib/sourceInvestigation";
 import {
   DiscoveryProfileRequiredError,
   getOnlineDiscoverySources,
@@ -57,6 +60,28 @@ router.put("/online-discovery/settings", requireAuth, async (req, res): Promise<
 
 router.get("/online-discovery/sources", requireAuth, async (req, res): Promise<void> => {
   res.json(GetOnlineDiscoverySourcesResponse.parse(await getOnlineDiscoverySources(req.userId)));
+});
+
+router.post("/online-discovery/sources/:id/investigate", requireAuth, async (req, res): Promise<void> => {
+  const params = InvestigateOnlineDiscoverySourceParams.safeParse(req.params);
+  if (!params.success || !Number.isSafeInteger(params.data.id) || params.data.id <= 0) {
+    res.status(400).json({ error: "A positive source ID is required." });
+    return;
+  }
+  try {
+    const result = await investigateSource(req.userId, params.data.id);
+    if (!result) {
+      res.status(404).json({ error: "Source not found." });
+      return;
+    }
+    res.json(InvestigateOnlineDiscoverySourceResponse.parse(result));
+  } catch (error) {
+    if (error instanceof SourceInvestigationBusyError) {
+      res.status(429).json({ error: error.message });
+      return;
+    }
+    throw error;
+  }
 });
 
 router.post("/online-discovery/sources", requireAuth, async (req, res): Promise<void> => {

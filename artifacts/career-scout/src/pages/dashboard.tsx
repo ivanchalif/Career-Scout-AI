@@ -64,6 +64,7 @@ import { useForm } from "react-hook-form";
 import Layout from "@/components/layout";
 import { StatusBadge } from "@/components/status-badge";
 import { SourceHealth } from "@/components/source-health";
+import { SourceInvestigation } from "@/components/source-investigation";
 import { PostingDecisionControls } from "@/components/posting-decision-controls";
 import { PreferenceBadge } from "@/components/preference-badge";
 import { FitScoreBadge, fitTier } from "@/components/fit-score";
@@ -1501,6 +1502,7 @@ export default function DashboardPage() {
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
+                          {!isEditing && <SourceInvestigation source={source} onEdit={() => startEditingDiscoverySource(source)} />}
                         </div>
                       );
                     })}

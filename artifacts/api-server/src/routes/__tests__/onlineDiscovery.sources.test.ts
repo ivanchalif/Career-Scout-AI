@@ -56,6 +56,11 @@ vi.mock("../../lib/onlineDiscovery", () => ({
 }));
 
 import { db } from "@workspace/db";
+vi.mock("../../lib/sourceInvestigation", () => ({
+  investigateSource: vi.fn(),
+  SourceInvestigationBusyError: class SourceInvestigationBusyError extends Error {},
+}));
+import { investigateSource, SourceInvestigationBusyError } from "../../lib/sourceInvestigation";
 import onlineDiscoveryRouter from "../onlineDiscovery";
 
 const source = {
@@ -93,6 +98,41 @@ function app() {
   instance.use(onlineDiscoveryRouter);
   return instance;
 }
+
+describe("POST /online-discovery/sources/:id/investigate", () => {
+  beforeEach(() => vi.clearAllMocks());
+  it("validates and returns the investigation contract for the authenticated owner", async () => {
+    vi.mocked(investigateSource).mockResolvedValue({
+      sourceId: 12, sourceUpdatedAt: source.updatedAt, investigatedAt: source.updatedAt,
+      summary: "Review evidence", findings: [], dismissals: [], recommendations: [],
+      health: {
+        color: "yellow", label: "Learning", reasons: [], latestSearchAdded: null, totalAdded: 0,
+        recentAdded: 0, applied: 0, dismissed: 0, knownPostingDates: 0, recentPostings: 0, lastSearchAt: null,
+      },
+      probe: {
+        status: "ok", error: null, retrieved: 3, unseen: 1, eligibleBySavedFilters: 1,
+        knownPostingDates: 0, recoveryNotes: [], warnings: [],
+      },
+    });
+    const response = await request(app()).post("/online-discovery/sources/12/investigate").expect(200);
+    expect(investigateSource).toHaveBeenCalledWith("test-user-id", 12);
+    expect(response.body.probe).toMatchObject({ retrieved: 3, unseen: 1 });
+    expect(response.body.sourceUpdatedAt).toBe(source.updatedAt.toISOString());
+  });
+  it("returns 404 when the user does not own the source", async () => {
+    vi.mocked(investigateSource).mockResolvedValue(null);
+    await request(app()).post("/online-discovery/sources/12/investigate").expect(404);
+  });
+  it("rejects invalid source IDs before investigation", async () => {
+    await request(app()).post("/online-discovery/sources/-1/investigate").expect(400);
+    expect(investigateSource).not.toHaveBeenCalled();
+  });
+  it("returns an actionable error for overlapping probes", async () => {
+    vi.mocked(investigateSource).mockRejectedValue(new SourceInvestigationBusyError("Wait for the current investigation."));
+    const response = await request(app()).post("/online-discovery/sources/12/investigate").expect(429);
+    expect(response.body.error).toBe("Wait for the current investigation.");
+  });
+});
 
 describe("PATCH /online-discovery/sources/:id", () => {
   beforeEach(() => {

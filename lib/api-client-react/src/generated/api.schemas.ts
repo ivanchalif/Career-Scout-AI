@@ -517,6 +517,51 @@ export interface OnlineDiscoverySettings {
   freshnessWindow: OnlineDiscoverySettingsFreshnessWindow;
 }
 
+export interface SourceDismissalCount {
+  reason: string;
+  count: number;
+}
+
+export type SourceRecommendationAction =
+  (typeof SourceRecommendationAction)[keyof typeof SourceRecommendationAction];
+
+export const SourceRecommendationAction = {
+  pause: "pause",
+  update_query: "update_query",
+  edit: "edit",
+  retry: "retry",
+} as const;
+
+export interface SourceRecommendation {
+  id: string;
+  title: string;
+  explanation: string;
+  action: SourceRecommendationAction;
+  /** @nullable */
+  proposedUrl: string | null;
+}
+
+export type SourceInvestigationProbeStatus =
+  (typeof SourceInvestigationProbeStatus)[keyof typeof SourceInvestigationProbeStatus];
+
+export const SourceInvestigationProbeStatus = {
+  ok: "ok",
+  failed: "failed",
+  not_run: "not_run",
+} as const;
+
+export interface SourceInvestigationProbe {
+  status: SourceInvestigationProbeStatus;
+  /** @nullable */
+  error: string | null;
+  retrieved: number;
+  unseen: number;
+  eligibleBySavedFilters: number;
+  knownPostingDates: number;
+  recoveryNotes: string[];
+  warnings: string[];
+}
+
 export type OnlineDiscoverySourceHealthColor =
   (typeof OnlineDiscoverySourceHealthColor)[keyof typeof OnlineDiscoverySourceHealthColor];
 
@@ -540,6 +585,18 @@ export interface OnlineDiscoverySourceHealth {
   recentPostings: number;
   /** @nullable */
   lastSearchAt: string | null;
+}
+
+export interface SourceInvestigation {
+  sourceId: number;
+  sourceUpdatedAt: string;
+  investigatedAt: string;
+  summary: string;
+  findings: string[];
+  dismissals: SourceDismissalCount[];
+  health: OnlineDiscoverySourceHealth;
+  probe: SourceInvestigationProbe;
+  recommendations: SourceRecommendation[];
 }
 
 export type OnlineDiscoverySourceKind =

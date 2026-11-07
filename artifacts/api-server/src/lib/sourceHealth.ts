@@ -14,6 +14,14 @@ type Profile = {
 };
 type Provenance = { jobPostingId: number; provider: string; isPrimary: boolean };
 
+export function eligibleSourcePostings(
+  source: Source, sources: Source[], postings: Posting[], provenance: Provenance[], profile?: Profile | null,
+) {
+  const primary = new Map(provenance.filter(row => row.isPrimary).map(row => [row.jobPostingId, row.provider]));
+  return postings.filter(posting =>
+    sourceIdForProvider(primary.get(posting.id) ?? posting.source, sources) === source.id && countsAsAdded(posting, profile));
+}
+
 /** Same reversible visibility preferences as the dashboard; dismissal is an outcome, not a filter. */
 export function countsAsAdded(posting: Pick<Posting, "title" | "company" | "link" | "location" | "remoteType">, profile?: Profile | null): boolean {
   const settings = profile?.companyFilterSettings;
@@ -39,9 +47,7 @@ export function buildSourceHealth(
   feedback: Array<{ jobPostingId: number; kind: string }>, profile: Profile | null | undefined,
   runs: DiscoveryProgress["sourceRuns"], now = new Date(),
 ) {
-  const primary = new Map(provenance.filter(row => row.isPrimary).map(row => [row.jobPostingId, row.provider]));
-  const attributed = postings.filter(posting =>
-    sourceIdForProvider(primary.get(posting.id) ?? posting.source, sources) === source.id && countsAsAdded(posting, profile));
+  const attributed = eligibleSourcePostings(source, sources, postings, provenance, profile);
   const history = runs?.[String(source.id)] ?? [];
   const last = history.at(-1);
   const cutoff = now.getTime() - 30 * 86400_000;
