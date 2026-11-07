@@ -394,6 +394,7 @@ export default function DashboardPage() {
 
   const summary = dashboardQ.data;
   const rawPostings = postingsQ.data ?? [];
+  const duplicateReviewIds = rawPostings.map(item => item.posting.id).join(",");
   const gmailStatus = gmailStatusQ.data;
   const gmailSyncing = gmailProcessing || syncMutation.isPending || gmailStatus?.syncing === true;
   const gmailProgress = gmailStatus?.syncing ? gmailStatus.progress : null;
@@ -607,9 +608,12 @@ export default function DashboardPage() {
       return;
     }
     let cancelled = false;
+    const controller = new AbortController();
     getToken().then((token) => {
+      if (controller.signal.aborted) throw new Error("Duplicate review cancelled");
       return fetch("/api/postings/near-duplicates", {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
+        signal: controller.signal,
       });
     }).then((r) => { if (!r.ok) throw new Error("Duplicate review unavailable"); return r.json(); })
       .then((pairs: NearDupPair[]) => {
@@ -621,9 +625,9 @@ export default function DashboardPage() {
         if (!cancelled) setNearDupMap(map);
       })
       .catch(() => {});
-    return () => { cancelled = true; };
+    return () => { cancelled = true; controller.abort(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rawPostings, nearDupRevision, userId]);
+  }, [duplicateReviewIds, nearDupRevision, userId, getToken]);
 
   const postings = useMemo(() => {
     let items = [...rawPostings];

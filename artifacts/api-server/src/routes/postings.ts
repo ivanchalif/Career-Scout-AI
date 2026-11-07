@@ -28,7 +28,8 @@ import { requireAuth } from "../middlewares/requireAuth";
 import { scorePosting, scorePostingBackground, extractJobListings } from "../lib/scoringService";
 import { fetchSingleEmail } from "../lib/gmailClient";
 import { isFuzzyDuplicate, runDedupSweep, loadDuplicateExceptions, previewConfirmedDuplicates } from "../lib/dedup";
-import { compareJobs, pairKey } from "../lib/duplicatePolicy";
+import { compareJobs } from "../lib/duplicatePolicy";
+import { findDuplicateReviews } from "../lib/duplicateReview";
 import { jobDuplicateExceptionsTable } from "@workspace/db";
 import { logger } from "../lib/logger";
 import { fetchJobPageContent } from "../lib/pageScraper";
@@ -199,22 +200,19 @@ router.get("/postings/deleted", requireAuth, async (req, res): Promise<void> => 
 // Evidence-based review only. Text resemblance alone cannot hide a job.
 router.get("/postings/near-duplicates", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId;
-  const postings = await db.select().from(jobPostingsTable).where(and(
+  const postings = await db.select({
+    id: jobPostingsTable.id, title: jobPostingsTable.title, company: jobPostingsTable.company,
+    link: jobPostingsTable.link, location: jobPostingsTable.location,
+    fullDescription: jobPostingsTable.fullDescription, jobIdentity: jobPostingsTable.jobIdentity,
+    appliedAt: jobPostingsTable.appliedAt, deletedAt: jobPostingsTable.deletedAt, closedAt: jobPostingsTable.closedAt,
+    salaryMin: jobPostingsTable.salaryMin, salaryMax: jobPostingsTable.salaryMax,
+    createdAt: jobPostingsTable.createdAt,
+  }).from(jobPostingsTable).where(and(
     eq(jobPostingsTable.userId, userId),
   ));
   const exceptions = await loadDuplicateExceptions(userId);
-  const seen = new Set<number>();
   const results: unknown[] = [];
-  const active = postings.filter((p) => !p.appliedAt && !p.deletedAt && !p.closedAt);
-  const partners = [...postings.filter((p) => p.appliedAt || p.deletedAt), ...active];
-  for (const a of active) {
-    if (seen.has(a.id)) continue;
-    for (const b of partners) {
-      if (a.id === b.id || (!b.appliedAt && !b.deletedAt && seen.has(b.id)) || exceptions.has(pairKey(a.id, b.id))) continue;
-      const decision = compareJobs(a, b);
-      if (decision.kind === "distinct") continue;
-      seen.add(a.id);
-      if (!b.appliedAt && !b.deletedAt) seen.add(b.id);
+  for (const { a, b, decision } of await findDuplicateReviews(postings, exceptions)) {
       const row: Record<string, unknown> = { id1: a.id, id2: b.id, evidence: decision.evidence, confidence: decision.kind };
       for (const [posting, suffix] of [[a, "1"], [b, "2"]] as const) {
         Object.assign(row, {
@@ -226,9 +224,6 @@ router.get("/postings/near-duplicates", requireAuth, async (req, res): Promise<v
         });
       }
       results.push(row);
-      break;
-    }
-    if (results.length >= 40) break;
   }
   res.json(results);
 });

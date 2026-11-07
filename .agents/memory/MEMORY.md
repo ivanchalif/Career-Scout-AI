@@ -15,3 +15,4 @@
 - [Dashboard density](dashboard-density.md) — minimize the header/control area's vertical space; keep secondary controls accessible and current errors/progress apparent.
 - [Duplicate identity policy](duplicate-identity-policy.md) — automatic dedup needs listing identity; review needs supporting evidence; persist distinct-pair feedback and preserve history.
 - [Mailbox key rotation](mailbox-key-rotation.md) — keep the secret protecting saved IMAP credentials stable, or migrate/reconnect before rotating it.
+- [Dashboard responsiveness](dashboard-performance.md) — duplicate review must not monopolize the API event loop or rerun for score-only refreshes and reason edits.

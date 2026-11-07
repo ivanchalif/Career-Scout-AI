@@ -12,6 +12,7 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { useDismissalDialog } from "@/components/dismissal-dialog-provider";
 import { type DismissReason } from "@/lib/dismissal-reasons";
+import { removePostingFromCache } from "@/lib/posting-cache";
 export { dismissReasons, reasonLabel, type DismissReason } from "@/lib/dismissal-reasons";
 
 function refreshAll(qc: QueryClient, id: number) {
@@ -34,9 +35,11 @@ export function usePostingDecision() {
   async function dismiss(id: number, reason?: DismissReason): Promise<boolean> {
     if (pending) return false;
     try {
+      // Prevent an older in-flight page response from restoring a dismissed card.
+      await qc.cancelQueries({ queryKey: getListPostingsQueryKey() });
       const res = await dismissM.mutateAsync({ id, data: { reason: reason ?? null } });
       qc.setQueriesData({ queryKey: getListPostingsQueryKey() }, (old: unknown) =>
-        Array.isArray(old) ? old.filter((i: { posting?: { id: number } }) => i?.posting?.id !== id) : old,
+        removePostingFromCache(old, id),
       );
       refreshAll(qc, id);
       showDismissalDialog({ id, undoToken: res.undoToken, reason: reason ?? null });

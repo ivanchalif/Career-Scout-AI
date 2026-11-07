@@ -17,6 +17,7 @@ import {
 import { DismissReasonItems } from "@/components/dismiss-reason-items";
 import { reasonLabel, type DismissReason } from "@/lib/dismissal-reasons";
 import { toast } from "@/hooks/use-toast";
+import { updateDismissalReasonInCache } from "@/lib/posting-cache";
 
 type DismissedJob = { id: number; undoToken: string; reason: DismissReason | null };
 const DismissalDialogContext = createContext<((job: DismissedJob) => void) | null>(null);
@@ -65,7 +66,14 @@ function DismissalDialog({ job, onClose }: { job: DismissedJob; onClose: () => v
       const result = await reasonM.mutateAsync({ id: job.id, data: { undoToken: token, reason: kind } });
       setToken(result.undoToken || token);
       setReason(kind);
-      refresh();
+      // Changing a reason does not change lifecycle, counts or visibility.
+      // Patch feedback instead of reloading the dashboard and duplicate review.
+      for (const queryKey of [getListPostingsQueryKey(), getListDeletedPostingsQueryKey()]) {
+        qc.setQueriesData({ queryKey }, (old: unknown) =>
+          updateDismissalReasonInCache(old, job.id, result.feedback));
+        void qc.invalidateQueries({ queryKey, refetchType: "none" });
+      }
+      void qc.invalidateQueries({ queryKey: getGetPostingQueryKey(job.id) });
     } catch {
       setError("Could not save reason. Your job is still dismissed. Try again or choose Not now.");
     }
