@@ -9,6 +9,12 @@ Identical titles and companies qualify for automatic dashboard duplicate classif
 
 **How to apply:** Equality ignores case and whitespace, not specialty, seniority, or punctuation. Preserve known location, requisition, and substantial description discrepancies for review. Only applied/dismissed records anchor recoverable automatic flags in Filtered; undoing that anchor restores active visibility. Honor pair exceptions, never alter saved history, and do not suppress active-active review merely because the matching evidence is exact.
 
+Discarding an extra copy as “duplicate” must leave the retained active copy visible, not turn the discarded copy into a dismissal anchor.
+
+**Why:** On 2026-11-09 the user clarified that resolving active-only duplicates must retain the other active opening.
+
+**How to apply:** Duplicate-reason dismissals and legacy duplicate flags do not anchor automatic visibility filtering or repeated reviews. Separate applied or genuinely rejected history still takes precedence. Keep this consistent across lists, counts, and review suggestions without rewriting history.
+
 “Not a duplicate” applies to the specific unordered pair and must persist per user; it must not suppress all comparisons involving either job.
 
 **Why:** The user approved persistent pair-specific feedback rather than temporary page-state dismissal.

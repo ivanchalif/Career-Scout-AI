@@ -16,7 +16,9 @@ vi.mock("@workspace/db", async (importOriginal) => {
     user_id: "userId", deleted_at: "deletedAt", closed_at: "closedAt", id: "id",
   };
   return { ...actual, db: {
-    select: () => ({ from: (table: any) => ({ where: async (condition: any) => {
+    select: () => ({ from: (table: any) => ({
+      leftJoin() { return this; },
+      where: async (condition: any) => {
       const rows = table === actual.jobDuplicateExceptionsTable ? state.exceptions : state.postings;
       const clauses = Array.isArray(condition) ? condition : [condition];
       return rows.filter((row) => clauses.every((c: any) => {
@@ -50,6 +52,12 @@ beforeAll(async () => {
 beforeEach(() => { state.postings = []; state.exceptions = []; state.writes = 0; });
 
 describe("pair-specific duplicate review API", () => {
+  it("does not suggest the retained active copy against a discarded duplicate", async () => {
+    state.postings = [posting(1), posting(2, { deletedAt: new Date(), dismissalReason: "duplicate" })];
+    const response = await request(app).get("/api/postings/near-duplicates").expect(200);
+    expect(response.body).toEqual([]);
+    expect(state.writes).toBe(0);
+  });
   it("includes dismissed history in review without modifying it", async () => {
     state.postings = [posting(1), posting(2, { title: "Sr Product Manager (AI)", deletedAt: new Date() })];
     const response = await request(app).get("/api/postings/near-duplicates").expect(200);

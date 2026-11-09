@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, jobPostingsTable, matchReportsTable, userProfilesTable, gmailConnectionsTable } from "@workspace/db";
+import { db, jobPostingsTable, matchReportsTable, userProfilesTable, gmailConnectionsTable, jobPostingFeedbackTable } from "@workspace/db";
 import { GetDashboardSummaryResponse } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
 import { postingFilterReason } from "../lib/postingFilters";
@@ -29,8 +29,13 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       link: jobPostingsTable.link, location: jobPostingsTable.location, remoteType: jobPostingsTable.remoteType,
       fullDescription: jobPostingsTable.fullDescription, jobIdentity: jobPostingsTable.jobIdentity,
       appliedAt: jobPostingsTable.appliedAt, deletedAt: jobPostingsTable.deletedAt, closedAt: jobPostingsTable.closedAt,
+      deletedBy: jobPostingsTable.deletedBy, dismissalReason: jobPostingFeedbackTable.kind,
     })
     .from(jobPostingsTable)
+    .leftJoin(jobPostingFeedbackTable, and(
+      eq(jobPostingFeedbackTable.jobPostingId, jobPostingsTable.id),
+      eq(jobPostingFeedbackTable.userId, userId),
+    ))
     .where(eq(jobPostingsTable.userId, userId));
 
   // Mirror the same filter chain the list endpoint uses

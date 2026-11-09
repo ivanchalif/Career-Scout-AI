@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { db, jobPostingsTable, jobDuplicateExceptionsTable } from "@workspace/db";
+import { db, jobPostingsTable, jobDuplicateExceptionsTable, jobPostingFeedbackTable } from "@workspace/db";
 import { compareJobs, normalizeTitle, pairKey, type DuplicateCandidate } from "./duplicatePolicy";
 import { historicalDuplicateMatches } from "./duplicateVisibility";
 export { canonicalizeJobUrl } from "./duplicatePolicy";
@@ -21,7 +21,11 @@ export async function loadHistoricalDuplicateMatches(userId: string) {
       location: jobPostingsTable.location, fullDescription: jobPostingsTable.fullDescription,
       jobIdentity: jobPostingsTable.jobIdentity,
       deletedAt: jobPostingsTable.deletedAt, closedAt: jobPostingsTable.closedAt,
-    }).from(jobPostingsTable).where(eq(jobPostingsTable.userId, userId)),
+      deletedBy: jobPostingsTable.deletedBy, dismissalReason: jobPostingFeedbackTable.kind,
+    }).from(jobPostingsTable).leftJoin(jobPostingFeedbackTable, and(
+      eq(jobPostingFeedbackTable.jobPostingId, jobPostingsTable.id),
+      eq(jobPostingFeedbackTable.userId, userId),
+    )).where(eq(jobPostingsTable.userId, userId)),
     loadDuplicateExceptions(userId),
   ]);
   return historicalDuplicateMatches(postings, exceptions);

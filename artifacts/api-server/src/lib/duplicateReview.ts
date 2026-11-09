@@ -1,6 +1,6 @@
 import { setImmediate } from "node:timers/promises";
 import { compareJobs, exactTitleCompanyKey, jobIdentityKeys, normalizeEmployer, pairKey, type DuplicateDecision } from "./duplicatePolicy";
-import type { HistoricalPosting } from "./duplicateVisibility";
+import { isHistoricalDuplicateAnchor, type HistoricalPosting } from "./duplicateVisibility";
 
 /** Every non-distinct decision requires either shared identity or employer.
  * Index those prerequisites once instead of parsing URLs for every history pair.
@@ -10,7 +10,7 @@ export async function findDuplicateReviews<T extends HistoricalPosting>(
   postings: T[], exceptions: Set<string>, limit = 40,
 ): Promise<{ a: T; b: T; decision: DuplicateDecision }[]> {
   const active = postings.filter(p => !p.appliedAt && !p.deletedAt && !p.closedAt);
-  const partners = [...postings.filter(p => p.appliedAt || p.deletedAt), ...active];
+  const partners = [...postings.filter(isHistoricalDuplicateAnchor), ...active];
   const keys = new Map<number, string[]>();
   const index = new Map<string, Set<number>>();
   for (const [position, posting] of partners.entries()) {

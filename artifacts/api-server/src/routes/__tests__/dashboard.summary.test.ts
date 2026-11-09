@@ -14,6 +14,7 @@ vi.mock("@workspace/db", () => ({
   matchReportsTable: {},
   userProfilesTable: {},
   gmailConnectionsTable: {},
+  jobPostingFeedbackTable: {},
 }));
 vi.mock("../../middlewares/requireAuth", () => ({
   requireAuth: (req: Request, _res: Response, next: NextFunction) => {
@@ -30,10 +31,26 @@ import { db } from "@workspace/db";
 const dbSelect = db.select as ReturnType<typeof vi.fn>;
 const chain = (rows: unknown[]) => ({
   from: vi.fn().mockReturnThis(),
+  leftJoin: vi.fn().mockReturnThis(),
   where: vi.fn().mockResolvedValue(rows),
 });
 
 describe("GET /dashboard/summary", () => {
+  it("counts the retained active copy after its sibling is marked duplicate", async () => {
+    dbSelect
+      .mockReturnValueOnce(chain([]))
+      .mockReturnValueOnce(chain([]))
+      .mockReturnValueOnce(chain([
+        { id: 1, title: "Role", company: "Example" },
+        { id: 2, title: "Role", company: "Example", deletedAt: new Date(), dismissalReason: "duplicate" },
+      ]))
+      .mockReturnValueOnce(chain([]));
+    const { default: dashboardRouter } = await import("../dashboard");
+    const app = express();
+    app.use(dashboardRouter);
+    const response = await request(app).get("/dashboard/summary").expect(200);
+    expect(response.body).toMatchObject({ totalPostings: 1, archivedPostings: 1 });
+  });
   it("excludes historical copies from all Active summary statistics", async () => {
     dbSelect
       .mockReturnValueOnce(chain([]))

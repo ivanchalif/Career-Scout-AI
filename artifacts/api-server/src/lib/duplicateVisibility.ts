@@ -5,7 +5,15 @@ export type HistoricalPosting = DuplicateCandidate & {
   appliedAt?: Date | string | null;
   deletedAt?: Date | string | null;
   closedAt?: Date | string | null;
+  deletedBy?: string | null;
+  dismissalReason?: string | null;
 };
+
+/** A discarded extra copy is not evidence that the retained opening is unwanted. */
+export function isHistoricalDuplicateAnchor(posting: HistoricalPosting): boolean {
+  return !!posting.appliedAt || (!!posting.deletedAt
+    && posting.deletedBy !== "duplicate" && posting.dismissalReason !== "duplicate");
+}
 
 /** Only applied/dismissed records can anchor automatic duplicate flags.
  * Two active copies remain visible for review; pair exceptions always win.
@@ -15,7 +23,7 @@ export function historicalDuplicateMatches<T extends HistoricalPosting>(
 ): Map<number, T[]> {
   const anchors = new Map<string, T[]>();
   for (const posting of postings) {
-    if (!posting.appliedAt && !posting.deletedAt) continue;
+    if (!isHistoricalDuplicateAnchor(posting)) continue;
     for (const key of duplicateMatchKeys(posting)) {
       const matches = anchors.get(key) ?? [];
       matches.push(posting);

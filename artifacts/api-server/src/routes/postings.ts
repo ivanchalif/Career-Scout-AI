@@ -207,9 +207,13 @@ router.get("/postings/near-duplicates", requireAuth, async (req, res): Promise<v
     link: jobPostingsTable.link, location: jobPostingsTable.location,
     fullDescription: jobPostingsTable.fullDescription, jobIdentity: jobPostingsTable.jobIdentity,
     appliedAt: jobPostingsTable.appliedAt, deletedAt: jobPostingsTable.deletedAt, closedAt: jobPostingsTable.closedAt,
+    deletedBy: jobPostingsTable.deletedBy, dismissalReason: jobPostingFeedbackTable.kind,
     salaryMin: jobPostingsTable.salaryMin, salaryMax: jobPostingsTable.salaryMax,
     createdAt: jobPostingsTable.createdAt,
-  }).from(jobPostingsTable).where(and(
+  }).from(jobPostingsTable).leftJoin(jobPostingFeedbackTable, and(
+    eq(jobPostingFeedbackTable.jobPostingId, jobPostingsTable.id),
+    eq(jobPostingFeedbackTable.userId, userId),
+  )).where(and(
     eq(jobPostingsTable.userId, userId),
   ));
   const exceptions = await loadDuplicateExceptions(userId);

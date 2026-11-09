@@ -42,6 +42,14 @@ beforeEach(() => {
   state.exceptions = new Set();
 });
 describe("paginated dashboard duplicate filtering", () => {
+  it("keeps the surviving copy in Active and not Filtered after duplicate dismissal", async () => {
+    state.postings = [posting(1), posting(2, { deletedAt: new Date(), dismissalReason: "duplicate" })];
+    state.candidates = [state.postings[0]];
+    const active = await getPostingPage("owner", { applied: false });
+    expect(active.total).toBe(1);
+    expect(active.items.map(item => item.posting.id)).toEqual([1]);
+    expect((await getPostingPage("owner", { hidden: true })).total).toBe(0);
+  });
   it("keeps both active exact copies in dashboard totals and out of Filtered", async () => {
     state.postings = [posting(1, { link: null }), posting(2, { link: null })];
     state.candidates = state.postings;

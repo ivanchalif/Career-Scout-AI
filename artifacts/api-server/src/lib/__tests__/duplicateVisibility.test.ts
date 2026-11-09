@@ -8,6 +8,21 @@ const posting = (id: number, overrides: Partial<HistoricalPosting> = {}): Histor
 });
 
 describe("read-only duplicate visibility", () => {
+  it.each([
+    { deletedBy: "user", dismissalReason: "duplicate" },
+    { deletedBy: "duplicate" },
+  ])("keeps the retained active copy visible after discarding an extra copy: %s", (reason) => {
+    const rows = [posting(1), posting(2, { deletedAt: new Date(), ...reason })];
+    expect(historicalDuplicateMatches(rows, new Set()).size).toBe(0);
+  });
+  it("still hides copies when a separate applied or rejected anchor exists", () => {
+    const rows = [
+      posting(1),
+      posting(2, { deletedAt: new Date(), dismissalReason: "duplicate" }),
+      posting(3, { appliedAt: new Date() }),
+    ];
+    expect(historicalDuplicateMatches(rows, new Set()).get(1)?.map(p => p.id)).toEqual([3]);
+  });
   it.each(["appliedAt", "deletedAt"] as const)("hides copies of %s history immediately without mutating either record", (field) => {
     const rows = [posting(1), posting(2, { [field]: new Date() })];
     const before = structuredClone(rows);
