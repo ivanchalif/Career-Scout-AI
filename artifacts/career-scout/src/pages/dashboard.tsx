@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import {
   Plus, Search, SlidersHorizontal, Mail, TrendingUp,
   BriefcaseBusiness, Star, Trash2, X,
-  RefreshCw, Unplug, ArrowUpDown, Sparkles, Link2, CheckCircle2, Undo2, MapPin, Ban, RotateCcw, Layers, Copy, Archive,
+  RefreshCw, Unplug, Sparkles, Link2, CheckCircle2, Undo2, MapPin, Ban, RotateCcw, Layers, Copy, Archive,
   ChevronDown, ChevronUp, MoreHorizontal, ExternalLink, SearchCode, Download, Upload, Pencil, Check, Loader2,
 } from "lucide-react";
 import {
@@ -47,6 +47,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { JobPagination } from "@/components/job-pagination";
+import { DashboardSortSelect } from "@/components/dashboard-sort-select";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -1833,31 +1834,7 @@ export default function DashboardPage() {
                     />
                   </div>
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="dashboard-sort" className="text-xs text-muted-foreground">
-                    Sort {activeTab === "active" ? "Active" : activeTab === "applied" ? "Applied" : "Deleted"}
-                  </Label>
-                  <div className="relative">
-                    <ArrowUpDown className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                    <select
-                      id="dashboard-sort"
-                      value={sortKey}
-                      onChange={(e) => setSortKey(e.target.value)}
-                      data-testid="sort-select"
-                      className="h-9 pl-8 pr-3 text-sm rounded-md border border-input bg-background text-foreground appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
-                    >
-                      <option value="recommended">Recommended: Fit + your choices</option>
-                      <option value="date-desc">Date: Newest first</option>
-                      <option value="date-asc">Date: Oldest first</option>
-                      <option value="score-desc">Score: Highest first</option>
-                      <option value="score-asc">Score: Lowest first</option>
-                      <option value="title-asc">Title: A → Z</option>
-                      <option value="title-desc">Title: Z → A</option>
-                      <option value="company-asc">Company: A → Z</option>
-                      <option value="company-desc">Company: Z → A</option>
-                    </select>
-                  </div>
-                </div>
+                <DashboardSortSelect view={activeTab} value={sortKey} onValueChange={setSortKey} />
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Min fit score</Label>
                   <Input
