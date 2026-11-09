@@ -1,5 +1,41 @@
 import { test, expect } from "./support/dismissal-fixture";
 
+test("sort choices remain selectable repeatedly without a page reload", async ({ page, dismissal }) => {
+  expect(dismissal.account.id).toBeTruthy();
+  await page.goto("/dashboard");
+  await page.getByRole("button", { name: "Show filters", exact: true }).click();
+  const trigger = page.getByTestId("sort-select");
+  for (const label of ["Title: A → Z", "Date: Oldest first", "Score: Highest first", "Company: Z → A", "Score: Lowest first"]) {
+    await trigger.click();
+    await page.getByRole("option", { name: label, exact: true }).click();
+    await expect(trigger).toContainText(label);
+    await expect(page.getByRole("listbox")).toHaveCount(0);
+    await expect.poll(() => page.locator("body").evaluate(el => getComputedStyle(el).pointerEvents)).not.toBe("none");
+  }
+  await trigger.click();
+  await page.keyboard.press("Escape");
+  await expect(trigger).toBeFocused();
+  await page.getByTestId("tab-applied").click();
+  await trigger.click();
+  await page.getByRole("option", { name: "Company: A → Z", exact: true }).click();
+  await page.getByTestId("tab-active").click();
+  await expect(trigger).toContainText("Score: Lowest first");
+});
+
+test("closing an action menu leaves other controls usable without reloading", async ({ page, dismissal }) => {
+  expect(dismissal.account.id).toBeTruthy();
+  await page.goto("/dashboard");
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await page.getByTestId("dashboard-tools-button").click();
+    await expect(page.getByTestId("dedup-sweep-button")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("menu")).toHaveCount(0);
+    await expect.poll(() => page.locator("body").evaluate(el => getComputedStyle(el).pointerEvents)).not.toBe("none");
+  }
+  await page.getByRole("button", { name: "Show filters", exact: true }).click();
+  await expect(page.getByTestId("sort-select")).toBeVisible();
+});
+
 test("distinct-job comparison persists after reload without dismissing the job", async ({ page, dismissal }) => {
   dismissal.duplicatePair = {
     id1: dismissal.id, id2: dismissal.id + 1,

@@ -7,7 +7,15 @@ import { Check, ChevronRight, Circle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useModalOwner } from "@/components/modal-auto-dismiss"
 
-const DropdownMenu = DropdownMenuPrimitive.Root
+// Actions can remove their own card or open a dialog. Non-modal menus avoid
+// overlapping page-wide pointer locks during those transitions. Dialogs still
+// provide their own modal focus and pointer isolation.
+function DropdownMenu({ modal, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
+  const owner = useModalOwner()
+  // A menu inside a dialog must retain modal focus behavior so focus restored
+  // after a selection cannot immediately dismiss the next menu opening.
+  return <DropdownMenuPrimitive.Root modal={modal ?? !!owner} {...props} />
+}
 
 const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger
 

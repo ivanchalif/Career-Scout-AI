@@ -9,6 +9,12 @@ All app modals auto-dismiss after three seconds without activity, or two seconds
 
 **How to apply:** Use the shared modal timing rather than per-page timers. Count owned portaled menus as inside, do not extend the outside deadline for continued outside movement, preserve form drafts on timeout, and retain the latest Undo token after changing reasons.
 
+Keep dialog-owned dropdowns modal even when standalone action menus use non-modal behavior.
+
+**Why:** Making every dropdown non-modal broke repeated dismissal-reason selection: after one saved reason, the next menu would not stay available. The focused browser regression passed after retaining modal behavior inside dialogs.
+
+**How to apply:** Derive the default from modal ownership, preserve explicit overrides, and test consecutive reason changes plus Undo. Every portaled selection surface must also inherit its modal owner for inactivity timing.
+
 Dismissal choices must be uniform across entry points and ordered alphabetically by their displayed labels.
 
 **Why:** The user explicitly requested both consistent choices in every dismissal flow and alphabetical ordering when extending the reasons.
