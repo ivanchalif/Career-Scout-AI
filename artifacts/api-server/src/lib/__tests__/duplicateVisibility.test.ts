@@ -18,9 +18,9 @@ describe("read-only duplicate visibility", () => {
     const rows = [posting(1, { appliedAt: new Date() }), posting(2, { deletedAt: new Date() })];
     expect(historicalDuplicateMatches(rows, new Set()).size).toBe(0);
   });
-  it("keeps one stable original when exact copies are both active", () => {
+  it("leaves both exact active copies visible, even when they share a listing URL", () => {
     const rows = [posting(1), posting(2)];
-    expect(historicalDuplicateMatches(rows.reverse(), new Set()).get(2)?.map(p => p.id)).toEqual([1]);
+    expect(historicalDuplicateMatches(rows.reverse(), new Set()).size).toBe(0);
     expect(historicalDuplicateMatches(rows, new Set(["1:2"])).size).toBe(0);
   });
   it("requires an exception for every actual historical match, never a global exemption", () => {
@@ -34,12 +34,18 @@ describe("read-only duplicate visibility", () => {
       expect(result.has(1)).toBe(link !== "https://jobright.ai/jobs/info/different");
     }
   });
-  it("never changes lifecycle or descriptions when automatically classifying active copies", () => {
+  it("never changes or hides active copies when there is no applied/dismissed anchor", () => {
     const rows = [posting(1, { link: null }), posting(2, { link: null }), posting(3, { title: "Senior Product Manager", link: null })];
     const before = structuredClone(rows);
     const matches = historicalDuplicateMatches(rows, new Set());
-    expect([...matches.keys()]).toEqual([2]);
+    expect([...matches.keys()]).toEqual([]);
     expect(rows).toEqual(before);
+  });
+  it.each(["appliedAt", "deletedAt"] as const)("undoing %s restores both copies to visibility", (field) => {
+    const rows = [posting(1), posting(2, { [field]: new Date() })];
+    expect(historicalDuplicateMatches(rows, new Set()).has(1)).toBe(true);
+    rows[1][field] = null;
+    expect(historicalDuplicateMatches(rows, new Set()).size).toBe(0);
   });
   it("does not use a closed-only record as an applied/dismissed anchor", () => {
     expect(historicalDuplicateMatches([posting(1), posting(2, { closedAt: new Date() })], new Set()).size).toBe(0);

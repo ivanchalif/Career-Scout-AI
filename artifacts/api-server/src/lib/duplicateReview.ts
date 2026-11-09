@@ -40,11 +40,16 @@ export async function findDuplicateReviews<T extends HistoricalPosting>(
       const decision = compareJobs(a, b);
       if (decision.kind === "distinct") continue;
       // Already classified automatically in Filtered; no human review needed.
-      if (decision.kind === "duplicate" && exactTitleCompanyKey(a)
-        && exactTitleCompanyKey(a) === exactTitleCompanyKey(b)) continue;
+      if ((b.appliedAt || b.deletedAt) && decision.kind === "duplicate" && exactTitleCompanyKey(a)
+        && exactTitleCompanyKey(a) === exactTitleCompanyKey(b)) {
+        seen.add(a.id);
+        break;
+      }
       seen.add(a.id);
       if (!b.appliedAt && !b.deletedAt) seen.add(b.id);
-      results.push({ a, b, decision });
+      results.push({ a, b, decision: decision.kind === "duplicate" && !b.appliedAt && !b.deletedAt
+        ? { kind: "review", evidence: [...decision.evidence, "Both jobs are active — user review required"] }
+        : decision });
       break;
     }
     if (results.length >= limit) break;

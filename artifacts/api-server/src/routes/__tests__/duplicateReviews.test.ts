@@ -99,6 +99,14 @@ describe("pair-specific duplicate review API", () => {
     expect((await request(app).get("/api/postings/near-duplicates").expect(200)).body).toEqual([]);
     expect(state.writes).toBe(0);
   });
+  it("returns a review for identical jobs when both are active, without changing either", async () => {
+    state.postings = [posting(1), posting(2)];
+    const response = await request(app).get("/api/postings/near-duplicates").expect(200);
+    expect(response.body).toHaveLength(1);
+    expect(response.body[0]).toMatchObject({ id1: 1, id2: 2, confidence: "review" });
+    expect(state.postings.every(posting => !posting.deletedAt && !posting.appliedAt)).toBe(true);
+    expect(state.writes).toBe(0);
+  });
   it.each([
     { postingId: 1, otherPostingId: 1 }, { postingId: -1, otherPostingId: 2 },
     { postingId: "1", otherPostingId: 2 }, { postingId: 1 }, {},

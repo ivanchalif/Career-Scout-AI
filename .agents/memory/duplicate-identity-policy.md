@@ -3,11 +3,11 @@ name: Duplicate identity policy
 description: Evidence required for duplicate handling and the distinction between similar roles and the same opening.
 ---
 
-Identical job titles and companies now qualify for automatic duplicate classification without user review. Equality ignores case and whitespace, not specialty, seniority, or punctuation. Verified individual-job identity remains an independent duplicate signal; fuzzy title/company resemblance alone is insufficient.
+Identical titles and companies qualify for automatic dashboard duplicate classification only against an applied or dismissed record. Two active jobs must stay visible and be offered for user review, even if identical.
 
-**Why:** The user explicitly changed the policy on 2026-11-08: identical titles and companies should be marked automatically; discrepancies such as title or role scope should be reviewed. The earlier rejection of the Uber/Cultura comparison still prohibits cross-employer fuzzy matches.
+**Why:** On 2026-11-09 the user narrowed the earlier automatic-duplicate rule: automatic flags require applied/dismissed history, not merely two matching active dashboard jobs. The earlier rejection of the Uber/Cultura comparison still prohibits cross-employer fuzzy matches.
 
-**How to apply:** Preserve seniority, specialty, team, location, known requisition, and substantial description discrepancies for review. Missing employer identity cannot establish equality. Generic careers URLs are not listing identities. Automatically classify existing exact copies recoverably in Filtered, retain one stable active original, honor pair exceptions, and keep saved applied/dismissed history intact. Apply the same comparison policy to future imports.
+**How to apply:** Equality ignores case and whitespace, not specialty, seniority, or punctuation. Preserve known location, requisition, and substantial description discrepancies for review. Only applied/dismissed records anchor recoverable automatic flags in Filtered; undoing that anchor restores active visibility. Honor pair exceptions, never alter saved history, and do not suppress active-active review merely because the matching evidence is exact.
 
 “Not a duplicate” applies to the specific unordered pair and must persist per user; it must not suppress all comparisons involving either job.
 

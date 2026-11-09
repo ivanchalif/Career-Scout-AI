@@ -42,17 +42,14 @@ beforeEach(() => {
   state.exceptions = new Set();
 });
 describe("paginated dashboard duplicate filtering", () => {
-  it("automatically flags active exact copies in Filtered, never review or history mutation", async () => {
+  it("keeps both active exact copies in dashboard totals and out of Filtered", async () => {
     state.postings = [posting(1, { link: null }), posting(2, { link: null })];
     state.candidates = state.postings;
     const active = await getPostingPage("owner", { applied: false });
-    expect(active.total).toBe(1);
-    expect(active.items.map(item => item.posting.id)).toEqual([1]);
+    expect(active.total).toBe(2);
+    expect(active.items.map(item => item.posting.id)).toEqual([1, 2]);
     const filtered = await getPostingPage("owner", { hidden: true });
-    expect(filtered.items[0].posting.id).toBe(2);
-    expect(filtered.items[0].filterReason?.duplicateMatches).toEqual([
-      { id: 1, title: "Product Manager", company: "Example", status: "active" },
-    ]);
+    expect(filtered.total).toBe(0);
     state.exceptions.add("1:2");
     expect((await getPostingPage("owner", { applied: false })).total).toBe(2);
     expect((await getPostingPage("owner", { hidden: true })).total).toBe(0);

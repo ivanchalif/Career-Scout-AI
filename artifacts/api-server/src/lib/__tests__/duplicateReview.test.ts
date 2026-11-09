@@ -9,6 +9,17 @@ const posting = (id: number, overrides = {}) => ({
 });
 
 describe("indexed duplicate review", () => {
+  it("offers exact active copies for review but skips exact applied/dismissed matches", async () => {
+    const a = posting(1, { company: "Acme" });
+    const b = posting(2, { company: "Acme" });
+    const pairs = await findDuplicateReviews([a, b], new Set());
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0].decision.kind).toBe("review");
+    expect(pairs[0].decision.evidence).toContain("Both jobs are active — user review required");
+    expect(await findDuplicateReviews([a, { ...b, appliedAt: new Date() }], new Set())).toEqual([]);
+    expect(await findDuplicateReviews([a, { ...b, deletedAt: new Date() }], new Set())).toEqual([]);
+    expect(await findDuplicateReviews([a, b], new Set(["1:2"]))).toEqual([]);
+  });
   it("matches exhaustive review decisions and historical ordering", async () => {
     const jobs = [
       posting(1, { company: "Acme Inc." }), posting(2, { company: "Acme", appliedAt: new Date() }),

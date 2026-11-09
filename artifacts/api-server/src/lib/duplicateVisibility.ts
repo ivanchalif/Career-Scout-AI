@@ -1,4 +1,4 @@
-import { compareJobs, duplicateMatchKeys, exactTitleCompanyKey, pairKey, type DuplicateCandidate } from "./duplicatePolicy";
+import { compareJobs, duplicateMatchKeys, pairKey, type DuplicateCandidate } from "./duplicatePolicy";
 
 export type HistoricalPosting = DuplicateCandidate & {
   id: number;
@@ -7,8 +7,8 @@ export type HistoricalPosting = DuplicateCandidate & {
   closedAt?: Date | string | null;
 };
 
-/** Automatic, recoverable duplicate classification. Preserve all history and
- * keep one stable active original; explicit pair exceptions always win.
+/** Only applied/dismissed records can anchor automatic duplicate flags.
+ * Two active copies remain visible for review; pair exceptions always win.
  */
 export function historicalDuplicateMatches<T extends HistoricalPosting>(
   postings: T[], exceptions: Set<string>,
@@ -23,8 +23,7 @@ export function historicalDuplicateMatches<T extends HistoricalPosting>(
     }
   }
   const result = new Map<number, T[]>();
-  // Oldest ID is a stable original, independent of sort order or pagination.
-  for (const posting of [...postings].sort((a, b) => a.id - b.id)) {
+  for (const posting of postings) {
     if (posting.appliedAt || posting.deletedAt || posting.closedAt) continue;
     const matches = new Map<number, T>();
     for (const key of duplicateMatchKeys(posting)) {
@@ -36,15 +35,6 @@ export function historicalDuplicateMatches<T extends HistoricalPosting>(
       }
     }
     if (matches.size) result.set(posting.id, [...matches.values()]);
-    else {
-      // Active-to-active auto-classification is limited to exact title/company.
-      const key = exactTitleCompanyKey(posting);
-      if (key) {
-        const originals = anchors.get(key) ?? [];
-        originals.push(posting);
-        anchors.set(key, originals);
-      }
-    }
   }
   return result;
 }
