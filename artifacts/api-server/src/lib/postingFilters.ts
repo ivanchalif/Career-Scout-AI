@@ -7,7 +7,8 @@ export type PostingVisibility = {
 };
 export type DuplicateFilterMatch = { id: number; title: string; company: string; status: "applied" | "dismissed" | "active" };
 export function postingFilterReason(
-  posting: { title: string; company: string; link?: string | null; location?: string | null; remoteType?: string | null },
+  posting: { title: string; company: string; link?: string | null; location?: string | null; remoteType?: string | null;
+    jobIdentity?: { finalUrl?: string | null; originalUrl?: string | null } | null },
   profile?: PostingVisibility | null,
   duplicateMatches: DuplicateFilterMatch[] = [],
 ) {

@@ -26,7 +26,8 @@ export function missingJobFields(page: PageResult | null) {
 }
 
 type LinkPosting = Pick<typeof jobPostingsTable.$inferSelect,
-  "id" | "userId" | "link" | "closedAt" | "deletedAt" | "availabilityCheckedAt">;
+  "id" | "userId" | "link" | "closedAt" | "deletedAt" | "availabilityCheckedAt">
+  & Partial<Pick<typeof jobPostingsTable.$inferSelect, "jobIdentity">>;
 const pending = new Set<string>();
 const queue: LinkPosting[] = [];
 let running = 0;
@@ -70,6 +71,10 @@ export async function checkJobLink(posting: LinkPosting): Promise<void> {
     availabilityReason: page.availability.reason,
     availabilityConfidence: page.availability.confidence,
     availabilityEvidence: page.availability.evidence,
+    // Redirect destinations identify the ATS even when a JS-rendered job page
+    // cannot be verified as an individual listing. Never downgrade verified identity.
+    ...(page.jobIdentity && (posting.jobIdentity?.status !== "verified" || page.jobIdentity.status === "verified")
+      ? { jobIdentity: page.jobIdentity } : {}),
     ...missingJobFields(page),
   }).where(and(
     eq(jobPostingsTable.id, posting.id),

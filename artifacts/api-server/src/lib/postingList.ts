@@ -45,6 +45,7 @@ export async function getPostingPage(userId: string, options: PostingListOptions
   }[options.sort ?? "score-desc"] ?? desc(score);
   const candidates = await db.select({
     id: p.id, title: p.title, company: p.company, location: p.location, link: p.link, remoteType: p.remoteType,
+    jobIdentity: p.jobIdentity,
     availabilityCheckedAt: p.availabilityCheckedAt,
     availabilityStatus: p.availabilityStatus, availabilityReason: p.availabilityReason, availabilityConfidence: p.availabilityConfidence,
   }).from(p).leftJoin(r, and(eq(r.jobPostingId, p.id), eq(r.userId, userId)))
@@ -63,6 +64,7 @@ export async function getPostingPage(userId: string, options: PostingListOptions
     scheduleJobLinkChecks(visible.map((posting) => ({
       id: posting.id, userId, link: posting.link, closedAt: null, deletedAt: null,
       availabilityCheckedAt: posting.availabilityCheckedAt,
+      jobIdentity: posting.jobIdentity,
     })));
   }
   const ids = eligible.slice(options.offset ?? 0, options.limit ? (options.offset ?? 0) + options.limit : undefined).map((posting) => posting.id);

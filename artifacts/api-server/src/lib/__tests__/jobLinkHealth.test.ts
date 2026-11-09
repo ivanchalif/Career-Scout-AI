@@ -32,6 +32,20 @@ beforeEach(() => {
 });
 
 describe("automatic missing-job closure", () => {
+  it("persists a Workday landing URL even when its job identity is uncertain", async () => {
+    const jobIdentity = {
+      version: 1 as const, status: "uncertain" as const, reason: "insufficient_rendered_content",
+      inputUrl: posting.link, finalUrl: "https://company.myworkdayjobs.com/jobs/123",
+      redirectChain: [posting.link, "https://company.myworkdayjobs.com/jobs/123"],
+      observedAt: checkedAt.toISOString(), signals: [],
+    };
+    vi.mocked(fetchJobPageContent).mockResolvedValue({ ...page("http_403", "unverified"), jobIdentity });
+    await checkJobLink(posting);
+    expect(set.mock.calls[0][0].jobIdentity).toEqual(jobIdentity);
+    expect(set.mock.calls[0][0]).not.toHaveProperty("closedAt");
+    await checkJobLink({ ...posting, jobIdentity: { ...jobIdentity, status: "verified" } });
+    expect(set.mock.calls[1][0]).not.toHaveProperty("jobIdentity");
+  });
   it.each(["explicit_job_closed", "explicit_job_unavailable", "explicit_posting_expired", "explicit_position_filled", "explicit_applications_closed", "jsonld_valid_through_expired"])("persists %s as recoverably closed", async (reason) => {
     vi.mocked(fetchJobPageContent).mockResolvedValue(page(reason));
     await checkJobLink(posting);

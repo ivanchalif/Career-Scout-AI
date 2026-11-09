@@ -110,3 +110,9 @@ Source investigations must distinguish poor relevance from broken retrieval, and
 **Why:** "Low usefulness" is based on user responses, not necessarily a technical fault. The user requested a way to investigate and review/implement solutions; silently widening eligibility or inventing exclusions would undermine their saved preferences.
 
 **How to apply:** Use original-importer attribution and the same rolling-window/filter rules as source health. Keep unknown dates unknown, label retrieval previews as preliminary, and never infer specific domain exclusions from a generic wrong-domain dismissal. Preserve jobs and global filters; apply only explicit configuration changes the user reviewed.
+
+Workday visibility must use the landing/application destination, not only the imported aggregator link.
+
+**Why:** The user clarified that landing URLs containing `myworkdayjobs` identify Workday jobs; checking only saved entry links misses redirects.
+
+**How to apply:** Use recorded Workday destination hosts even when the page cannot be verified as an individual listing. Keep that ATS signal separate from duplicate identity verification and preserve the reversible hide preference.

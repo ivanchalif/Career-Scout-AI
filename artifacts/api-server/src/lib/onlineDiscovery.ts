@@ -96,6 +96,7 @@ export async function getOnlineDiscoverySources(userId: string, includeHealth = 
     db.select({
       id: jobPostingsTable.id, source: jobPostingsTable.source, title: jobPostingsTable.title,
       company: jobPostingsTable.company, link: jobPostingsTable.link, location: jobPostingsTable.location,
+      jobIdentity: jobPostingsTable.jobIdentity,
       remoteType: jobPostingsTable.remoteType, sourcePostedAt: jobPostingsTable.sourcePostedAt,
       createdAt: jobPostingsTable.createdAt, appliedAt: jobPostingsTable.appliedAt,
       deletedAt: jobPostingsTable.deletedAt, deletedBy: jobPostingsTable.deletedBy,

@@ -5,6 +5,7 @@ import { isHiddenByWorkday } from "./workdayFilter";
 type Source = { id: number; provider: string; isSuppressed: boolean };
 type Posting = {
   id: number; source: string; title: string; company: string; link: string | null;
+  jobIdentity?: { finalUrl?: string | null; originalUrl?: string | null } | null;
   location: string | null; remoteType: string | null; sourcePostedAt: Date | null;
   createdAt: Date; appliedAt: Date | null; deletedAt: Date | null; deletedBy: string | null;
 };
@@ -23,7 +24,7 @@ export function eligibleSourcePostings(
 }
 
 /** Same reversible visibility preferences as the dashboard; dismissal is an outcome, not a filter. */
-export function countsAsAdded(posting: Pick<Posting, "title" | "company" | "link" | "location" | "remoteType">, profile?: Profile | null): boolean {
+export function countsAsAdded(posting: Pick<Posting, "title" | "company" | "link" | "location" | "remoteType" | "jobIdentity">, profile?: Profile | null): boolean {
   const settings = profile?.companyFilterSettings;
   if (isHiddenByWorkday(posting, settings) || bayAreaFilterReason(posting, settings)) return false;
   if (profile?.titleExcludeKeywords?.some(keyword => posting.title.toLowerCase().includes(keyword.toLowerCase()))) return false;

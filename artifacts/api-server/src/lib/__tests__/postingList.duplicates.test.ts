@@ -42,6 +42,17 @@ beforeEach(() => {
   state.exceptions = new Set();
 });
 describe("paginated dashboard duplicate filtering", () => {
+  it("filters Workday redirect destinations, not just the saved aggregator link", async () => {
+    state.postings = [posting(1, {
+      link: "https://example.com/job/1",
+      jobIdentity: { finalUrl: "https://company.myworkdayjobs.com/jobs/123" },
+    })];
+    state.candidates = state.postings;
+    expect((await getPostingPage("owner", { applied: false })).total).toBe(0);
+    const filtered = await getPostingPage("owner", { hidden: true });
+    expect(filtered.total).toBe(1);
+    expect(filtered.items[0].filterReason?.byAts).toBe(true);
+  });
   it("keeps the surviving copy in Active and not Filtered after duplicate dismissal", async () => {
     state.postings = [posting(1), posting(2, { deletedAt: new Date(), dismissalReason: "duplicate" })];
     state.candidates = [state.postings[0]];
