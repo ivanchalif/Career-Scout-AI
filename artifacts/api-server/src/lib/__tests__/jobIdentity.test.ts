@@ -31,8 +31,8 @@ describe("verified cross-site opening identity", () => {
     expect(jobIdentityKeys(a)).toContain("ats:greenhouse:acme:91001");
     expect(JSON.parse(JSON.stringify(a.jobIdentity))).toEqual(a.jobIdentity);
   });
-  it("keeps similarly titled different requisitions distinct", () => {
-    expect(compareJobs(candidate(1, "lensa", inputUrl), candidate(2, "other-requisition", otherUrl)).kind).toBe("distinct");
+  it("requires review when identical title/company conflicts with known requisition IDs", () => {
+    expect(compareJobs(candidate(1, "lensa", inputUrl), candidate(2, "other-requisition", otherUrl)).kind).toBe("review");
   });
   it("scopes IDs by employer and does not use unscoped identifier values", () => {
     const a = candidate(1, "lensa", inputUrl);

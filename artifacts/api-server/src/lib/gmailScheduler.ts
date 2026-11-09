@@ -293,7 +293,7 @@ async function _syncUserInner(
       const title = listing.title || email.subject.slice(0, 200) || "Job Opportunity";
       const company = listing.company || extractSender(email.sender);
 
-      const { isDuplicate, matchedId, matchedTitle, matchedCompany, wasDeleted, wasApplied } = await isFuzzyDuplicate(conn.userId, title, company, { link: resolvedUrl, jobIdentity });
+      const { isDuplicate, matchedId, matchedTitle, matchedCompany, wasDeleted, wasApplied } = await isFuzzyDuplicate(conn.userId, title, company, { link: resolvedUrl, jobIdentity, location: jobLocation, fullDescription: description });
       if (isDuplicate) {
         if (matchedId && listing.url) await saveJobIdentitySource({
           userId: conn.userId, postingId: matchedId, provider: "gmail", url: listing.url, jobIdentity,

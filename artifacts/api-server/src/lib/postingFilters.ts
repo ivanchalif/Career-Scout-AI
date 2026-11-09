@@ -5,7 +5,7 @@ export type PostingVisibility = {
   companyFilterSettings?: { mode: string; companies: string[]; excludeWorkday?: boolean; bayAreaNonRemoteOnly?: boolean } | null;
   titleExcludeKeywords?: string[] | null;
 };
-export type DuplicateFilterMatch = { id: number; title: string; company: string; status: "applied" | "dismissed" };
+export type DuplicateFilterMatch = { id: number; title: string; company: string; status: "applied" | "dismissed" | "active" };
 export function postingFilterReason(
   posting: { title: string; company: string; link?: string | null; location?: string | null; remoteType?: string | null },
   profile?: PostingVisibility | null,

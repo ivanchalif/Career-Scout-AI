@@ -22,7 +22,7 @@ export async function getPostingPage(userId: string, options: PostingListOptions
   const filterReason = (posting: Parameters<typeof postingFilterReason>[0] & { id: number }) =>
     postingFilterReason(posting, profile, (duplicates.get(posting.id) ?? []).map((anchor) => ({
       id: anchor.id, title: anchor.title, company: anchor.company,
-      status: anchor.deletedAt ? "dismissed" as const : "applied" as const,
+      status: anchor.deletedAt ? "dismissed" as const : anchor.appliedAt ? "applied" as const : "active" as const,
     })));
   const conditions = [eq(p.userId, userId)];
   if (options.archived) conditions.push(or(isNotNull(p.deletedAt), isNotNull(p.closedAt))!);

@@ -47,10 +47,10 @@ describe("identity-based imports and cleanup", () => {
       .toEqual({ isDuplicate: false });
     expect(db.update).not.toHaveBeenCalled();
   });
-  it("does not block same-title jobs without listing identity", async () => {
+  it("blocks identical title/company copies even without a link, without mutating history", async () => {
     state.postings = [posting(1)];
-    expect(await isFuzzyDuplicate("owner", "Product Manager", "Acme Inc")).toEqual({ isDuplicate: false });
-    expect(db.select).not.toHaveBeenCalled();
+    expect(await isFuzzyDuplicate("owner", "Product Manager", "Acme Inc")).toMatchObject({ isDuplicate: true, matchedId: 1 });
+    expect(db.update).not.toHaveBeenCalled();
   });
   it("does not block a different requisition at the same company", async () => {
     state.postings = [posting(1)];

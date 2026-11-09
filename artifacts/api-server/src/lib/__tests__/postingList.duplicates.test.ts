@@ -37,11 +37,26 @@ const posting = (id: number, overrides = {}) => ({
   appliedAt: null, deletedAt: null, closedAt: null, source: "manual", ...overrides,
 });
 beforeEach(() => {
-  state.postings = [posting(1), posting(2, { appliedAt: new Date() }), posting(3, { link: null })];
+  state.postings = [posting(1), posting(2, { appliedAt: new Date() }), posting(3, { title: "Different Product Manager", link: null })];
   state.candidates = [state.postings[0], state.postings[2]];
   state.exceptions = new Set();
 });
 describe("paginated dashboard duplicate filtering", () => {
+  it("automatically flags active exact copies in Filtered, never review or history mutation", async () => {
+    state.postings = [posting(1, { link: null }), posting(2, { link: null })];
+    state.candidates = state.postings;
+    const active = await getPostingPage("owner", { applied: false });
+    expect(active.total).toBe(1);
+    expect(active.items.map(item => item.posting.id)).toEqual([1]);
+    const filtered = await getPostingPage("owner", { hidden: true });
+    expect(filtered.items[0].posting.id).toBe(2);
+    expect(filtered.items[0].filterReason?.duplicateMatches).toEqual([
+      { id: 1, title: "Product Manager", company: "Example", status: "active" },
+    ]);
+    state.exceptions.add("1:2");
+    expect((await getPostingPage("owner", { applied: false })).total).toBe(2);
+    expect((await getPostingPage("owner", { hidden: true })).total).toBe(0);
+  });
   it("returns an accurate total after filters and before page slicing", async () => {
     state.exceptions.add("1:2");
     const result = await getPostingPage("owner", { applied: false, limit: 1, offset: 1 });

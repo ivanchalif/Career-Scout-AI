@@ -423,12 +423,12 @@ export default function FilteredPage() {
                             {filterReason.duplicateMatches?.map((match) => (
                               <div key={match.id} className="flex flex-wrap items-center gap-2 text-xs">
                                 <span className="sem-badge" data-tone="hidden">
-                                  Same posting as {match.status} job: {match.title} at {match.company}
+                                  Automatically flagged duplicate of {match.status} job: {match.title} at {match.company}
                                 </span>
                                 <button
                                   type="button"
                                   className="text-indigo-300 underline underline-offset-2 disabled:opacity-50"
-                                  aria-label={`Not a duplicate of ${match.title} at ${match.company}, history record ${match.id}`}
+                                  aria-label={`Not a duplicate of ${match.title} at ${match.company}, job record ${match.id}`}
                                   disabled={savingDistinct !== null}
                                   aria-busy={savingDistinct === `${posting.id}:${match.id}`}
                                   onClick={() => markDistinct(posting.id, match.id)}

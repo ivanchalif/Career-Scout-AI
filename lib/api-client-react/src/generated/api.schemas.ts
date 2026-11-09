@@ -254,6 +254,7 @@ export type DuplicateFilterMatchStatus =
 export const DuplicateFilterMatchStatus = {
   applied: "applied",
   dismissed: "dismissed",
+  active: "active",
 } as const;
 
 export interface DuplicateFilterMatch {

@@ -27,6 +27,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     .select({
       id: jobPostingsTable.id, title: jobPostingsTable.title, company: jobPostingsTable.company,
       link: jobPostingsTable.link, location: jobPostingsTable.location, remoteType: jobPostingsTable.remoteType,
+      fullDescription: jobPostingsTable.fullDescription, jobIdentity: jobPostingsTable.jobIdentity,
       appliedAt: jobPostingsTable.appliedAt, deletedAt: jobPostingsTable.deletedAt, closedAt: jobPostingsTable.closedAt,
     })
     .from(jobPostingsTable)

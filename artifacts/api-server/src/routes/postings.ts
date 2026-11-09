@@ -173,7 +173,9 @@ router.post("/postings", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const duplicate = await isFuzzyDuplicate(userId, parsed.data.title, parsed.data.company, { link: parsed.data.link });
+  const duplicate = await isFuzzyDuplicate(userId, parsed.data.title, parsed.data.company, {
+    link: parsed.data.link, fullDescription: parsed.data.fullDescription,
+  });
   if (duplicate.isDuplicate) {
     res.status(409).json({ error: "This job already exists in your history (active, applied, or dismissed). Open the existing listing instead of adding another copy.", existingPostingId: duplicate.matchedId });
     return;
@@ -313,7 +315,8 @@ router.post("/postings/import", requireAuth, upload.single("file"), async (req, 
   }
 
   const existingPostings = await db
-    .select({ title: jobPostingsTable.title, company: jobPostingsTable.company, link: jobPostingsTable.link })
+    .select({ title: jobPostingsTable.title, company: jobPostingsTable.company, link: jobPostingsTable.link,
+      location: jobPostingsTable.location, fullDescription: jobPostingsTable.fullDescription })
     .from(jobPostingsTable)
     .where(eq(jobPostingsTable.userId, userId));
 
@@ -339,7 +342,8 @@ router.post("/postings/import", requireAuth, upload.single("file"), async (req, 
     const salaryMin = isNaN(salaryMinRaw) ? null : salaryMinRaw;
     const salaryMax = isNaN(salaryMaxRaw) ? null : salaryMaxRaw;
 
-    if (existingPostings.some((posting) => compareJobs({ title, company, link }, posting).kind === "duplicate")) {
+    const fullDescription = (record["fullDescription"] ?? "").trim();
+    if (existingPostings.some((posting) => compareJobs({ title, company, link, location, fullDescription }, posting).kind === "duplicate")) {
       skipped++;
       continue;
     }
@@ -363,7 +367,7 @@ router.post("/postings/import", requireAuth, upload.single("file"), async (req, 
       })
       .returning();
 
-    existingPostings.push({ title, company, link });
+    existingPostings.push({ title, company, link, location, fullDescription });
 
     imported++;
     scorePostingBackground(inserted.id, userId);

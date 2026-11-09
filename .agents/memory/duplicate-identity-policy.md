@@ -3,11 +3,11 @@ name: Duplicate identity policy
 description: Evidence required for duplicate handling and the distinction between similar roles and the same opening.
 ---
 
-Automatic duplicate blocking or removal requires proof of the same individual listing: an individual-job URL or an employer-scoped ATS requisition ID. Title/company resemblance is not proof. Same-employer jobs with supporting details may be offered for review; different employers require verified shared listing identity, not fuzzy company matching.
+Identical job titles and companies now qualify for automatic duplicate classification without user review. Equality ignores case and whitespace, not specialty, seniority, or punctuation. Verified individual-job identity remains an independent duplicate signal; fuzzy title/company resemblance alone is insufficient.
 
-**Why:** The user rejected a comparison between Uber's Senior Product Manager – Uber Parcel and Cultura Technologies' Product Manager, then approved stricter identity-based rules. Generic Product Manager titles and the shared word Technologies must not make different openings duplicates.
+**Why:** The user explicitly changed the policy on 2026-11-08: identical titles and companies should be marked automatically; discrepancies such as title or role scope should be reviewed. The earlier rejection of the Uber/Cultura comparison still prohibits cross-employer fuzzy matches.
 
-**How to apply:** Preserve seniority, specialty, team, and location differences. Generic careers or collection URLs are not listing identities. Use the same policy for review suggestions, import suppression, and cleanup. Preserve descriptions and reversible state when removing confirmed copies.
+**How to apply:** Preserve seniority, specialty, team, location, known requisition, and substantial description discrepancies for review. Missing employer identity cannot establish equality. Generic careers URLs are not listing identities. Automatically classify existing exact copies recoverably in Filtered, retain one stable active original, honor pair exceptions, and keep saved applied/dismissed history intact. Apply the same comparison policy to future imports.
 
 “Not a duplicate” applies to the specific unordered pair and must persist per user; it must not suppress all comparisons involving either job.
 

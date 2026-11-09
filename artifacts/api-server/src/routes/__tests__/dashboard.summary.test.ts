@@ -87,7 +87,7 @@ describe("GET /dashboard/summary", () => {
       { id: 3, title: "Engineer", location: "New York, NY", remoteType: "remote", company: "Example", appliedAt: null },
       { id: 4, title: "Engineer", location: null, remoteType: "onsite", company: "Example", appliedAt: null },
       { id: 5, title: "Engineer", location: "New York, NY", remoteType: null, company: "Example", appliedAt: null },
-    ];
+    ].map(posting => ({ ...posting, company: `Employer ${posting.id}` }));
     dbSelect
       .mockReturnValueOnce(chain([{ companyFilterSettings: { mode: "off", companies: [], bayAreaNonRemoteOnly: enabled } }]))
       .mockReturnValueOnce(chain([]))

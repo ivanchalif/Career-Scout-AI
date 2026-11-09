@@ -1,5 +1,5 @@
 import { setImmediate } from "node:timers/promises";
-import { compareJobs, jobIdentityKeys, normalizeEmployer, pairKey, type DuplicateDecision } from "./duplicatePolicy";
+import { compareJobs, exactTitleCompanyKey, jobIdentityKeys, normalizeEmployer, pairKey, type DuplicateDecision } from "./duplicatePolicy";
 import type { HistoricalPosting } from "./duplicateVisibility";
 
 /** Every non-distinct decision requires either shared identity or employer.
@@ -39,6 +39,9 @@ export async function findDuplicateReviews<T extends HistoricalPosting>(
       if (++comparisons % 25 === 0) await setImmediate();
       const decision = compareJobs(a, b);
       if (decision.kind === "distinct") continue;
+      // Already classified automatically in Filtered; no human review needed.
+      if (decision.kind === "duplicate" && exactTitleCompanyKey(a)
+        && exactTitleCompanyKey(a) === exactTitleCompanyKey(b)) continue;
       seen.add(a.id);
       if (!b.appliedAt && !b.deletedAt) seen.add(b.id);
       results.push({ a, b, decision });

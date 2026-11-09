@@ -295,7 +295,7 @@ export const ListPostingsResponseItem = zod.object({
             id: zod.number(),
             title: zod.string(),
             company: zod.string(),
-            status: zod.enum(["applied", "dismissed"]),
+            status: zod.enum(["applied", "dismissed", "active"]),
           }),
         )
         .optional(),
@@ -500,7 +500,7 @@ export const GetPostingPageResponse = zod.object({
                 id: zod.number(),
                 title: zod.string(),
                 company: zod.string(),
-                status: zod.enum(["applied", "dismissed"]),
+                status: zod.enum(["applied", "dismissed", "active"]),
               }),
             )
             .optional(),
@@ -651,7 +651,7 @@ export const ListDeletedPostingsResponseItem = zod.object({
             id: zod.number(),
             title: zod.string(),
             company: zod.string(),
-            status: zod.enum(["applied", "dismissed"]),
+            status: zod.enum(["applied", "dismissed", "active"]),
           }),
         )
         .optional(),
@@ -806,7 +806,7 @@ export const GetPostingResponse = zod.object({
             id: zod.number(),
             title: zod.string(),
             company: zod.string(),
-            status: zod.enum(["applied", "dismissed"]),
+            status: zod.enum(["applied", "dismissed", "active"]),
           }),
         )
         .optional(),
@@ -1094,7 +1094,7 @@ export const UndoPostingDismissalResponse = zod.object({
             id: zod.number(),
             title: zod.string(),
             company: zod.string(),
-            status: zod.enum(["applied", "dismissed"]),
+            status: zod.enum(["applied", "dismissed", "active"]),
           }),
         )
         .optional(),
@@ -2059,7 +2059,7 @@ export const GetDashboardSummaryResponse = zod.object({
                 id: zod.number(),
                 title: zod.string(),
                 company: zod.string(),
-                status: zod.enum(["applied", "dismissed"]),
+                status: zod.enum(["applied", "dismissed", "active"]),
               }),
             )
             .optional(),

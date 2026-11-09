@@ -792,7 +792,9 @@ export async function runOnlineDiscovery(userId: string) {
           ? sourceById.get(`${screenedCandidate.provider}:${screenedCandidate.sourceJobId}`)
           : undefined);
       if (!existingId) {
-        const fuzzy = await isFuzzyDuplicate(userId, screenedCandidate.title, screenedCandidate.company, { link: canonicalUrl, jobIdentity });
+        const fuzzy = await isFuzzyDuplicate(userId, screenedCandidate.title, screenedCandidate.company, {
+          link: canonicalUrl, jobIdentity, location: screenedCandidate.location, fullDescription: screenedCandidate.description,
+        });
         existingId = fuzzy.matchedId;
       }
       if (existingId) {

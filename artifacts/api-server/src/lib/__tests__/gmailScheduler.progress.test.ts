@@ -169,7 +169,9 @@ describe("Gmail pipeline progress", () => {
     });
     vi.mocked(isFuzzyDuplicate).mockResolvedValue(duplicate ? { isDuplicate: true, matchedId: 51 } : { isDuplicate: false });
     await syncUser(conn);
-    expect(isFuzzyDuplicate).toHaveBeenCalledWith(conn.userId, "Product Manager", "Example", { link: url, jobIdentity });
+    expect(isFuzzyDuplicate).toHaveBeenCalledWith(conn.userId, "Product Manager", "Example", {
+      link: url, jobIdentity, location: null, fullDescription: "Useful page description",
+    });
     expect(saveJobIdentitySource).toHaveBeenCalledWith(expect.objectContaining({
       userId: conn.userId, provider: "gmail", url, jobIdentity,
       ...(duplicate ? { postingId: 51 } : {}),

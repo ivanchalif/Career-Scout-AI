@@ -1693,7 +1693,7 @@ components:
         id: { type: integer }
         title: { type: string }
         company: { type: string }
-        status: { type: string, enum: [applied, dismissed] }
+        status: { type: string, enum: [applied, dismissed, active] }
       required: [id, title, company, status]
 
     DuplicatePostingConflict:

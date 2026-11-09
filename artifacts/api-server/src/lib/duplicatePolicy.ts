@@ -8,6 +8,19 @@ export type DuplicateCandidate = {
 };
 export type DuplicateDecision = { kind: "distinct" | "review" | "duplicate"; evidence: string[] };
 
+/** Exact text only: do not erase specialty, punctuation or seniority differences. */
+export function exactTitleCompanyKey(posting: DuplicateCandidate): string | null {
+  const clean = (value: string) => value.normalize("NFKC").toLowerCase().trim().replace(/\s+/g, " ");
+  const title = clean(posting.title), company = clean(posting.company);
+  if (!title || !company || /^(unknown|not specified|not provided|n\/a)$/.test(company)) return null;
+  return `text:${JSON.stringify([title, company])}`;
+}
+
+export function duplicateMatchKeys(posting: DuplicateCandidate): string[] {
+  const exact = exactTitleCompanyKey(posting);
+  return [...jobIdentityKeys(posting), ...(exact ? [exact] : [])];
+}
+
 export function canonicalizeJobUrl(rawUrl: string): string {
   try {
     let url = new URL(rawUrl.trim());
@@ -138,6 +151,24 @@ function level(title: string): string {
 
 export function compareJobs(a: DuplicateCandidate, b: DuplicateCandidate): DuplicateDecision {
   const distinct: DuplicateDecision = { kind: "distinct", evidence: [] };
+  const exact = exactTitleCompanyKey(a);
+  if (exact && exact === exactTitleCompanyKey(b)) {
+    const aId = atsIdentity(a.jobIdentity?.status === "verified" ? a.jobIdentity.originalUrl : a.link);
+    const bId = atsIdentity(b.jobIdentity?.status === "verified" ? b.jobIdentity.originalUrl : b.link);
+    const conflictingId = aId && bId && aId.scope === bId.scope && aId.id !== bId.id;
+    const locationA = normalizeTitle(a.location ?? ""), locationB = normalizeTitle(b.location ?? "");
+    const conflictingLocation = locationA && locationB && locationA !== locationB;
+    const conflictingScope = (a.fullDescription?.length ?? 0) >= 250 && (b.fullDescription?.length ?? 0) >= 250
+      && overlap(words(a.fullDescription!), words(b.fullDescription!)) < 0.85;
+    const discrepancies = [
+      ...(conflictingId ? ["Different known requisition IDs"] : []),
+      ...(conflictingLocation ? ["Different stated locations"] : []),
+      ...(conflictingScope ? ["Substantially different role descriptions"] : []),
+    ];
+    return discrepancies.length
+      ? { kind: "review", evidence: ["Identical job title and company", ...discrepancies, "Review the discrepancy before marking duplicate"] }
+      : { kind: "duplicate", evidence: ["Identical job title and company (case and whitespace normalized)"] };
+  }
   if (a.jobIdentity?.status === "verified" || b.jobIdentity?.status === "verified") {
     const bKeys = new Set(jobIdentityKeys(b));
     if (jobIdentityKeys(a).some((key) => bKeys.has(key)))

@@ -141,7 +141,7 @@ router.post("/imap/sync", requireAuth, async (req, res): Promise<void> => {
         const title = listing.title || email.subject.slice(0, 200) || "Job Opportunity";
         const company = listing.company || email.sender.replace(/<[^>]+>/g, "").trim().split("@")[0] || "Unknown";
 
-        const { isDuplicate, matchedTitle, matchedCompany, wasDeleted, wasApplied } = await isFuzzyDuplicate(userId, title, company, { link: listing.url });
+        const { isDuplicate, matchedTitle, matchedCompany, wasDeleted, wasApplied } = await isFuzzyDuplicate(userId, title, company, { link: listing.url, fullDescription: listing.description });
         if (isDuplicate) {
           logger.info(
             { userId, title, company, matchedTitle, matchedCompany, wasDeleted, wasApplied },

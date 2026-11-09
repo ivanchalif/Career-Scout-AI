@@ -18,6 +18,7 @@ export async function loadHistoricalDuplicateMatches(userId: string) {
     db.select({
       id: jobPostingsTable.id, title: jobPostingsTable.title, company: jobPostingsTable.company,
       link: jobPostingsTable.link, appliedAt: jobPostingsTable.appliedAt,
+      location: jobPostingsTable.location, fullDescription: jobPostingsTable.fullDescription,
       jobIdentity: jobPostingsTable.jobIdentity,
       deletedAt: jobPostingsTable.deletedAt, closedAt: jobPostingsTable.closedAt,
     }).from(jobPostingsTable).where(eq(jobPostingsTable.userId, userId)),
@@ -26,18 +27,18 @@ export async function loadHistoricalDuplicateMatches(userId: string) {
   return historicalDuplicateMatches(postings, exceptions);
 }
 
-/** Kept as a compatibility name; text similarity NEVER blocks an import. */
+/** Similarity never blocks imports; exact title/company or listing identity can. */
 export async function isFuzzyDuplicate(
   userId: string, title: string, company: string,
-  options?: { excludeId?: number; deletedOrAppliedOnly?: boolean; link?: string | null; jobIdentity?: DuplicateCandidate["jobIdentity"] },
+  options?: { excludeId?: number; deletedOrAppliedOnly?: boolean; link?: string | null; jobIdentity?: DuplicateCandidate["jobIdentity"]; location?: string | null; fullDescription?: string | null },
 ): Promise<{ isDuplicate: boolean; matchedTitle?: string; matchedCompany?: string; matchedId?: number; wasDeleted?: boolean; wasApplied?: boolean }> {
-  if (!options?.link) return { isDuplicate: false };
   const postings = await db.select().from(jobPostingsTable).where(eq(jobPostingsTable.userId, userId));
-  const exceptions = options.excludeId ? await loadDuplicateExceptions(userId) : new Set<string>();
-  const candidate: DuplicateCandidate = { title, company, link: options.link, jobIdentity: options.jobIdentity };
-  const match = postings.find((posting) => posting.id !== options.excludeId
-    && (!options.deletedOrAppliedOnly || posting.deletedAt || posting.appliedAt)
-    && (!options.excludeId || !exceptions.has(pairKey(options.excludeId, posting.id)))
+  const exceptions = options?.excludeId ? await loadDuplicateExceptions(userId) : new Set<string>();
+  const candidate: DuplicateCandidate = { title, company, link: options?.link, jobIdentity: options?.jobIdentity,
+    location: options?.location, fullDescription: options?.fullDescription };
+  const match = postings.find((posting) => posting.id !== options?.excludeId
+    && (!options?.deletedOrAppliedOnly || posting.deletedAt || posting.appliedAt)
+    && (!options?.excludeId || !exceptions.has(pairKey(options.excludeId, posting.id)))
     && compareJobs(candidate, posting).kind === "duplicate");
   return match ? {
     isDuplicate: true, matchedId: match.id, matchedTitle: match.title, matchedCompany: match.company,

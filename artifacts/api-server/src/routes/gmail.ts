@@ -269,7 +269,7 @@ router.post("/gmail/reprocess", requireAuth, async (req: Request, res: Response)
       }
 
       // Use the resolved identity, matching scheduled Gmail and online imports.
-      const { isDuplicate } = await isFuzzyDuplicate(userId, title, company, { link: resolvedUrl });
+      const { isDuplicate } = await isFuzzyDuplicate(userId, title, company, { link: resolvedUrl, fullDescription });
       if (isDuplicate) continue;
 
       // Check blocked body keywords

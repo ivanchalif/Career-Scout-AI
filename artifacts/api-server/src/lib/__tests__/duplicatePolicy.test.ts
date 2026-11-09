@@ -28,12 +28,12 @@ describe("duplicate evidence", () => {
   it.each([
     ["https://linkedin.com/jobs/view/123", "https://linkedin.com/jobs/view/456"],
     ["https://jobright.ai/jobs/info/abc", "https://jobright.ai/jobs/info/def"],
-  ])("preserves distinct provider job IDs even with matching text", (first, second) => {
-    expect(compareJobs({ ...a, link: first }, { ...a, link: second }).kind).toBe("distinct");
+  ])("offers review for the discrepancy of distinct provider IDs despite matching text", (first, second) => {
+    expect(compareJobs({ ...a, link: first }, { ...a, link: second }).kind).toBe("review");
   });
   it("preserves functional job identifiers on unknown providers", () => {
-    expect(compareJobs({ ...a, link: "https://example.org/jobs?jobId=123" },
-      { ...a, link: "https://example.org/jobs?jobId=456" }).kind).not.toBe("duplicate");
+    expect(canonicalizeJobUrl("https://example.org/jobs?jobId=123"))
+      .not.toBe(canonicalizeJobUrl("https://example.org/jobs?jobId=456"));
   });
   it("rejects the real Uber/Cultura false positive", () => {
     expect(compareJobs(
@@ -55,15 +55,15 @@ describe("duplicate evidence", () => {
   it("does not confuse IDs at different employers", () => {
     expect(compareJobs(a, { ...a, company: "Different Employer", link: "https://jobs.lever.co/other/req-1" }).kind).toBe("distinct");
   });
-  it("different requisition IDs are different jobs regardless of text", () => {
-    expect(compareJobs(a, { ...a, link: "https://jobs.lever.co/acme/req-2" }).kind).toBe("distinct");
+  it("different requisition IDs require review for otherwise identical jobs", () => {
+    expect(compareJobs(a, { ...a, link: "https://jobs.lever.co/acme/req-2" }).kind).toBe("review");
   });
   it.each(["https://example.com", "https://example.com/careers", "https://jobs.lever.co/acme", "https://example.com/jobs/search", "https://example.com/jobs?department=product"])("does not equate collection URLs: %s", (link) => {
     expect(individualJobUrl(link)).toBeNull();
-    expect(compareJobs({ ...a, title: "Product Manager", link }, { ...a, title: "Product Manager", link }).kind).not.toBe("duplicate");
+    expect(compareJobs({ ...a, title: "Product Manager", link }, { ...a, title: "Software Engineer", link }).kind).not.toBe("duplicate");
   });
-  it("same title and company are not enough even with the same location", () => {
-    expect(compareJobs({ ...a, title: "Product Manager", link: null }, { ...a, title: "Product Manager", link: null }).kind).toBe("distinct");
+  it("automatically classifies identical titles and companies without requiring a link or review", () => {
+    expect(compareJobs({ ...a, title: "Product Manager", link: null }, { ...a, title: " product  manager ", link: null }).kind).toBe("duplicate");
   });
   it("same employer/title/specialty offers review, never automatic removal", () => {
     const result = compareJobs({ ...a, link: null }, { ...a, company: "Acme Technologies", link: null });
@@ -73,15 +73,22 @@ describe("duplicate evidence", () => {
   it.each([
     { title: "Junior Product Manager (AI)" },
     { title: "Senior Product Manager (Security)" },
-    { location: "Alpharetta, GA" },
     { company: "Other Technologies" },
   ])("meaningful role or employer differences prevent review: %j", (change) => {
     expect(compareJobs({ ...a, link: null }, { ...a, link: null, ...change }).kind).toBe("distinct");
   });
+  it("retains review for a location or scope discrepancy despite identical titles", () => {
+    expect(compareJobs({ ...a, link: null }, { ...a, link: null, location: "Alpharetta, GA" }).kind).toBe("review");
+    expect(compareJobs({ ...a, link: null, fullDescription: "Build AI models and research machine learning systems. ".repeat(10) },
+      { ...a, link: null, fullDescription: "Manage retail inventory freight shipping and logistics warehouses. ".repeat(10) }).kind).toBe("review");
+  });
+  it.each(["", "Unknown", "Not specified"])("does not automatically equate missing employer identity: %s", (company) => {
+    expect(compareJobs({ title: "Product Manager", company }, { title: "Product Manager", company }).kind).not.toBe("duplicate");
+  });
   it("only substantially matching descriptions support generic-title review", () => {
     const description = "Lead cross functional product strategy, roadmap delivery and customer research across the platform. ".repeat(4);
     expect(compareJobs({ ...a, title: "Product Manager", link: null, fullDescription: description },
-      { ...a, title: "Product Manager", link: null, fullDescription: description }).kind).toBe("review");
+      { ...a, title: "Product Manager", link: null, fullDescription: description }).kind).toBe("duplicate");
   });
   it("scopes ATS IDs to both vendor and employer", () => {
     expect(atsIdentity(a.link)).toEqual({ scope: "lever:acme", id: "req-1" });

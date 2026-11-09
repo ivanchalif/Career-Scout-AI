@@ -51,7 +51,7 @@ beforeEach(() => { state.postings = []; state.exceptions = []; state.writes = 0;
 
 describe("pair-specific duplicate review API", () => {
   it("includes dismissed history in review without modifying it", async () => {
-    state.postings = [posting(1), posting(2, { deletedAt: new Date() })];
+    state.postings = [posting(1), posting(2, { title: "Sr Product Manager (AI)", deletedAt: new Date() })];
     const response = await request(app).get("/api/postings/near-duplicates").expect(200);
     expect(response.body[0]).toMatchObject({ id1: 1, id2: 2, confidence: "review" });
     expect(response.body[0].deleted_at2).toBeTruthy();
@@ -74,7 +74,7 @@ describe("pair-specific duplicate review API", () => {
     expect((await request(app).get("/api/postings/near-duplicates").expect(200)).body).toEqual([]);
   });
   it("shows evidence and saves a symmetric exception across repeated requests", async () => {
-    state.postings = [posting(1), posting(2, { appliedAt: new Date() })];
+    state.postings = [posting(1), posting(2, { title: "Sr Product Manager (AI)", appliedAt: new Date() })];
     const before = await request(app).get("/api/postings/near-duplicates").expect(200);
     expect(before.body[0]).toMatchObject({ id1: 1, id2: 2, confidence: "review" });
     expect(before.body[0].evidence.length).toBeGreaterThan(0);
@@ -84,7 +84,7 @@ describe("pair-specific duplicate review API", () => {
     expect(state.exceptions).toEqual([{ userId: "owner", postingIdLow: 1, postingIdHigh: 2 }]);
     expect((await request(app).get("/api/postings/near-duplicates").expect(200)).body).toEqual([]);
     // An exception for 1:2 does not suppress other comparisons involving job 1.
-    state.postings.push(posting(3, { appliedAt: new Date() }));
+    state.postings.push(posting(3, { title: "Sr Product Manager (AI)", appliedAt: new Date() }));
     const after = await request(app).get("/api/postings/near-duplicates").expect(200);
     expect(after.body[0]).toMatchObject({ id1: 1, id2: 3 });
     expect(state.postings.every((p) => !p.deletedAt)).toBe(true);
@@ -92,6 +92,11 @@ describe("pair-specific duplicate review API", () => {
   it("rejects foreign-user pairs without saving anything", async () => {
     state.postings = [posting(1), posting(2, { userId: "other-owner" })];
     await request(app).post("/api/postings/not-duplicates").send({ postingId: 1, otherPostingId: 2 }).expect(404);
+    expect(state.writes).toBe(0);
+  });
+  it("does not ask for review of exact title/company matches", async () => {
+    state.postings = [posting(1), posting(2), posting(3, { appliedAt: new Date() })];
+    expect((await request(app).get("/api/postings/near-duplicates").expect(200)).body).toEqual([]);
     expect(state.writes).toBe(0);
   });
   it.each([
