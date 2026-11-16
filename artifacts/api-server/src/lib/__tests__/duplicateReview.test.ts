@@ -9,6 +9,33 @@ const posting = (id: number, overrides = {}) => ({
 });
 
 describe("indexed duplicate review", () => {
+  it.each([3, 5, 9])("covers every active copy in a group of %i without auto-dismissing any", async (count) => {
+    const jobs = Array.from({ length: count }, (_, id) => posting(id + 1, { company: "Acme" }));
+    const pairs = await findDuplicateReviews(jobs, new Set());
+    expect(new Set(pairs.flatMap(({ a, b }) => [a.id, b.id])).size).toBe(count);
+    expect(pairs.every(({ decision }) => decision.kind === "review")).toBe(true);
+    expect(jobs.every(job => !job.deletedAt && !job.appliedAt)).toBe(true);
+  });
+
+  it("checks scoped jobs beyond the global cap against off-page partners", async () => {
+    const jobs = Array.from({ length: 60 }, (_, id) => [
+      posting(id * 2 + 1, { company: `Employer ${id}` }),
+      posting(id * 2 + 2, { company: `Employer ${id}` }),
+    ]).flat();
+    const subjects = new Set(jobs.filter(job => job.id % 2 === 0).map(job => job.id));
+    const pairs = await findDuplicateReviews(jobs, new Set(), 40, subjects);
+    expect(pairs).toHaveLength(60);
+    expect(new Set(pairs.map(({ a }) => a.id))).toEqual(subjects);
+    expect(pairs.every(({ b }) => !subjects.has(b.id))).toBe(true);
+  });
+
+  it("keeps pair exceptions when another group member already has a warning", async () => {
+    const jobs = [posting(1, { company: "Acme" }), posting(2, { company: "Acme" }), posting(3, { company: "Acme" })];
+    const pairs = await findDuplicateReviews(jobs, new Set(["1:3"]));
+    expect(pairs.map(({ a, b }) => pairKey(a.id, b.id))).toEqual(["1:2", "2:3"]);
+    expect(await findDuplicateReviews(jobs, new Set(["1:3", "2:3"]), 40, new Set([3]))).toEqual([]);
+  });
+
   it("offers exact active copies for review but skips exact applied/dismissed matches", async () => {
     const a = posting(1, { company: "Acme" });
     const b = posting(2, { company: "Acme" });

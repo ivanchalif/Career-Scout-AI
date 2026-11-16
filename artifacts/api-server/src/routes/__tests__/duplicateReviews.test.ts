@@ -52,6 +52,34 @@ beforeAll(async () => {
 beforeEach(() => { state.postings = []; state.exceptions = []; state.writes = 0; });
 
 describe("pair-specific duplicate review API", () => {
+  it("scopes subjects to the current page but compares against off-page owned jobs", async () => {
+    state.postings = [
+      ...Array.from({ length: 45 }, (_, index) => [
+        posting(index * 2 + 1, { company: `Employer ${index}` }),
+        posting(index * 2 + 2, { company: `Employer ${index}` }),
+      ]).flat(),
+      posting(1000, { userId: "other-owner" }),
+    ];
+    const response = await request(app).get("/api/postings/near-duplicates?postingIds=89,1000").expect(200);
+    expect(response.body).toHaveLength(1);
+    expect(response.body[0]).toMatchObject({ id1: 89, id2: 90, confidence: "review" });
+    expect(state.writes).toBe(0);
+  });
+
+  it("returns coverage for every visible member of an active-only group", async () => {
+    state.postings = [posting(1), posting(2), posting(3)];
+    const response = await request(app).get("/api/postings/near-duplicates?postingIds=1,2,3").expect(200);
+    expect(new Set(response.body.flatMap((pair: any) => [pair.id1, pair.id2]))).toEqual(new Set([1, 2, 3]));
+    expect(state.writes).toBe(0);
+  });
+
+  it.each(["", "0", "-1", "1,x", "1.5", "9007199254740992", Array.from({ length: 101 }, (_, i) => i + 1).join(",")])(
+    "rejects an invalid visible-ID scope %s", async ids => {
+      await request(app).get("/api/postings/near-duplicates").query({ postingIds: ids }).expect(400);
+      expect(state.writes).toBe(0);
+    },
+  );
+
   it("does not suggest the retained active copy against a discarded duplicate", async () => {
     state.postings = [posting(1), posting(2, { deletedAt: new Date(), dismissalReason: "duplicate" })];
     const response = await request(app).get("/api/postings/near-duplicates").expect(200);

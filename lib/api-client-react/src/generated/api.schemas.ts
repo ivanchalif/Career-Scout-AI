@@ -1022,6 +1022,15 @@ export type ImportPostingsCsvBody = {
   file: Blob;
 };
 
+export type GetDuplicateReviewsParams = {
+  /**
+   * Comma-separated visible posting IDs (up to 100). Each is checked against all owned history and active jobs, without the account-wide 40-pair cap.
+   * @maxLength 1699
+   * @pattern ^[1-9]\d*(,[1-9]\d*){0,99}$
+   */
+  postingIds?: string;
+};
+
 export type GetDuplicateReviews200ItemConfidence =
   (typeof GetDuplicateReviews200ItemConfidence)[keyof typeof GetDuplicateReviews200ItemConfidence];
 

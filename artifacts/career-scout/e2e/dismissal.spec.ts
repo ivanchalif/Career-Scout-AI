@@ -1,5 +1,23 @@
 import { test, expect } from "./support/dismissal-fixture";
 
+test("duplicate checking reports failure and retries the visible page without a reload", async ({ page, dismissal }) => {
+  dismissal.failDuplicateReview = true;
+  dismissal.duplicatePair = {
+    id1: dismissal.id, id2: dismissal.id + 1,
+    title1: dismissal.item.posting.title, title2: "Off-page duplicate candidate",
+    company1: dismissal.item.posting.company, company2: dismissal.item.posting.company,
+    confidence: "review", evidence: ["Same employer", "Matching specialty"],
+  };
+  await page.goto("/dashboard");
+  await expect(page.getByRole("alert")).toContainText("Duplicate check unavailable");
+  expect(dismissal.duplicateReviewIds).toBe(String(dismissal.id));
+  await page.getByRole("button", { name: "Retry duplicate check", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Review", exact: true })).toBeVisible();
+  await expect(page.getByText("Duplicate check unavailable.", { exact: false })).toHaveCount(0);
+  await expect(page.getByTestId(`posting-card-${dismissal.id}`)).toBeVisible();
+  expect(dismissal.mutations).toEqual([]);
+});
+
 test("sort choices remain selectable repeatedly without a page reload", async ({ page, dismissal }) => {
   expect(dismissal.account.id).toBeTruthy();
   await page.goto("/dashboard");

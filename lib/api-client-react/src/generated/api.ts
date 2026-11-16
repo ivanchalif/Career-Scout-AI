@@ -34,6 +34,7 @@ import type {
   FilterStats,
   FilteredEmail,
   GetDuplicateReviews200Item,
+  GetDuplicateReviewsParams,
   GetFilterStatsParams,
   GetPostingPageParams,
   GmailAuthorizationError,
@@ -2118,15 +2119,30 @@ export const useCleanupDuplicatePostings = <
 /**
  * @summary Review same-employer jobs with supporting duplicate evidence
  */
-export const getGetDuplicateReviewsUrl = () => {
-  return `/api/postings/near-duplicates`;
+export const getGetDuplicateReviewsUrl = (
+  params?: GetDuplicateReviewsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/postings/near-duplicates?${stringifiedParams}`
+    : `/api/postings/near-duplicates`;
 };
 
 export const getDuplicateReviews = async (
+  params?: GetDuplicateReviewsParams,
   options?: RequestInit,
 ): Promise<GetDuplicateReviews200Item[]> => {
   return customFetch<GetDuplicateReviews200Item[]>(
-    getGetDuplicateReviewsUrl(),
+    getGetDuplicateReviewsUrl(params),
     {
       ...options,
       method: "GET",
@@ -2134,28 +2150,38 @@ export const getDuplicateReviews = async (
   );
 };
 
-export const getGetDuplicateReviewsQueryKey = () => {
-  return [`/api/postings/near-duplicates`] as const;
+export const getGetDuplicateReviewsQueryKey = (
+  params?: GetDuplicateReviewsParams,
+) => {
+  return [
+    `/api/postings/near-duplicates`,
+    ...(params ? [params] : []),
+  ] as const;
 };
 
 export const getGetDuplicateReviewsQueryOptions = <
   TData = Awaited<ReturnType<typeof getDuplicateReviews>>,
-  TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof getDuplicateReviews>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
+  TError = ErrorType<void>,
+>(
+  params?: GetDuplicateReviewsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDuplicateReviews>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
-  const queryKey = queryOptions?.queryKey ?? getGetDuplicateReviewsQueryKey();
+  const queryKey =
+    queryOptions?.queryKey ?? getGetDuplicateReviewsQueryKey(params);
 
   const queryFn: QueryFunction<
     Awaited<ReturnType<typeof getDuplicateReviews>>
-  > = ({ signal }) => getDuplicateReviews({ signal, ...requestOptions });
+  > = ({ signal }) =>
+    getDuplicateReviews(params, { signal, ...requestOptions });
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof getDuplicateReviews>>,
@@ -2167,7 +2193,7 @@ export const getGetDuplicateReviewsQueryOptions = <
 export type GetDuplicateReviewsQueryResult = NonNullable<
   Awaited<ReturnType<typeof getDuplicateReviews>>
 >;
-export type GetDuplicateReviewsQueryError = ErrorType<unknown>;
+export type GetDuplicateReviewsQueryError = ErrorType<void>;
 
 /**
  * @summary Review same-employer jobs with supporting duplicate evidence
@@ -2175,16 +2201,19 @@ export type GetDuplicateReviewsQueryError = ErrorType<unknown>;
 
 export function useGetDuplicateReviews<
   TData = Awaited<ReturnType<typeof getDuplicateReviews>>,
-  TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof getDuplicateReviews>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetDuplicateReviewsQueryOptions(options);
+  TError = ErrorType<void>,
+>(
+  params?: GetDuplicateReviewsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDuplicateReviews>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDuplicateReviewsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

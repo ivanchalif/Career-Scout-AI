@@ -575,7 +575,18 @@ paths:
       operationId: getDuplicateReviews
       tags: [postings]
       summary: Review same-employer jobs with supporting duplicate evidence
+      parameters:
+        - in: query
+          name: postingIds
+          description: Comma-separated visible posting IDs (up to 100). Each is checked against all owned history and active jobs, without the account-wide 40-pair cap.
+          required: false
+          schema:
+            type: string
+            maxLength: 1699
+            pattern: '^[1-9]\d*(,[1-9]\d*){0,99}$'
       responses:
+        "400":
+          description: Invalid posting IDs
         "200":
           description: Candidate pairs, excluding saved distinct pairs
           content:

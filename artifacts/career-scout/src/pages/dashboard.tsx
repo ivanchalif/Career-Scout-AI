@@ -182,6 +182,7 @@ export default function DashboardPage() {
   const [nearDupMap, setNearDupMap] = useState<Map<number, NearDupPair & { isId1: boolean }>>(new Map());
   const [dismissedNearDups, setDismissedNearDups] = useState<Set<string>>(new Set());
   const [nearDupRevision, setNearDupRevision] = useState(0);
+  const [nearDupStatus, setNearDupStatus] = useState<"idle" | "loading" | "error">("idle");
   const [savingDistinctPair, setSavingDistinctPair] = useState<string | null>(null);
   const [reviewingNearDups, setReviewingNearDups] = useState<Set<number>>(new Set());
   const [autoSweepCount, setAutoSweepCount] = useState<number | null>(null);
@@ -202,6 +203,7 @@ export default function DashboardPage() {
   useEffect(() => {
     setDismissedNearDups(new Set());
     setNearDupMap(new Map());
+    setNearDupStatus("idle");
     setSavingDistinctPair(null);
   }, [userId]);
 
@@ -607,13 +609,16 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!rawPostings.length) {
       setNearDupMap((previous) => previous.size ? new Map() : previous);
+      setNearDupStatus("idle");
       return;
     }
     let cancelled = false;
     const controller = new AbortController();
+    setNearDupStatus("loading");
+    setNearDupMap(new Map());
     getToken().then((token) => {
       if (controller.signal.aborted) throw new Error("Duplicate review cancelled");
-      return fetch("/api/postings/near-duplicates", {
+      return fetch(`/api/postings/near-duplicates?${new URLSearchParams({ postingIds: duplicateReviewIds })}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         signal: controller.signal,
       });
@@ -621,12 +626,14 @@ export default function DashboardPage() {
       .then((pairs: NearDupPair[]) => {
         const map = new Map<number, NearDupPair & { isId1: boolean }>();
         for (const pair of pairs) {
-          map.set(pair.id1, { ...pair, isId1: true });
-          map.set(pair.id2, { ...pair, isId1: false });
+          // A group may share a comparison partner. Keep its first suggestion
+          // stable while ensuring every returned job receives a warning.
+          if (!map.has(pair.id1)) map.set(pair.id1, { ...pair, isId1: true });
+          if (!map.has(pair.id2)) map.set(pair.id2, { ...pair, isId1: false });
         }
-        if (!cancelled) setNearDupMap(map);
+        if (!cancelled) { setNearDupMap(map); setNearDupStatus("idle"); }
       })
-      .catch(() => {});
+      .catch(() => { if (!cancelled) setNearDupStatus("error"); });
     return () => { cancelled = true; controller.abort(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [duplicateReviewIds, nearDupRevision, userId, getToken]);
@@ -1909,6 +1916,21 @@ export default function DashboardPage() {
           <p className="text-xs text-muted-foreground mb-4">
             Deleted jobs are listed below. Closed jobs (position no longer open) are also shown here — they can re-import if the role reopens.
           </p>
+        )}
+
+        {activeTab === "active" && nearDupStatus !== "idle" && rawPostings.length > 0 && (
+          <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground" role={nearDupStatus === "error" ? "alert" : "status"}>
+            {nearDupStatus === "loading" ? (
+              <><Loader2 className="w-3.5 h-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />Checking for possible duplicates…</>
+            ) : (
+              <>
+                <span>Duplicate check unavailable. Some jobs may be unflagged.</span>
+                <Button variant="ghost" size="sm" onClick={() => setNearDupRevision(revision => revision + 1)}>
+                  Retry duplicate check
+                </Button>
+              </>
+            )}
+          </div>
         )}
 
         {/* Postings list */}

@@ -1215,6 +1215,23 @@ export const CleanupDuplicatePostingsResponse = zod.object({
 /**
  * @summary Review same-employer jobs with supporting duplicate evidence
  */
+export const getDuplicateReviewsQueryPostingIdsMax = 1699;
+
+export const getDuplicateReviewsQueryPostingIdsRegExp = new RegExp(
+  "^[1-9]\\d\*(,[1-9]\\d\*){0,99}$",
+);
+
+export const GetDuplicateReviewsQueryParams = zod.object({
+  postingIds: zod.coerce
+    .string()
+    .max(getDuplicateReviewsQueryPostingIdsMax)
+    .regex(getDuplicateReviewsQueryPostingIdsRegExp)
+    .optional()
+    .describe(
+      "Comma-separated visible posting IDs (up to 100). Each is checked against all owned history and active jobs, without the account-wide 40-pair cap.",
+    ),
+});
+
 export const GetDuplicateReviewsResponseItem = zod.object({
   id1: zod.number(),
   id2: zod.number(),

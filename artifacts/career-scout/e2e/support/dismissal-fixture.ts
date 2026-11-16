@@ -47,6 +47,8 @@ class DismissalFixture {
   duplicatePair: Record<string, unknown> | null = null;
   pairSaved = false;
   failPairSave = false;
+  failDuplicateReview = false;
+  duplicateReviewIds: string | null = null;
   readonly account = { id: `dismissal-test-${randomUUID()}`, email: `dismissal-${randomUUID()}@example.test` };
   readonly id = 61001;
   readonly originalFeedback: PostingFeedback = { kind: "more_like_this", createdAt: "2024-11-10T11:12:13.000Z" };
@@ -118,7 +120,14 @@ class DismissalFixture {
           criteria: { roleTitles: [], skills: [], locations: [], remotePreferences: [] },
         } satisfies OnlineDiscoveryStatus);
         case "/api/online-discovery/sources": return json({ sources: [], availableSources: [] });
-        case "/api/postings/near-duplicates": return json(this.duplicatePair && !this.pairSaved ? [this.duplicatePair] : []);
+        case "/api/postings/near-duplicates": {
+          this.duplicateReviewIds = searchParams?.get("postingIds") ?? null;
+          if (this.failDuplicateReview) {
+            this.failDuplicateReview = false;
+            return json({ error: "Simulated duplicate-check failure" }, 500);
+          }
+          return json(this.duplicatePair && !this.pairSaved ? [this.duplicatePair] : []);
+        }
         default: return null;
       }
     }

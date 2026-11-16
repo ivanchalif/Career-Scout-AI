@@ -23,6 +23,7 @@ import {
   SetPostingFeedbackBody,
   SetPostingFeedbackResponse,
   UndoPostingFeedbackParams,
+  GetDuplicateReviewsQueryParams,
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
 import { scorePosting, scorePostingBackground, extractJobListings } from "../lib/scoringService";
@@ -202,6 +203,15 @@ router.get("/postings/deleted", requireAuth, async (req, res): Promise<void> => 
 // Evidence-based review only. Text resemblance alone cannot hide a job.
 router.get("/postings/near-duplicates", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId;
+  const query = GetDuplicateReviewsQueryParams.safeParse(req.query);
+  if (!query.success) {
+    res.status(400).json({ error: "Provide up to 100 comma-separated positive posting IDs" }); return;
+  }
+  const postingIds = query.data.postingIds === undefined
+    ? undefined : new Set(query.data.postingIds.split(",").map(Number));
+  if (postingIds && [...postingIds].some(id => !Number.isSafeInteger(id))) {
+    res.status(400).json({ error: "Invalid posting ID" }); return;
+  }
   const postings = await db.select({
     id: jobPostingsTable.id, title: jobPostingsTable.title, company: jobPostingsTable.company,
     link: jobPostingsTable.link, location: jobPostingsTable.location,
@@ -218,7 +228,7 @@ router.get("/postings/near-duplicates", requireAuth, async (req, res): Promise<v
   ));
   const exceptions = await loadDuplicateExceptions(userId);
   const results: unknown[] = [];
-  for (const { a, b, decision } of await findDuplicateReviews(postings, exceptions)) {
+  for (const { a, b, decision } of await findDuplicateReviews(postings, exceptions, 40, postingIds)) {
       const row: Record<string, unknown> = { id1: a.id, id2: b.id, evidence: decision.evidence, confidence: decision.kind };
       for (const [posting, suffix] of [[a, "1"], [b, "2"]] as const) {
         Object.assign(row, {
