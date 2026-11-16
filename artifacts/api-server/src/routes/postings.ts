@@ -30,7 +30,7 @@ import { scorePosting, scorePostingBackground, extractJobListings } from "../lib
 import { fetchSingleEmail } from "../lib/gmailClient";
 import { isFuzzyDuplicate, runDedupSweep, loadDuplicateExceptions, previewConfirmedDuplicates } from "../lib/dedup";
 import { compareJobs } from "../lib/duplicatePolicy";
-import { findDuplicateReviews } from "../lib/duplicateReview";
+import { loadDuplicateReviews } from "../lib/duplicateReviewStore";
 import { jobDuplicateExceptionsTable } from "@workspace/db";
 import { logger } from "../lib/logger";
 import { fetchJobPageContent } from "../lib/pageScraper";
@@ -212,23 +212,8 @@ router.get("/postings/near-duplicates", requireAuth, async (req, res): Promise<v
   if (postingIds && [...postingIds].some(id => !Number.isSafeInteger(id))) {
     res.status(400).json({ error: "Invalid posting ID" }); return;
   }
-  const postings = await db.select({
-    id: jobPostingsTable.id, title: jobPostingsTable.title, company: jobPostingsTable.company,
-    link: jobPostingsTable.link, location: jobPostingsTable.location,
-    fullDescription: jobPostingsTable.fullDescription, jobIdentity: jobPostingsTable.jobIdentity,
-    appliedAt: jobPostingsTable.appliedAt, deletedAt: jobPostingsTable.deletedAt, closedAt: jobPostingsTable.closedAt,
-    deletedBy: jobPostingsTable.deletedBy, dismissalReason: jobPostingFeedbackTable.kind,
-    salaryMin: jobPostingsTable.salaryMin, salaryMax: jobPostingsTable.salaryMax,
-    createdAt: jobPostingsTable.createdAt,
-  }).from(jobPostingsTable).leftJoin(jobPostingFeedbackTable, and(
-    eq(jobPostingFeedbackTable.jobPostingId, jobPostingsTable.id),
-    eq(jobPostingFeedbackTable.userId, userId),
-  )).where(and(
-    eq(jobPostingsTable.userId, userId),
-  ));
-  const exceptions = await loadDuplicateExceptions(userId);
   const results: unknown[] = [];
-  for (const { a, b, decision } of await findDuplicateReviews(postings, exceptions, 40, postingIds)) {
+  for (const { a, b, decision } of await loadDuplicateReviews(userId, postingIds)) {
       const row: Record<string, unknown> = { id1: a.id, id2: b.id, evidence: decision.evidence, confidence: decision.kind };
       for (const [posting, suffix] of [[a, "1"], [b, "2"]] as const) {
         Object.assign(row, {

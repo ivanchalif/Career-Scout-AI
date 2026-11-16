@@ -150,6 +150,18 @@ function level(title: string): string {
 }
 
 export function compareJobs(a: DuplicateCandidate, b: DuplicateCandidate): DuplicateDecision {
+  return compareJobEvidence(a, b, false);
+}
+
+/** Necessary metadata prerequisites, not a duplicate decision. Assume descriptions
+ * could match so missing evidence can never prune a legitimate review candidate.
+ * Keep this on the same policy path as the final evidence-based comparison.
+ */
+export function mayMatchJobs(a: DuplicateCandidate, b: DuplicateCandidate): boolean {
+  return compareJobEvidence(a, b, true).kind !== "distinct";
+}
+
+function compareJobEvidence(a: DuplicateCandidate, b: DuplicateCandidate, assumeDescriptionMatch: boolean): DuplicateDecision {
   const distinct: DuplicateDecision = { kind: "distinct", evidence: [] };
   const exact = exactTitleCompanyKey(a);
   if (exact && exact === exactTitleCompanyKey(b)) {
@@ -158,7 +170,7 @@ export function compareJobs(a: DuplicateCandidate, b: DuplicateCandidate): Dupli
     const conflictingId = aId && bId && aId.scope === bId.scope && aId.id !== bId.id;
     const locationA = normalizeTitle(a.location ?? ""), locationB = normalizeTitle(b.location ?? "");
     const conflictingLocation = locationA && locationB && locationA !== locationB;
-    const conflictingScope = (a.fullDescription?.length ?? 0) >= 250 && (b.fullDescription?.length ?? 0) >= 250
+    const conflictingScope = !assumeDescriptionMatch && (a.fullDescription?.length ?? 0) >= 250 && (b.fullDescription?.length ?? 0) >= 250
       && overlap(words(a.fullDescription!), words(b.fullDescription!)) < 0.85;
     const discrepancies = [
       ...(conflictingId ? ["Different known requisition IDs"] : []),
@@ -197,8 +209,8 @@ export function compareJobs(a: DuplicateCandidate, b: DuplicateCandidate): Dupli
   if (aSpecific.size && bSpecific.size && overlap(aSpecific, bSpecific) < 0.75) return distinct;
   const locationA = normalizeTitle(a.location ?? ""), locationB = normalizeTitle(b.location ?? "");
   if (locationA && locationB && locationA !== locationB) return distinct;
-  const descriptionMatch = (a.fullDescription?.length ?? 0) >= 250 && (b.fullDescription?.length ?? 0) >= 250
-    && overlap(words(a.fullDescription!), words(b.fullDescription!)) >= 0.85;
+  const descriptionMatch = assumeDescriptionMatch || ((a.fullDescription?.length ?? 0) >= 250 && (b.fullDescription?.length ?? 0) >= 250
+    && overlap(words(a.fullDescription!), words(b.fullDescription!)) >= 0.85);
   const domainMatch = aSpecific.size > 0 && bSpecific.size > 0 && overlap(aSpecific, bSpecific) >= 0.9;
   if (!descriptionMatch && !domainMatch) return distinct;
   return { kind: "review", evidence: [

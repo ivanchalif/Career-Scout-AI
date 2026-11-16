@@ -2,7 +2,10 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import express from "express";
 import request from "supertest";
 
-const state = vi.hoisted(() => ({ postings: [] as any[], exceptions: [] as any[], writes: 0 }));
+const state = vi.hoisted(() => ({
+  postings: [] as any[], exceptions: [] as any[], writes: 0,
+  reads: [] as { fields: string[]; ids: number[] }[],
+}));
 vi.mock("drizzle-orm", async (importOriginal) => ({
   ...await importOriginal<any>(),
   eq: (field: any, value: any) => ({ op: "eq", field: field.name, value }),
@@ -12,19 +15,22 @@ vi.mock("drizzle-orm", async (importOriginal) => ({
 }));
 vi.mock("@workspace/db", async (importOriginal) => {
   const actual = await importOriginal<any>();
-  const property: Record<string, string> = {
-    user_id: "userId", deleted_at: "deletedAt", closed_at: "closedAt", id: "id",
-  };
+  const property = (name: string) => name === "kind" ? "dismissalReason"
+    : name.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
   return { ...actual, db: {
-    select: () => ({ from: (table: any) => ({
+    select: (selection?: Record<string, any>) => ({ from: (table: any) => ({
       leftJoin() { return this; },
       where: async (condition: any) => {
       const rows = table === actual.jobDuplicateExceptionsTable ? state.exceptions : state.postings;
       const clauses = Array.isArray(condition) ? condition : [condition];
-      return rows.filter((row) => clauses.every((c: any) => {
-        const value = row[property[c.field] ?? c.field];
+      const matched = rows.filter((row) => clauses.every((c: any) => {
+        const value = row[property(c.field)];
         return c.op === "eq" ? value === c.value : c.op === "in" ? c.value.includes(value) : value == null;
       }));
+      state.reads.push({ fields: Object.keys(selection ?? {}), ids: matched.map(row => row.id) });
+      return selection ? matched.map(row => Object.fromEntries(
+        Object.entries(selection).map(([key, column]) => [key, row[property(column.name)]]),
+      )) : matched;
     } }) }),
     insert: () => ({ values: (row: any) => ({ onConflictDoNothing: async () => {
       if (!state.exceptions.some((e) => e.userId === row.userId && e.postingIdLow === row.postingIdLow && e.postingIdHigh === row.postingIdHigh)) {
@@ -42,16 +48,46 @@ vi.mock("../../lib/scoringService", () => ({
 const posting = (id: number, overrides = {}) => ({
   id, userId: "owner", title: "Senior Product Manager (AI)", company: "Acme Technologies",
   location: "San Francisco, CA", link: null, appliedAt: null, deletedAt: null, closedAt: null,
-  salaryMin: null, salaryMax: null, createdAt: new Date(), ...overrides,
+  fullDescription: "", salaryMin: null, salaryMax: null, createdAt: new Date(), ...overrides,
 });
 const app = express();
 beforeAll(async () => {
   const { default: router } = await import("../postings");
   app.use(express.json()); app.use("/api", router);
 }, 30_000);
-beforeEach(() => { state.postings = []; state.exceptions = []; state.writes = 0; });
+beforeEach(() => { state.postings = []; state.exceptions = []; state.writes = 0; state.reads = []; });
 
 describe("pair-specific duplicate review API", () => {
+  it("retrieves descriptions only for plausible owned candidates, including off-page identity matches", async () => {
+    const originalUrl = "https://jobs.lever.co/acme/original";
+    state.postings = [
+      posting(1, { company: "Acme Inc.", jobIdentity: { version: 1, status: "verified", originalUrl, signals: [] } }),
+      posting(2, { company: "Other label", title: "Different title", link: originalUrl, appliedAt: new Date() }),
+      posting(3, { title: "Junior Accountant" }),
+      posting(4, { company: "Unrelated", fullDescription: "x".repeat(100_000) }),
+      posting(5, { deletedAt: new Date(), dismissalReason: "duplicate" }),
+      posting(6, { deletedAt: new Date(), deletedBy: "duplicate" }),
+      posting(7, { closedAt: new Date() }),
+      posting(8, { userId: "other-owner" }),
+      posting(9),
+    ];
+    state.exceptions = [{ userId: "owner", postingIdLow: 1, postingIdHigh: 9 }];
+    const result = await request(app).get("/api/postings/near-duplicates?postingIds=1,8").expect(200);
+    expect(result.body).toHaveLength(1);
+    expect(result.body[0]).toMatchObject({ id1: 1, id2: 2, confidence: "duplicate" });
+    expect(state.reads[0].fields).not.toContain("fullDescription");
+    expect(state.reads.filter(read => read.fields.includes("fullDescription"))).toEqual([
+      { fields: ["id", "fullDescription"], ids: [1, 2] },
+    ]);
+    expect(state.writes).toBe(0);
+  });
+
+  it("does not load any descriptions when subjects have no plausible partners", async () => {
+    state.postings = [posting(1), posting(2, { title: "Junior Accountant" })];
+    expect((await request(app).get("/api/postings/near-duplicates?postingIds=1").expect(200)).body).toEqual([]);
+    expect(state.reads.some(read => read.fields.includes("fullDescription"))).toBe(false);
+  });
+
   it("scopes subjects to the current page but compares against off-page owned jobs", async () => {
     state.postings = [
       ...Array.from({ length: 45 }, (_, index) => [
