@@ -1,5 +1,46 @@
 import { test, expect } from "./support/dismissal-fixture";
 
+test("duplicate confirmation closes after three idle seconds even while hovered", async ({ page, dismissal }) => {
+  await page.clock.install();
+  await page.goto("/dashboard");
+  await page.getByTestId(`posting-flag-duplicate-${dismissal.id}`).click();
+  const confirmation = page.locator("li[data-modal-owner]").filter({ hasText: "Flagged as duplicate" });
+  await expect(confirmation).toBeVisible();
+  await confirmation.hover();
+  await page.clock.fastForward(2900);
+  await expect(confirmation).toBeVisible();
+  await page.clock.fastForward(500);
+  await expect(confirmation).toHaveCount(0);
+  expect(dismissal.item.posting.deletedAt).toBeTruthy();
+});
+
+test("duplicate confirmation closes after two seconds of continued outside activity", async ({ page, dismissal }) => {
+  await page.clock.install();
+  await page.goto("/dashboard");
+  await page.getByTestId(`posting-flag-duplicate-${dismissal.id}`).click();
+  const confirmation = page.locator("li[data-modal-owner]").filter({ hasText: "Flagged as duplicate" });
+  await expect(confirmation).toBeVisible();
+  await page.mouse.move(5, 5);
+  for (let step = 0; step < 4; step++) {
+    await page.clock.fastForward(500);
+    await page.mouse.move(10 + step, 5);
+  }
+  await page.clock.fastForward(400);
+  await expect(confirmation).toHaveCount(0);
+  expect(dismissal.item.posting.deletedAt).toBeTruthy();
+});
+
+test("duplicate confirmation keeps Undo working before automatic close", async ({ page, dismissal }) => {
+  await page.clock.install();
+  await page.goto("/dashboard");
+  await page.getByTestId(`posting-flag-duplicate-${dismissal.id}`).click();
+  const confirmation = page.locator("li[data-modal-owner]").filter({ hasText: "Flagged as duplicate" });
+  await expect(confirmation).toBeVisible();
+  await confirmation.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(page.getByTestId(`posting-card-${dismissal.id}`)).toBeVisible();
+  expect(dismissal.item.posting.deletedAt).toBeNull();
+});
+
 test("duplicate checking reports failure and retries the visible page without a reload", async ({ page, dismissal }) => {
   dismissal.failDuplicateReview = true;
   dismissal.duplicatePair = {

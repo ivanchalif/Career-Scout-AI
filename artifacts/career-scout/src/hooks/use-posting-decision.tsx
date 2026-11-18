@@ -47,7 +47,7 @@ export function usePostingDecision() {
         toast({
           title: "Flagged as duplicate",
           description: "Moved to Deleted with reason: Duplicate.",
-          duration: 8000,
+          autoDismissOnInactivity: true,
           action: (
             <ToastAction altText="Undo duplicate flag" onClick={() => void undoDismissal(id, res.undoToken)}>
               Undo

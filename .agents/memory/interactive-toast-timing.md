@@ -25,7 +25,7 @@ Explicitly flagging a possible duplicate skips the dismissal reason dialog; save
 
 **Why:** The user already confirmed the duplicate reason through that action and explicitly asked not to be prompted for it again.
 
-**How to apply:** Apply this exception in the shared dismissal flow so duplicate shortcuts remain consistent without losing reversible dismissal or error handling.
+**How to apply:** Apply this exception in the shared dismissal flow so duplicate shortcuts remain consistent without losing reversible dismissal or error handling. The non-modal duplicate confirmation must still follow the three-second idle/two-second outside timing; hovering without activity must not hold it open. Keep Undo functional until it closes.
 
 For other interactive toasts, do not assume that increasing a Radix toast's duration alone pauses it.
 

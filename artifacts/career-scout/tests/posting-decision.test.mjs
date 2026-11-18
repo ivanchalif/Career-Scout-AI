@@ -56,6 +56,7 @@ test("confirming a duplicate saves the reason and skips the dismissal dialog", a
   assert.equal(f.dismissals[0].data.reason, "duplicate");
   assert.equal(f.dialogs.length, 0);
   assert.equal(f.toasts[0].title, "Flagged as duplicate");
+  assert.equal(f.toasts[0].autoDismissOnInactivity, true);
   assert.ok(f.invalidations.length > 0);
   await f.toasts[0].action.props.onClick();
   await new Promise(resolve => setImmediate(resolve));

@@ -4,6 +4,7 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { startModalAutoDismiss } from "@/lib/modal-auto-dismiss"
 
 const ToastProvider = ToastPrimitives.Provider
 
@@ -41,11 +42,28 @@ const toastVariants = cva(
 const Toast = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Root>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root> &
-    VariantProps<typeof toastVariants>
->(({ className, variant, ...props }, ref) => {
+    VariantProps<typeof toastVariants> & { autoDismissOnInactivity?: boolean }
+>(({ className, variant, autoDismissOnInactivity = false, duration, ...props }, ref) => {
+  const [element, setElement] = React.useState<React.ElementRef<typeof ToastPrimitives.Root> | null>(null)
+  const owner = React.useId()
+  const close = React.useRef(props.onOpenChange)
+  close.current = props.onOpenChange
+  const setRef = React.useCallback((node: React.ElementRef<typeof ToastPrimitives.Root> | null) => {
+    setElement(node)
+    if (typeof ref === "function") ref(node)
+    else if (ref) ref.current = node
+  }, [ref])
+  React.useEffect(() => {
+    if (!autoDismissOnInactivity || props.open === false || !element) return
+    return startModalAutoDismiss(element, owner, () => close.current?.(false))
+  }, [autoDismissOnInactivity, props.open, element, owner])
   return (
     <ToastPrimitives.Root
-      ref={ref}
+      ref={setRef}
+      data-modal-owner={autoDismissOnInactivity ? owner : undefined}
+      // Use one timer: Radix's hover/focus-paused duration must not override the
+      // shared idle/outside deadlines for interactive duplicate confirmations.
+      duration={autoDismissOnInactivity ? Infinity : duration}
       className={cn(toastVariants({ variant }), className)}
       {...props}
     />
