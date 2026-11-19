@@ -64,7 +64,7 @@ test("sort choices remain selectable repeatedly without a page reload", async ({
   await page.goto("/dashboard");
   await page.getByRole("button", { name: "Show filters", exact: true }).click();
   const trigger = page.getByTestId("sort-select");
-  for (const label of ["Title: A → Z", "Date: Oldest first", "Score: Highest first", "Company: Z → A", "Score: Lowest first"]) {
+  for (const label of ["Recommended: Fit + your choices", "Date: Newest first", "Title: A → Z", "Title: Z → A", "Date: Oldest first", "Score: Highest first", "Company: A → Z", "Company: Z → A", "Score: Lowest first"]) {
     await trigger.click();
     await page.getByRole("option", { name: label, exact: true }).click();
     await expect(trigger).toContainText(label);

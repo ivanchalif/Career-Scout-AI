@@ -3,7 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 // No saved Clerk session, database, AI calls, or live API server is used.
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: "dismissal.spec.ts",
+  testMatch: ["dismissal.spec.ts", "dropdowns.spec.ts"],
   outputDir: "../../generated-artifacts/dismissal-tests",
   timeout: 30_000,
   retries: 0,

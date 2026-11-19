@@ -44,6 +44,19 @@ export const test = base.extend<{ dismissal: DismissalFixture }>({
 export { expect };
 
 class DismissalFixture {
+  gmailConnected = false;
+  profile = {
+    skills: [], experienceHistory: [], education: "", remotePreference: "remote",
+    syncScheduleHours: 6 as number | null,
+  };
+  failProfileSave = false;
+  readonly profileSaves: Record<string, unknown>[] = [];
+  readonly discoverySaves: Record<string, unknown>[] = [];
+  discovery: OnlineDiscoveryStatus = {
+    source: "test-only", scheduleHours: null as number | null, minimumMatchScore: 60,
+    freshnessWindow: "past_week", lastFound: 0, lastImported: 0, lastDuplicates: 0,
+    criteria: { roleTitles: [], skills: [], locations: [], remotePreferences: [] },
+  };
   duplicatePair: Record<string, unknown> | null = null;
   pairSaved = false;
   failPairSave = false;
@@ -109,16 +122,16 @@ class DismissalFixture {
           topMatches: this.item.posting.deletedAt ? [] : [this.item], strongMatches: 1,
           hasProfile: true, gmailConnected: false,
         } satisfies DashboardSummary);
+        case "/api/profile": return json(this.profile);
+        case "/api/imap/status": return json({ connected: false });
+        case "/api/filtered-emails": return json([]);
+        case "/api/email-sync-log": return json([]);
         case "/api/gmail/status": return json({
-          connected: false, syncing: false, progress: null, postingCount: 0,
+          connected: this.gmailConnected, syncing: false, progress: null, postingCount: 0,
         } satisfies GmailStatus);
         case "/api/company-filter-settings": return json({ mode: "off", companies: [] });
         case "/api/title-exclude-settings": return json({ keywords: [] });
-        case "/api/online-discovery/status": return json({
-          source: "test-only", scheduleHours: null, minimumMatchScore: 60,
-          freshnessWindow: "past_week", lastFound: 0, lastImported: 0, lastDuplicates: 0,
-          criteria: { roleTitles: [], skills: [], locations: [], remotePreferences: [] },
-        } satisfies OnlineDiscoveryStatus);
+        case "/api/online-discovery/status": return json(this.discovery satisfies OnlineDiscoveryStatus);
         case "/api/online-discovery/sources": return json({ sources: [], availableSources: [] });
         case "/api/postings/near-duplicates": {
           this.duplicateReviewIds = searchParams?.get("postingIds") ?? null;
@@ -130,6 +143,20 @@ class DismissalFixture {
         }
         default: return null;
       }
+    }
+    if (method === "PUT" && path === "/api/profile") {
+      this.profileSaves.push(structuredClone(body ?? {}));
+      if (this.failProfileSave) {
+        this.failProfileSave = false;
+        return json({ error: "Simulated profile save failure" }, 500);
+      }
+      Object.assign(this.profile, body);
+      return json(this.profile);
+    }
+    if (method === "PUT" && path === "/api/online-discovery/settings") {
+      this.discoverySaves.push(structuredClone(body ?? {}));
+      Object.assign(this.discovery, body);
+      return json(this.discovery);
     }
     if (method === "POST" && path === "/api/postings/dedup-sweep") {
       return json({ removed: 0, remaining: this.item.posting.deletedAt ? 0 : 1 });

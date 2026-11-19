@@ -244,7 +244,7 @@ export default function InboxPage() {
     setIsSavingSchedule(true);
     try {
       await upsertMutation.mutateAsync(
-        { data: { syncScheduleHours: hours ?? undefined } },
+        { data: { syncScheduleHours: hours } },
         {
           onSuccess: () => {
             qc.invalidateQueries({ queryKey: getGetProfileQueryKey() });
@@ -259,6 +259,8 @@ export default function InboxPage() {
             toast({ title: "Error", description: "Failed to save sync schedule.", variant: "destructive" }),
         }
       );
+    } catch {
+      setSyncScheduleHours(profileQ.data?.syncScheduleHours ?? null);
     } finally {
       setIsSavingSchedule(false);
     }
@@ -400,7 +402,7 @@ export default function InboxPage() {
                 )}
 
                 <div className="space-y-2 pt-1 border-t border-border">
-                  <Label className="text-xs text-muted-foreground flex items-center gap-1.5 pt-3">
+                  <Label htmlFor="sync-schedule" className="text-xs text-muted-foreground flex items-center gap-1.5 pt-3">
                     <RefreshCw className="w-3 h-3" />
                     Auto-sync schedule
                     {isSavingSchedule && <Loader2 className="w-3 h-3 animate-spin ml-1" />}
@@ -411,7 +413,7 @@ export default function InboxPage() {
                     disabled={isSavingSchedule}
                     data-testid="sync-schedule-select"
                   >
-                    <SelectTrigger className="w-52 h-8 text-xs" data-testid="sync-schedule-trigger">
+                    <SelectTrigger id="sync-schedule" className="w-52 h-8 text-xs" data-testid="sync-schedule-trigger">
                       <SelectValue placeholder="Choose frequency" />
                     </SelectTrigger>
                     <SelectContent>

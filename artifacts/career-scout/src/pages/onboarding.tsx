@@ -333,15 +333,15 @@ export default function OnboardingPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="flex items-center gap-1.5">
+                  <Label htmlFor="work-preference" className="flex items-center gap-1.5">
                     <Wifi className="w-3.5 h-3.5" />
                     Work preference
                   </Label>
                   <Select
-                    defaultValue="hybrid"
+                    value={watch("remotePreference")}
                     onValueChange={(val) => setValue("remotePreference", val as "remote" | "hybrid" | "onsite")}
                   >
-                    <SelectTrigger data-testid="remote-select">
+                    <SelectTrigger id="work-preference" data-testid="remote-select">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

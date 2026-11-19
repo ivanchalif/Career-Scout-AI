@@ -14,6 +14,7 @@ import { GmailAuthorizationExpiredError, isGmailAuthorizationExpired } from "./g
 import { isGmailSyncRunning, runGmailSync, type ReportGmailSyncProgress, type SyncUserResult } from "./gmailSyncState";
 import { completedGmailMessages, successfulGmailMessages, acknowledgedGmailMessages, pendingGmailMailboxMessages } from "./gmailCompletion";
 import { finalizeGmailMailboxMessage } from "./gmailMailboxCompletion";
+import { gmailScheduleHours } from "./gmailSchedule";
 import { saveJobIdentitySource } from "./jobIdentitySources";
 import type { JobIdentityEvidence } from "@workspace/db";
 export type { SyncUserResult } from "./gmailSyncState";
@@ -26,7 +27,7 @@ function parseSenderName(sender: string): string {
 }
 
 const CHECK_INTERVAL_MS = 1 * 60 * 1000; // check every 1 minute
-const DEFAULT_SYNC_HOURS = 1; // used when user has Gmail connected but no schedule set
+const DEFAULT_SYNC_HOURS = 1; // used when user has Gmail connected but no profile
 
 // Sender domains that never send job postings — used to short-circuit processing
 // before spending any LLM tokens. Add more as they appear.
@@ -450,9 +451,8 @@ async function checkAndSyncUsers(): Promise<void> {
         .from(userProfilesTable)
         .where(eq(userProfilesTable.userId, conn.userId));
 
-      // If the user has never set a schedule, fall back to DEFAULT_SYNC_HOURS
-      // rather than silently skipping them forever.
-      const scheduleHours = profile?.syncScheduleHours ?? DEFAULT_SYNC_HOURS;
+      const scheduleHours = gmailScheduleHours(profile, DEFAULT_SYNC_HOURS);
+      if (scheduleHours === null) continue; // Manual only, as displayed in the selector.
 
       const lastSync = conn.lastSyncedAt ? new Date(conn.lastSyncedAt).getTime() : 0;
       const msSinceSync = now - lastSync;

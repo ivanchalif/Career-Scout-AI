@@ -1315,8 +1315,9 @@ export default function DashboardPage() {
                   : "Add experience or skills to your profile to start matching in the US and Canada."}
               </p>
               <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2.5">
-                <label className="text-xs text-muted-foreground">Auto-discover</label>
+                <label className="text-xs text-muted-foreground" htmlFor="discovery-schedule-select">Auto-discover</label>
                 <select
+                  id="discovery-schedule-select"
                   className="h-8 rounded-md border border-border bg-background px-2 text-xs"
                   value={discoveryStatus?.scheduleHours == null ? "manual" : String(discoveryStatus.scheduleHours)}
                   onChange={(event) => saveDiscoverySettings(event.target.value === "manual" ? null : Number(event.target.value))}
