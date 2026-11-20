@@ -1,5 +1,13 @@
 import { test, expect } from "./support/dismissal-fixture";
 
+test("signed-in home opens the dashboard even without profile skills or experience", async ({ page, dismissal }) => {
+  expect(dismissal.profile.skills).toEqual([]);
+  expect(dismissal.profile.experienceHistory).toEqual([]);
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page.getByTestId(`posting-card-${dismissal.id}`)).toBeVisible();
+});
+
 test("duplicate confirmation closes after three idle seconds even while hovered", async ({ page, dismissal }) => {
   await page.clock.install();
   await page.goto("/dashboard");

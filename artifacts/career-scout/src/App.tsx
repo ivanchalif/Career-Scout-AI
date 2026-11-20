@@ -14,7 +14,7 @@ const MetricsPage = lazy(() => import("@/pages/metrics"));
 const FilteredPage = lazy(() => import("@/pages/filtered"));
 const OnboardingPage = lazy(() => import("@/pages/onboarding"));
 import NotFound from "@/pages/not-found";
-import { useGetProfile, getGetProfileQueryKey, setAuthTokenGetter } from "@workspace/api-client-react";
+import { setAuthTokenGetter } from "@workspace/api-client-react";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -144,25 +144,11 @@ function ClerkQueryClientCacheInvalidator() {
   return null;
 }
 
-function SignedInHomeGate() {
-  const profileQ = useGetProfile({ query: { queryKey: getGetProfileQueryKey() } });
-
-  if (profileQ.isLoading) return null;
-
-  const profile = profileQ.data;
-  const hasProfile = !!(profile && (
-    (profile.skills && profile.skills.length > 0) ||
-    (profile.experienceHistory && profile.experienceHistory.length > 0)
-  ));
-
-  return <Redirect to={hasProfile ? "/dashboard" : "/profile"} />;
-}
-
 function HomeRoute() {
   return (
     <>
       <Show when="signed-in">
-        <SignedInHomeGate />
+        <Redirect to="/dashboard" />
       </Show>
       <Show when="signed-out">
         <LandingPage />
@@ -192,7 +178,7 @@ function ClerkProviderWithRoutes() {
       appearance={clerkAppearance}
       signInUrl={`${basePath}/sign-in`}
       signUpUrl={`${basePath}/sign-up`}
-      signInFallbackRedirectUrl={`${basePath}/profile`}
+      signInFallbackRedirectUrl={`${basePath}/dashboard`}
       signUpFallbackRedirectUrl={`${basePath}/profile`}
       localization={{
         signIn: {
