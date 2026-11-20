@@ -41,7 +41,7 @@ export const userProfilesTable = pgTable("user_profiles", {
       "recruiter", "job alert", "job opportunity", "open position",
       "just posted", "great match", "job matches", "job recommendations",
       "recommended jobs", "jobs you might like", "new jobs", "you may be a fit",
-      "new job:", "are hiring",
+      "new job:", "are hiring", "more matches",
     ],
     fromAddresses: [],
     bodyKeywords: [],

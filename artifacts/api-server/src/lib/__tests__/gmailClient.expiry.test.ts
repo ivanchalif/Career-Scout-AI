@@ -8,10 +8,27 @@ vi.mock("googleapis", () => ({
   google: { gmail: () => ({ users: { messages } }) },
 }));
 
-import { estimateEmailCount, fetchJobEmails, markEmailAsRead } from "../gmailClient";
+import { DEFAULT_EMAIL_FILTER_CRITERIA, estimateEmailCount, fetchJobEmails, markEmailAsRead, matchesEmailFilterCriteria } from "../gmailClient";
 
 describe("Gmail client authorization expiry (no real mail)", () => {
   beforeEach(() => vi.resetAllMocks());
+
+  it("includes more-matches digests in both subject matching and the Gmail query", async () => {
+    expect(matchesEmailFilterCriteria(
+      "VP of Product at Nace.AI + 5 more matches", "alerts@example.test", "",
+      DEFAULT_EMAIL_FILTER_CRITERIA,
+    )).toBe(true);
+    messages.list.mockResolvedValueOnce({ data: { messages: [] } });
+    await fetchJobEmails("mock-access", "mock-refresh");
+    expect(messages.list.mock.calls[0][0].q).toContain('"more matches"');
+  });
+
+  it("keeps body exclusions effective for more-matches digests", () => {
+    expect(matchesEmailFilterCriteria(
+      "VP of Product at Nace.AI + 5 MORE MATCHES", "alerts@example.test", "excluded topic",
+      { ...DEFAULT_EMAIL_FILTER_CRITERIA, blockedBodyKeywords: ["excluded topic"] },
+    )).toBe(false);
+  });
 
   it("marks only the processed message read and archives it without trashing it", async () => {
     messages.modify.mockResolvedValueOnce({});
